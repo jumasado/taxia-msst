@@ -959,11 +959,7 @@ async function renderHistory(){
   document.getElementById('hsl').style.display='none';
   const hsc=document.getElementById('hsc');
   if(!dates.length){hsc.innerHTML='<div class="card"><div style="font-size:14px;color:#888">Sin historial aún.</div></div>';return;}
-  hsc.innerHTML=`<div class="card">${dates.map(d=>`
-    <div class="hist-row">
-      <div style="flex:1"><div style="font-weight:600;font-size:14px">${formatDate(d)}</div><div style="font-size:12px;color:#888">${dateMap[d].size}/${visible.length} con tareas</div></div>
-      '+(session.role!=='assistant'?'<button class="btn btn-sm" onclick="renderDashboard(\'"+d+"\')">Dashboard</button>':'')+'
-    </div>`).join('')}</div>`;
+  hsc.innerHTML='<div class="card">'+dates.map(function(d){var btnDash=session.role!=='assistant'?'<button class="btn btn-sm" onclick="renderDashboard(\''+d+'\')">Dashboard</button>':'';return '<div class="hist-row"><div style="flex:1"><div style="font-weight:600;font-size:14px">'+formatDate(d)+'</div><div style="font-size:12px;color:#888">'+dateMap[d].size+'/'+visible.length+' con tareas</div></div>'+btnDash+'</div>';}).join('')+'</div>';
 }
 
 /* ===== CLIENTES ===== */
