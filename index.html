@@ -1021,17 +1021,7 @@ function renderClientesTabla(){
   else if(activeGrupoFilter!=='all')list=list.filter(c=>c.grupo_id===activeGrupoFilter);
   if(q)list=list.filter(c=>(c.nombre+c.rfc+c.notas).toLowerCase().includes(q));
   if(!list.length){tbody.innerHTML=`<tr><td colspan="6" style="color:#bbb;text-align:center;padding:1rem">Sin resultados</td></tr>`;return;}
-  tbody.innerHTML=list.map(c=>`<tr>
-    <td style="font-weight:500">${escH(c.nombre)}</td>
-    <td style="color:#888">${escH(c.rfc||'—')}</td>
-    <td>${escH(c.tipo||'—')}</td>
-    <td>'+(c.grupos?'<span class="badge badge-group">'+escH(c.grupos.nombre)+'</span>':'—')+'</td>
-    <td>${escH(c.responsable||'—')}</td>
-    <td style="white-space:nowrap">
-      ${(session.role==='admin'||session.role==='manager')?'<button class="btn btn-sm" onclick="editCliente(\''+c.id+'\')">Editar</button>':''}
-      ${(session.role==='admin'||session.role==='manager')?'<button class="btn btn-sm btn-danger" onclick="deleteCliente(\''+c.id+'\')">Eliminar</button>':''}
-    </td>
-  </tr>`).join('');
+  tbody.innerHTML=list.map(function(c){var canEdit=session.role==='admin'||session.role==='manager';var grupoCell=c.grupos?'<span class="badge badge-group">'+escH(c.grupos.nombre)+'</span>':'—';var editBtn=canEdit?'<button class="btn btn-sm" onclick="editCliente(\''+c.id+'\')">Editar</button>':'';var delBtn=canEdit?'<button class="btn btn-sm btn-danger" onclick="deleteCliente(\''+c.id+'\')">Eliminar</button>':'';return '<tr><td style="font-weight:500">'+escH(c.nombre)+'</td><td style="color:#888">'+escH(c.rfc||'—')+'</td><td>'+escH(c.tipo||'—')+'</td><td>'+grupoCell+'</td><td>'+escH(c.responsable||'—')+'</td><td style="white-space:nowrap">'+editBtn+delBtn+'</td></tr>';}).join('');
 }
 function editCliente(id){
   const c=clientesCache.find(x=>x.id===id);if(!c)return;
@@ -1130,13 +1120,7 @@ async function renderAdmin(){
   (users||[]).forEach(u=>{usersCache[u.email]=u;});
   document.getElementById('al').style.display='none';
   const AVM={admin:'av-m',manager:'av-a',assistant:'av-y'};
-  let rows=(users||[]).map(u=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #e5e5e0">
-      <div class="avatar ${av(u.av)}" style="width:34px;height:34px;font-size:12px">${u.initials||'??'}</div>
-      <div style="flex:1"><div style="font-size:14px;font-weight:600">${u.name} ${roleBadge(u.role)}</div><div style="font-size:12px;color:#888">${u.email}</div></div>
-      <button class="btn btn-sm" onclick="fillEditUser('${u.email}','${escH(u.name)}','${u.role}','${escH(u.pass)}')">Editar</button>
-      '+(u.email!==session.email?'<button class="btn btn-sm btn-danger" onclick="deleteUser(\'"+u.email+"\')">Eliminar</button>':'')+'
-    </div>`).join('');
+  let rows=(users||[]).map(function(u){var delBtn=u.email!==session.email?'<button class="btn btn-sm btn-danger" onclick="deleteUser(\''+u.email+'\')">Eliminar</button>':'';return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #e5e5e0"><div class="avatar '+av(u.av)+'" style="width:34px;height:34px;font-size:12px">'+(u.initials||'??')+'</div><div style="flex:1"><div style="font-size:14px;font-weight:600">'+u.name+' '+roleBadge(u.role)+'</div><div style="font-size:12px;color:#888">'+u.email+'</div></div><button class="btn btn-sm" onclick="fillEditUser(\''+u.email+'\',\''+escH(u.name)+'\',\''+u.role+'\',\''+escH(u.pass)+'\')">Editar</button>'+delBtn+'</div>';}).join('');
   document.getElementById('ac').innerHTML=`
   <div class="card"><div class="sec-label">Usuarios activos</div>${rows}</div>
   <div class="card">
