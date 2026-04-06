@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaxIA día a día</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="TaxIA">
+<meta name="theme-color" content="#3B4BC8">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f3;color:#1a1a1a;min-height:100vh}
+.app{max-width:780px;margin:0 auto;padding:1.5rem 1rem}
+.card{background:#fff;border:1px solid #e5e5e0;border-radius:12px;padding:1rem 1.25rem;margin-bottom:1rem}
+.sec-label{font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0}
+.av-m{background:#f0f7d4;color:#3B4BC8}.av-a{background:#f0f7d4;color:#5a8a1a}
+.av-y{background:#FAEEDA;color:#633806}.av-b{background:#FBEAF0;color:#72243E}.av-x{background:#E6F1FB;color:#0C447C}
+.badge{display:inline-block;font-size:11px;padding:2px 9px;border-radius:999px;font-weight:500}
+.badge-admin{background:#f0f7d4;color:#3B4BC8}.badge-mgr{background:#f0f7d4;color:#5a8a1a}
+.badge-ast{background:#FAEEDA;color:#633806}.badge-ok{background:#f0f7d4;color:#5a8a1a}
+.badge-miss{background:#FEF3C7;color:#92400E}.badge-group{background:#E6F1FB;color:#0C447C}
+.badge-assigned{background:#EEEDFE;color:#3B4BC8;font-size:11px;padding:2px 8px;border-radius:999px;font-weight:500;display:inline-block}
+.badge-done{background:#f0f7d4;color:#5a8a1a}.badge-pending{background:#FEF3C7;color:#92400E}
+.metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:1rem}
+.metric{background:#f5f5f3;border-radius:8px;padding:12px}
+.metric-label{font-size:12px;color:#888;margin-bottom:4px}
+.metric-val{font-size:22px;font-weight:600;color:#1a1a1a}
+input[type=text],input[type=email],input[type=password]{width:100%;padding:8px 10px;font-size:14px;border:1px solid #e0e0db;border-radius:8px;background:#fff;color:#1a1a1a;outline:none;font-family:inherit}
+input:focus{border-color:#7F77DD;box-shadow:0 0 0 3px rgba(127,119,221,.12)}
+select{padding:8px 10px;font-size:14px;border:1px solid #e0e0db;border-radius:8px;background:#fff;color:#1a1a1a;outline:none;font-family:inherit}
+select:focus{border-color:#7F77DD}
+.btn{padding:9px 16px;font-size:14px;font-weight:500;cursor:pointer;border:1px solid #e0e0db;border-radius:8px;background:#f5f5f3;color:#1a1a1a;font-family:inherit}
+.btn:hover{background:#eaeae7}.btn:active{transform:scale(.98)}
+.btn-purple{border:1.5px solid #3B4BC8;background:#f0f7d4;color:#3B4BC8}.btn-purple:hover{background:#d6e8a0}
+.btn-primary{background:#3B4BC8;color:#fff;border-color:#3B4BC8}.btn-primary:hover{background:#3B4BC8}
+.btn-success{background:#8DC63F;color:#fff;border-color:#8DC63F}.btn-success:hover{background:#6a9e22}
+.btn-full{width:100%;margin-top:8px}.btn-sm{padding:5px 12px;font-size:12px}
+.btn-danger{color:#dc2626;border-color:#fca5a5;background:#fff}.btn-danger:hover{background:#fef2f2}
+.err-msg{font-size:12px;color:#dc2626;margin-top:4px;display:none}
+.ok-msg{font-size:13px;color:#5a8a1a;background:#f0f7d4;border-radius:8px;padding:8px 12px;margin-top:8px;display:none}
+.loading{font-size:14px;color:#999;font-style:italic;padding:1rem 0;display:flex;align-items:center;gap:8px}
+.analysis-box{background:#f5f5f3;border-radius:8px;padding:1rem;font-size:14px;color:#1a1a1a;line-height:1.7;min-height:60px}
+.hist-row{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #e5e5e0}
+.hist-row:last-child{border-bottom:none}
+.nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid #e0e0db;border-top-color:#3B4BC8;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.progress-bar-wrap{background:#f0f0ec;border-radius:999px;height:10px;flex:1;overflow:hidden}
+.progress-bar-fill{height:100%;border-radius:999px;transition:width .4s}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.table-wrap{overflow-x:auto}
+table.data-table{width:100%;border-collapse:collapse;font-size:13px}
+table.data-table th{text-align:left;padding:8px 10px;border-bottom:2px solid #e5e5e0;font-weight:600;color:#555;font-size:12px}
+table.data-table td{padding:8px 10px;border-bottom:1px solid #f0f0ec;color:#1a1a1a;vertical-align:middle}
+table.data-table tr:last-child td{border-bottom:none}
+table.data-table tr:hover td{background:#fafaf8}
+.search-input{padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;width:100%;margin-bottom:10px;outline:none;font-family:inherit}
+.search-input:focus{border-color:#7F77DD}
+.tab-bar{display:flex;gap:6px;margin-bottom:1.25rem;flex-wrap:wrap}
+.tab{padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid #e0e0db;border-radius:8px;background:#fff;color:#888}
+.tab.on{background:#f5f5f3;color:#1a1a1a;border-color:#bbb}
+.bottom-nav{display:flex;gap:6px;margin-bottom:1.25rem;flex-wrap:wrap;border-bottom:1px solid #e5e5e0;padding-bottom:1rem}
+.bnav-item{padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid transparent;border-radius:8px;color:#888;background:transparent}
+.bnav-item:hover{background:#f0f0ec;color:#1a1a1a}
+.bnav-item.on{background:#fff;border-color:#e0e0db;color:#1a1a1a;font-weight:600}
+/* Tarea card */
+.tarea-card{background:#fff;border:1px solid #e5e5e0;border-radius:10px;padding:12px 14px;margin-bottom:8px;transition:opacity .2s}
+.tarea-card.done{background:#f9fdf9;border-color:#9FE1CB;opacity:.85}
+.tarea-card.dragged-in{border-left:3px solid #EF9F27}
+.tarea-card.standby{background:#f0f4ff;border-color:#b5c0f0;opacity:.85;border-left:3px solid #3B4BC8}
+.bitacora-row{font-size:11px;color:#999;margin-top:4px;display:flex;flex-wrap:wrap;gap:6px}
+.bit-item{background:#f5f5f3;border-radius:4px;padding:2px 6px;font-size:11px;color:#888}
+.tarea-card.eliminada{background:#fff5f5;border-color:#fca5a5;opacity:.75;border-left:3px solid #dc2626}
+
+.news-section{width:100%;margin-top:0}
+.news-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.news-badge{background:#3B4BC8;color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px;letter-spacing:.05em}
+.news-date{font-size:11px;color:#888}
+.news-card{display:block;background:#fff;border:1px solid #dde0f5;border-radius:10px;padding:12px 14px;margin-bottom:8px;text-decoration:none;transition:all .15s;box-shadow:0 2px 8px rgba(59,75,200,0.06);word-break:break-word}
+.news-card:hover{border-color:#3B4BC8;box-shadow:0 4px 16px rgba(59,75,200,0.12);transform:translateY(-1px)}
+.news-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+.news-fuente{font-size:10px;font-weight:700;color:#3B4BC8;background:#EEEDFE;padding:2px 8px;border-radius:4px}
+.news-fecha{font-size:10px;color:#bbb}
+.news-titulo{font-size:13px;font-weight:600;color:#1a1a1a;margin-bottom:4px;line-height:1.4}
+.news-resumen{font-size:11px;color:#666;line-height:1.5;margin-bottom:6px}
+.news-link{font-size:11px;color:#3B4BC8;font-weight:600}
+
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:1000;display:flex;align-items:center;justify-content:center}
+.modal-box{background:#fff;border-radius:14px;padding:1.5rem;width:90%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,0.15)}
+.modal-title{font-size:15px;font-weight:600;color:#1a1a1a;margin-bottom:4px}
+.modal-sub{font-size:13px;color:#888;margin-bottom:1rem}
+.motivo-opt{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid #e0e0db;border-radius:8px;margin-bottom:8px;cursor:pointer;transition:all .15s}
+.motivo-opt:hover{background:#f0f4ff;border-color:#3B4BC8}
+.motivo-opt.selected{background:#EEEDFE;border-color:#3B4BC8}
+.motivo-num{width:22px;height:22px;border-radius:50%;background:#3B4BC8;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.motivo-text{font-size:13px;color:#1a1a1a;line-height:1.4}
+.tarea-header{display:flex;align-items:flex-start;gap:10px}
+.tarea-check{width:20px;height:20px;border-radius:50%;border:2px solid #d1d1d1;flex-shrink:0;margin-top:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.tarea-check.checked{background:#8DC63F;border-color:#8DC63F}
+.tarea-check.checked::after{content:'✓';color:#fff;font-size:11px;font-weight:700}
+.tarea-check.disabled{cursor:default;opacity:.4}
+.tarea-body{flex:1}
+.tarea-desc{font-size:14px;font-weight:500;color:#1a1a1a;margin-bottom:4px}
+.tarea-desc.done-text{text-decoration:line-through;color:#999}
+.tarea-meta{font-size:12px;color:#888;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tarea-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.new-tarea-row{display:flex;gap:8px;margin-top:4px}
+.slot-empty{background:#fafaf8;border:1.5px dashed #e0e0db;border-radius:10px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.slot-num{font-size:12px;color:#bbb;min-width:20px;text-align:center}
+@media(max-width:520px){.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.grid2{grid-template-columns:1fr}.bottom-nav{gap:4px}.bnav-item{padding:7px 10px;font-size:12px}.new-tarea-row{flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+/* TaxIA v1775155643 */
+const SB_URL='https://ysctgzbqaducghivamff.supabase.co';
+const SB_KEY='sb_publishable_t3OG3DkHfRGxVA1hrnJUbg_kRZ6hbM8';
+const RESEND_KEY='re_af8ioNRf_PL4mNcXJTDq7eRk6t8HM7DZr';
+const FROM_EMAIL='onboarding@resend.dev';
+let session=null,usersCache={},clientesCache=[],gruposCache=[];
+const COLORS={'av-m':'#7F77DD','av-a':'#8DC63F','av-y':'#EF9F27','av-b':'#D4537E','av-x':'#378ADD'};
+const app=document.getElementById('app');
+
+async function sbGet(t,p=''){
+  const r=await fetch(`${SB_URL}/rest/v1/${t}${p}`,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+  return r.json();
+}
+async function sbPost(t,d,pref='return=representation'){
+  return fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':pref},body:JSON.stringify(d)});
+}
+async function sbPatch(t,p,d){
+  return fetch(`${SB_URL}/rest/v1/${t}${p}`,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(d)});
+}
+async function sbUpsert(t,d,conflict=''){
+  const pref=conflict?'resolution=merge-duplicates,return=representation':'return=representation';
+  return fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':pref},body:JSON.stringify(d)});
+}
+async function sbDelete(t,p){
+  return fetch(`${SB_URL}/rest/v1/${t}${p}`,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+}
+
+function todayKey(){
+  return new Date().toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
+}
+function nowISO(){return new Date().toLocaleString('sv-SE',{timeZone:'America/Tijuana',hour12:false}).replace(' ','T')+'-07:00'}
+function formatDate(k){const d=new Date(k+'T12:00:00');return d.toLocaleDateString('es-MX',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}
+function formatDateShort(k){const d=new Date(k+'T12:00:00');return d.toLocaleDateString('es-MX',{month:'short',day:'numeric'})}
+function roleBadge(r){return r==='admin'?'<span class="badge badge-admin">Director</span>':r==='manager'?'<span class="badge badge-mgr">Líder de Práctica Fiscal</span>':'<span class="badge badge-ast">Consultor Junior</span>'}
+function escH(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function av(a){return a||'av-x'}
+function pc(email){const u=usersCache[email];return u?COLORS[av(u.av)]||'#888':'#888'}
+function visibleEmails(){
+  const all=Object.keys(usersCache);
+  if(session.role==='admin') return all;
+  if(session.role==='manager') return all.filter(e=>usersCache[e].role!=='admin');
+  return [session.email];
+}
+function getNotifyEmails(){
+  const admin=Object.keys(usersCache).find(e=>usersCache[e].role==='admin');
+  const mgr=Object.keys(usersCache).find(e=>usersCache[e].role==='manager');
+  if(session.role==='admin') return [admin].filter(Boolean);
+  if(session.role==='manager') return [mgr,admin].filter(Boolean);
+  return [mgr,admin].filter(Boolean);
+}
+async function loadCaches(){
+  const [g,c]=await Promise.all([sbGet('grupos','?select=*&order=nombre.asc'),sbGet('clientes','?select=*,grupos(nombre)&order=nombre.asc')]);
+  gruposCache=g||[];clientesCache=c||[];
+}
+
+async function getActiveTareas(email){
+  const today=todayKey();
+  const {data:tareas}=await sbGet('tareas',`?email=eq.${encodeURIComponent(email)}&select=*&order=orden.asc,created_at.asc`).then(r=>({data:r}));
+  if(!tareas) return [];
+  // pendientes de cualquier fecha + concluidas de hoy
+  return tareas.filter(t=>t.status==='pendiente'||t.status==='standby'||t.status==='eliminada'||(t.status==='concluida'&&t.fecha_conclusion&&t.fecha_conclusion.startsWith(today)));
+}
+
+async function ensureArrastre(email){
+  // Si hoy no tiene tareas pendientes propias, verificar si hay pendientes de días anteriores ya cargadas
+  // Las pendientes simplemente persisten — no hay acción adicional necesaria
+}
+
+function renderTopNav(active){
+  const items=[
+    {id:'dashboard',label:'Dashboard',roles:['admin','manager']},
+    {id:'plan',label:'Mis tareas',roles:['admin','manager','assistant']},
+    {id:'clientes',label:'Clientes',roles:['admin','manager','assistant']},
+    {id:'historial',label:'Historial',roles:['admin','manager','assistant']},
+    {id:'admin',label:'Usuarios',roles:['admin']}
+  ];
+  return `<div class="nav">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="font-size:16px;font-weight:700;color:#3B4BC8">T<span style="color:#8DC63F">a</span><span style="color:#8DC63F">x</span>IA <span style="color:#8DC63F">día a día</span></div>
+      <div style="font-size:13px;color:#888">${formatDate(todayKey())}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="avatar ${av(session.av)}" style="width:32px;height:32px;font-size:12px">${session.initials||'??'}</div>
+      <button class="btn btn-sm" onclick="doLogout()">Salir</button>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    ${items.filter(i=>i.roles.includes(session.role)).map(i=>`<div class="bnav-item${active===i.id?' on':''}" onclick="nav('${i.id}')">${i.label}</div>`).join('')}
+  </div>`;
+}
+
+function doLogout(){session=null;usersCache={};clientesCache=[];gruposCache=[];renderLogin();}
+function nav(s){
+  const t=todayKey();
+  if(s==='dashboard') renderDashboard(t);
+  else if(s==='plan') renderMisPlan(null);
+  else if(s==='clientes') renderClientes();
+  else if(s==='historial') renderHistory();
+  else if(s==='admin') renderAdmin();
+}
+
+
+// Pool de noticias fiscales verificadas — se rotan 2 por día
+const NEWS_POOL = [
+  {
+    titulo: 'Declaración Anual ISR 2025 personas morales — vence el 31 de marzo',
+    resumen: 'El SAT fija el 31 de marzo como fecha límite definitiva para que personas morales presenten su Declaración Anual del ISR 2025. Multas de hasta $44,790 por incumplimiento.',
+    fuente: 'El Financiero',
+    url: 'https://www.elfinanciero.com.mx/tags/sat/',
+    fecha: 'Mar 2026'
+  },
+  {
+    titulo: 'Declaración Anual personas físicas: del 1 al 30 de abril 2026',
+    resumen: 'Las personas físicas con ingresos >$400,000, dos o más patrones, honorarios o arrendamiento deben presentar su declaración anual ante el SAT en abril 2026.',
+    fuente: 'El Informador',
+    url: 'https://www.informador.mx/mexico/declaracion-anual-2026-quienes-estan-obligados-a-presentarla-ante-el-sat-20260318-0129.html',
+    fecha: '23 Mar 2026'
+  },
+  {
+    titulo: 'SAT auditará 1,200 grandes contribuyentes y 12,000 PyMEs en 2026',
+    resumen: 'El SAT presentó su Plan Maestro de Fiscalización 2026: revisará 1,200 grandes empresas y 12,000 PyMEs enfocándose en factureras, simulación de pérdidas y abuso de estímulos fiscales.',
+    fuente: 'El Imparcial',
+    url: 'https://www.elimparcial.com/dinero/2026/03/24/el-sat-auditara-a-1200-grandes-contribuyentes-y-12000-pymes-en-2026-para-combatir-el-uso-de-factureras-la-simulacion-de-perdidas-y-el-abuso-de-estimulos-fiscales/',
+    fecha: '24 Mar 2026'
+  },
+  {
+    titulo: 'Regularización Fiscal 2026: hasta 100% de reducción en multas y recargos',
+    resumen: 'El SAT ofrece reducción de hasta 100% en multas, recargos y gastos de ejecución para personas físicas y PyMEs con ingresos hasta $300 millones en el ejercicio 2024.',
+    fuente: 'SAT / El Financiero',
+    url: 'https://www.sat.gob.mx/minisitio/RegularizacionFiscal/RegularizacionFiscal/index.html',
+    fecha: 'Ene 2026'
+  },
+  {
+    titulo: 'SAT y CFDI falsos: penas de 2 a 9 años de prisión desde 2026',
+    resumen: 'La Reforma Fiscal 2026 incorpora sanciones penales severas para quienes emitan o den efectos a CFDI falsos. Un solo comprobante cuestionado puede detonar consecuencias sobre todos los CFDI del contribuyente.',
+    fuente: 'El Financiero',
+    url: 'https://www.elfinanciero.com.mx/mis-finanzas/2026/01/04/aguas-con-el-sat-en-2026-que-sabemos-de-los-cambios-que-aplicara-para-combatir-las-facturas-falsas/',
+    fecha: '4 Ene 2026'
+  },
+  {
+    titulo: 'Días inhábiles SAT: 2 y 3 de abril 2026 (Jueves y Viernes Santo)',
+    resumen: 'La Regla 2.1.6 de la RMF 2026 declara inhábiles el 2 y 3 de abril para actos y trámites ante el SAT. Ajusta tus plazos de presentación y pago si vencen en esas fechas.',
+    fuente: 'RMF 2026 / Siempre Al Día',
+    url: 'https://siemprealdia.co/mexico/fiscal/dias-inhabiles-del-sat/',
+    fecha: 'Mar 2026'
+  },
+  {
+    titulo: 'SAT intensifica vigilancia de transferencias electrónicas en 2026',
+    resumen: 'El SAT mantiene monitoreo de operaciones electrónicas y reporta movimientos inusuales. Depósitos en efectivo >$15,000 mensuales son reportados automáticamente por los bancos.',
+    fuente: 'El Imparcial',
+    url: 'https://www.elimparcial.com/mexico/2026/03/09/sat-mantiene-vigilancia-sobre-transferencias-en-marzo-de-2026-y-aclara-que-conceptos-pueden-generar-alertas-automaticas-en-el-sistema-financiero/',
+    fecha: '9 Mar 2026'
+  },
+  {
+    titulo: 'Dictamen de estados financieros vence el 15 de mayo 2026',
+    resumen: 'Personas morales obligadas u opcionales deben presentar el dictamen de estados financieros ante el SAT a más tardar el 15 de mayo de 2026. Omitirlo expone a revisiones profundas.',
+    fuente: 'BBVA Calendario Fiscal',
+    url: 'https://www.bbva.com/es/mx/empresas/calendario-fiscal-2026-para-personas-morales-en-mexico-y-fechas-esenciales-del-sat/',
+    fecha: 'Mar 2026'
+  },
+  {
+    titulo: 'e.Firma: saldo a favor >$10,000 requiere certificado activo para devolución',
+    resumen: 'El SAT advierte que contribuyentes con saldo a favor mayor a $10,000 pesos necesitan e.firma vigente para solicitar devolución. Verifica la vigencia de tu certificado antes del cierre anual.',
+    fuente: 'SAT',
+    url: 'https://www.sat.gob.mx',
+    fecha: 'Mar 2026'
+  },
+  {
+    titulo: 'Garantía obligatoria al impugnar créditos fiscales desde 2026',
+    resumen: 'La Reforma Fiscal 2026 obliga a garantizar créditos fiscales impugnados incluso al interponer Recurso de Revocación ante el SAT. El plazo para constituir garantía es de 6 meses desde la presentación.',
+    fuente: 'Holland & Knight',
+    url: 'https://www.hklaw.com/en/insights/publications/2025/11/reforma-fiscal-para-2026-en-mexico',
+    fecha: 'Nov 2025'
+  },
+  {
+    titulo: 'SAT verifica cédula profesional en honorarios médicos para deducciones',
+    resumen: 'Como parte de la revisión de facturas, el SAT verificará que la cédula profesional en honorarios médicos coincida con la persona que emitió el CFDI. Aplica para deducciones personales 2025.',
+    fuente: 'El Financiero',
+    url: 'https://www.elfinanciero.com.mx/tags/sat/',
+    fecha: 'Feb 2026'
+  },
+  {
+    titulo: 'Recaudación tributaria enero 2026 creció 11% real: SAT',
+    resumen: 'La recaudación tributaria en enero 2026 alcanzó $595,758 millones de pesos, representando un crecimiento real del 11% respecto al mismo mes del año anterior, informó el SAT.',
+    fuente: 'El Financiero',
+    url: 'https://www.elfinanciero.com.mx/tags/sat/',
+    fecha: 'Feb 2026'
+  },
+  {
+    titulo: 'Plataformas digitales obligadas a dar acceso al SAT desde abril 2026',
+    resumen: 'A partir del 1 de abril 2026, las plataformas digitales de servicios e intermediación deben permitir al SAT acceso a información de operaciones en tiempo real conforme al CFDI 4.0.',
+    fuente: 'BBVA / SAT',
+    url: 'https://www.bbva.com/es/mx/empresas/calendario-fiscal-2026-para-personas-morales-en-mexico-y-fechas-esenciales-del-sat/',
+    fecha: 'Mar 2026'
+  },
+  {
+    titulo: 'PRODECON habilita micrositio guía para declaración anual 2026',
+    resumen: 'La Procuraduría de la Defensa del Contribuyente (PRODECON) habilitó un micrositio con guía paso a paso para apoyar a contribuyentes en la presentación de su declaración anual ante el SAT.',
+    fuente: 'PRODECON',
+    url: 'https://www.prodecon.gob.mx',
+    fecha: 'Mar 2026'
+  }
+];
+
+function getTodayNews() {
+  // Selecciona 2 noticias diferentes cada día basado en el día del año
+  const now = new Date();
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+  const idx1 = dayOfYear % NEWS_POOL.length;
+  const idx2 = (dayOfYear + 7) % NEWS_POOL.length;
+  // Evitar duplicados
+  const i2 = idx1 === idx2 ? (idx2 + 1) % NEWS_POOL.length : idx2;
+  return [NEWS_POOL[idx1], NEWS_POOL[i2]];
+}
+
+function renderNewsCards() {
+  const noticias = getTodayNews();
+  return noticias.map(n => `
+    <a href="${n.url}" target="_blank" rel="noopener" class="news-card">
+      <div class="news-card-top">
+        <span class="news-fuente">${escH(n.fuente)}</span>
+        <span class="news-fecha">${escH(n.fecha)}</span>
+      </div>
+      <div class="news-titulo">${escH(n.titulo)}</div>
+      <div class="news-resumen">${escH(n.resumen)}</div>
+      <div class="news-link">Leer más →</div>
+    </a>`).join('');
+}
+
+function renderNewsSection() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+  return `<div class="news-section">
+    <div class="news-header">
+      <span class="news-badge">Fiscal MX — Hoy</span>
+      <span class="news-date">${dateStr}</span>
+    </div>
+    ${renderNewsCards()}
+  </div>`;
+}
+
+
+function renderLogin(){
+  document.body.style.margin='0';
+  document.body.style.padding='0';
+  document.body.style.background='#f8f9ff';
+  app.style.maxWidth='100%';
+  app.style.padding='0';
+  
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+  const noticias = getTodayNews();
+  const newsHTML = noticias.map(n=>`
+    <a href="${n.url}" target="_blank" rel="noopener" style="display:block;background:#fff;border:1px solid #dde0f5;border-radius:10px;padding:10px 12px;margin-bottom:8px;text-decoration:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:10px;font-weight:700;color:#3B4BC8;background:#EEEDFE;padding:2px 7px;border-radius:4px">${escH(n.fuente)}</span>
+        <span style="font-size:10px;color:#bbb">${escH(n.fecha)}</span>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:#1a1a1a;margin-bottom:3px;line-height:1.4">${escH(n.titulo)}</div>
+      <div style="font-size:11px;color:#666;line-height:1.4;margin-bottom:4px">${escH(n.resumen)}</div>
+      <div style="font-size:11px;color:#3B4BC8;font-weight:600">Leer más →</div>
+    </a>`).join('');
+
+  app.innerHTML=`
+  <style>
+    @keyframes fadeInDown{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes scaleIn{from{opacity:0;transform:scale(0.93)}to{opacity:1;transform:scale(1)}}
+    @keyframes fadeInUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
+    .anim-logo{animation:fadeInDown .7s ease both}
+    .anim-sub{animation:fadeIn .7s ease .4s both}
+    .anim-card{animation:scaleIn .6s cubic-bezier(.22,.68,0,1.2) .5s both}
+    .anim-news{animation:fadeInUp .5s ease .8s both}
+    .login-page{width:100%;min-height:100vh;min-height:-webkit-fill-available;background:#f8f9ff;overflow-y:auto;-webkit-overflow-scrolling:touch;position:relative;}
+    .login-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;}
+    .login-content{position:relative;z-index:1;width:100%;max-width:400px;margin:0 auto;padding:env(safe-area-inset-top, 20px) 20px env(safe-area-inset-bottom, 20px);box-sizing:border-box;display:flex;flex-direction:column;align-items:center;min-height:100vh;min-height:-webkit-fill-available;}
+    .login-top{padding-top:32px;text-align:center;width:100%;}
+    .login-form-box{background:rgba(255,255,255,0.97);border:1px solid #dde0f5;border-radius:16px;padding:24px 20px;width:100%;box-shadow:0 4px 24px rgba(59,75,200,0.1);margin-bottom:16px;box-sizing:border-box;}
+    .login-input{width:100%;padding:10px 12px;font-size:16px;border:1px solid #e0e0db;border-radius:8px;background:#fff;color:#1a1a1a;outline:none;font-family:inherit;box-sizing:border-box;-webkit-appearance:none;}
+    .login-input:focus{border-color:#3B4BC8;}
+    .login-btn-main{width:100%;padding:13px;font-size:15px;font-weight:600;cursor:pointer;border:none;border-radius:8px;background:#3B4BC8;color:#fff;font-family:inherit;margin-top:14px;-webkit-appearance:none;}
+    .login-label{font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;text-align:left;display:block;}
+    .login-err{font-size:12px;color:#dc2626;margin-top:6px;display:none;}
+    .news-box{width:100%;margin-bottom:24px;}
+    .news-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+    .news-badge{background:#3B4BC8;color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px;letter-spacing:.05em;}
+    .news-date-lbl{font-size:11px;color:#888;}
+  </style>
+  
+  <div class="login-page" id="login-page">
+    <!-- Fondo SVG -->
+    <svg class="login-bg anim-sub" viewBox="0 0 900 700" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <rect width="900" height="700" fill="#f8f9ff"/>
+      <ellipse cx="820" cy="-20" rx="260" ry="180" fill="#3B4BC8" fill-opacity="0.06" transform="rotate(-10 820 -20)"/>
+      <ellipse cx="80" cy="720" rx="220" ry="160" fill="#8DC63F" fill-opacity="0.06" transform="rotate(10 80 720)"/>
+      <pattern id="dp" x="0" y="0" width="34" height="34" patternUnits="userSpaceOnUse"><circle cx="17" cy="17" r="0.7" fill="#3B4BC8" fill-opacity="0.07"/></pattern>
+      <rect width="900" height="700" fill="url(#dp)"/>
+      <g opacity="0.12">
+        <circle cx="720" cy="100" r="5" fill="#3B4BC8"/>
+        <circle cx="800" cy="60" r="4" fill="#3B4BC8"/>
+        <circle cx="860" cy="130" r="5" fill="#8DC63F"/>
+        <line x1="720" y1="100" x2="800" y2="60" stroke="#3B4BC8" stroke-width="0.8"/>
+        <line x1="800" y1="60" x2="860" y2="130" stroke="#3B4BC8" stroke-width="0.8"/>
+      </g>
+      <rect x="896" y="0" width="4" height="700" fill="#8DC63F" fill-opacity="0.2"/>
+    </svg>
+
+    <div class="login-content">
+      <!-- Logo -->
+      <div class="login-top anim-logo">
+        <div style="font-size:28px;font-weight:700;color:#3B4BC8;margin-bottom:4px">T<span style="color:#8DC63F">a</span><span style="color:#8DC63F">x</span>IA <span style="color:#8DC63F">día a día</span></div>
+        <div class="anim-sub" style="font-size:12px;color:#888;margin-bottom:20px;letter-spacing:.04em">MSST Consulting SC</div>
+      </div>
+
+      <!-- Form -->
+      <div class="login-form-box anim-card">
+        <div style="margin-bottom:12px">
+          <label class="login-label">Correo</label>
+          <input class="login-input" id="lemail" type="email" placeholder="usuario@msstconsulting.com" autocomplete="email">
+        </div>
+        <div>
+          <label class="login-label">Contraseña</label>
+          <input class="login-input" id="lpass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <div class="login-err" id="lerr">Correo o contraseña incorrectos.</div>
+        <button class="login-btn-main" onclick="doLogin()" id="lbtn">Entrar</button>
+      </div>
+
+      <!-- Noticias -->
+      <div class="news-box anim-news">
+        <div class="news-header">
+          <span class="news-badge">Fiscal MX — Hoy</span>
+          <span class="news-date-lbl">${dateStr}</span>
+        </div>
+        ${newsHTML}
+      </div>
+    </div>
+  </div>`;
+}
+
+
+async function doLogin(){
+  const em=document.getElementById('lemail').value.trim().toLowerCase();
+  const pw=document.getElementById('lpass').value;
+  const btn=document.getElementById('lbtn');
+  btn.innerHTML='<span class="spinner"></span> Verificando...';btn.disabled=true;
+  try{
+    const data=await sbGet('users',`?email=eq.${encodeURIComponent(em)}&pass=eq.${encodeURIComponent(pw)}&select=*`);
+    if(!data||!data.length){document.getElementById('lerr').style.display='block';btn.innerHTML='Entrar';btn.disabled=false;return;}
+    session={...data[0]};
+    sbPatch('users','?email=eq.'+encodeURIComponent(em),{last_login:nowISO()});
+    const [allU]=await Promise.all([sbGet('users','?select=*'),loadCaches()]);
+    allU.forEach(u=>{usersCache[u.email]=u;});
+    if(session.role==='assistant') renderMisPlan();
+    else renderDashboard(todayKey());
+  }catch(e){
+    document.getElementById('lerr').textContent='Error de conexión.';document.getElementById('lerr').style.display='block';btn.innerHTML='Entrar';btn.disabled=false;
+  }
+}
+
+/* ===== MIS TAREAS ===== */
+async function renderMisPlan(targetEmail){
+  const today=todayKey();
+  const email=targetEmail||session.email;
+  const canManage=(session.role==='admin')||(session.role==='manager'&&usersCache[email]?.role==='assistant');
+  const isOwn=email===session.email;
+  let memberList=[];
+  if(session.role==='admin') memberList=Object.entries(usersCache);
+  else if(session.role==='manager') memberList=Object.entries(usersCache).filter(([e,u])=>u.role!=='admin');
+  else memberList=[[session.email,usersCache[session.email]||session]];
+
+  const selectorHTML=(memberList.length>1)?`
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid #e5e5e0">
+      ${memberList.map(([e,u])=>`
+        <div onclick="renderMisPlan('${e}')" style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:10px;cursor:pointer;border:${e===email?'2px solid #3B4BC8':'1px solid #e0e0db'};background:${e===email?'#EEEDFE':'#fff'};transition:all .15s">
+          <div class="avatar ${av((usersCache[e]||{}).av||'av-x')}" style="width:28px;height:28px;font-size:11px">${(usersCache[e]||{}).initials||'??'}</div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:${e===email?'#3B4BC8':'#1a1a1a'}">${escH((usersCache[e]||{}).name||e)}</div>
+            <div style="font-size:11px;color:${e===email?'#3B4BC8':'#888'}">${e===session.email?'Yo':((usersCache[e]||{}).role==='manager'?'Líder':'Consultor')}</div>
+          </div>
+        </div>`).join('')}
+    </div>`:'';
+  app.innerHTML=renderTopNav('plan')+selectorHTML+`<div class="loading" id="pl"><span class="spinner"></span>Cargando tareas...</div><div id="pf"></div>`;
+  const tareas=await getActiveTareas(email);
+  document.getElementById('pl').style.display='none';
+  buildPlanUI(tareas,today,email,canManage||isOwn,canManage&&!isOwn);
+}
+
+function buildPlanUI(tareas,today,targetEmail,canEdit,isRemote){
+  const pendientes=tareas.filter(t=>t.status==='pendiente');
+  const enStandby=tareas.filter(t=>t.status==='standby');
+  const concluidas=tareas.filter(t=>t.status==='concluida');
+  const eliminadas=tareas.filter(t=>t.status==='eliminada');
+  const total=tareas.length;
+  const slots=5;
+  const pct=total>0?Math.round(concluidas.length/total*100):0;
+  const tEmail=targetEmail||session.email;
+  const color=pc(tEmail);
+  const tUser=usersCache[tEmail]||session;
+  const clientOpts='<option value="">Sin cliente</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-name="'+escH(c.nombre)+'">'+escH(c.nombre)+(c.grupos?' ('+escH(c.grupos.nombre)+')':'')+' </option>').join('');
+
+  let tareasHTML='';
+  tareas.forEach((t,i)=>{
+    const isDone=t.status==='concluida';
+    const isOld=!t.fecha_creacion||t.fecha_creacion<today;
+    const isStandby=t.status==='standby';
+    const isEliminada=t.status==='eliminada';
+    const canDelete=session.role==='admin'&&!isDone&&!isEliminada;
+    const canStandby=canEdit&&(session.role==='admin'||session.role==='manager');
+    const bitHTML=(t.bitacora||[]).length?('<div class="bitacora-row">'+
+      (t.bitacora||[]).map(b=>'<span class="bit-item">'+(b.fecha?b.fecha.slice(0,10):'')+' '+escH(b.evento||'')+' </span>').join('')+
+    '</div>'):'';
+    let metaHTML='';
+    if(t.client_name) metaHTML+='<span>'+escH(t.client_name)+'</span>';
+    if(isStandby) metaHTML+='<span style="background:#E6F1FB;color:#3B4BC8;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600">Stand By</span>';
+    if(t.asignada_por&&t.asignada_por!==t.email&&usersCache[t.asignada_por]) metaHTML+='<span style="background:#EEEDFE;color:#3B4BC8;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:500">Asignada por '+escH(usersCache[t.asignada_por].name)+'</span>';
+    if(isOld&&!isDone&&!isStandby) metaHTML+='<span style="color:#EF9F27;font-weight:500">Arrastrada del '+t.fecha_creacion+'</span>';
+    if(isDone) metaHTML+='<span style="color:#8DC63F;font-weight:500">Concluida '+(t.fecha_conclusion?t.fecha_conclusion.slice(0,10):'')+'</span>';
+    if(isDone&&t.motivo_conclusion) metaHTML+='<span style="background:#f0f0ec;color:#555;padding:2px 8px;border-radius:999px;font-size:11px">'+escH(t.motivo_conclusion)+'</span>';
+    if(isEliminada) metaHTML+='<span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600">Eliminada</span>';
+        const toggleArgs="'"+t.id+"','"+( isDone?'pendiente':'concluida')+"','"+tEmail+"'";
+    let checkOnclick=canEdit&&!isStandby?'onclick="toggleTarea('+toggleArgs+')"':'';
+    let checkClass='tarea-check'+(isDone?' checked':'')+((!canEdit||isStandby)?' disabled':'');
+    let actionsHTML='';
+    const tid=t.id, te=tEmail, isb=String(isStandby);
+    if(canEdit&&!isDone&&!isEliminada){
+      actionsHTML='<div class="tarea-actions" style="display:flex;flex-direction:column;gap:4px">';
+      if(!isStandby) actionsHTML+='<button class="btn btn-success btn-sm" onclick="mostrarModalConclusion(\'' +tid+ '\',\'' +te+ '\')">Concluir</button>';
+      if(canStandby){
+        const sbColor=isStandby?'#3B4BC8':'#888';
+        const sbBorder=isStandby?'#3B4BC8':'#e0e0db';
+        const sbBg=isStandby?'#EEEDFE':'#fff';
+        const sbTxt=isStandby?'Reactivar':'Stand By';
+        actionsHTML+='<button class="btn btn-sm" style="font-size:11px;padding:4px 8px;color:'+sbColor+';border-color:'+sbBorder+';background:'+sbBg+'" onclick="toggleStandby(\'' +tid+ '\',\'' +isb+ '\',\'' +te+ '\')">'+sbTxt+'</button>';
+      }
+      if(canDelete) actionsHTML+='<button class="btn btn-sm btn-danger" style="font-size:11px;padding:4px 8px" onclick="eliminarTarea(\'' +tid+ '\',\'' +te+ '\')">Eliminar</button>';
+      actionsHTML+='</div>';
+    } else if(isDone){
+      actionsHTML='<div style="width:24px;height:24px;border-radius:50%;background:#8DC63F;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:700">✓</span></div>';
+    } else if(isEliminada){
+      actionsHTML='<div style="width:24px;height:24px;border-radius:50%;background:#fca5a5;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:700">✕</span></div>';
+    }
+    let cardClass='tarea-card'+(isDone?' done':isStandby?' standby':isEliminada?' eliminada':'')+(isOld&&!isDone&&!isStandby&&!isEliminada?' dragged-in':'');
+    tareasHTML+='<div class="'+cardClass+'" id="tcard-'+t.id+'">'+
+      '<div class="tarea-header">'+
+        '<div class="'+checkClass+'" '+checkOnclick+'></div>'+
+        '<div class="tarea-body">'+
+          '<div class="tarea-desc'+(isDone||isStandby?' done-text':'')+'">'+escH(t.descripcion)+'</div>'+
+          '<div class="tarea-meta">'+metaHTML+'</div>'+
+          bitHTML+
+        '</div>'+
+        actionsHTML+
+      '</div>'+
+    '</div>';
+  });
+
+  // Slots vacíos: siempre que haya menos de 5 tareas pendientes activas
+  const slotsLibres=slots-pendientes.length; // standby NO cuenta para el límite
+  let newSlotsHTML='';
+  if(slotsLibres>0){
+    const slotPlaceholder=total===0?'Agrega tu tarea...':'Agregar tarea...';
+    for(let i=0;i<slotsLibres;i++){
+      const idx=`ns${i}`;
+      newSlotsHTML+=`<div class="slot-empty" id="slot-${idx}">
+        <span class="slot-num">${pendientes.length+i+1}</span>
+        <input type="text" id="ndesc-${idx}" placeholder="${slotPlaceholder}" style="flex:1;border:none;background:transparent;padding:0;font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addTarea('${idx}')">
+        <select id="ncli-${idx}" style="width:140px;flex-shrink:0;font-size:13px">${clientOpts}</select>
+        <button class="btn btn-sm btn-primary" onclick="addTareaRemota('${idx}','${tEmail}')">Agregar</button>
+      </div>`;
+    }
+  }
+
+  const pf=document.getElementById('pf');
+  pf.innerHTML=`
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
+    <div style="flex:1">
+      <div style="font-size:15px;font-weight:600">${tUser.name||session.name}${isRemote?' <span style="font-size:11px;background:#EEEDFE;color:#3B4BC8;padding:2px 8px;border-radius:999px;font-weight:500">Asignando</span>':''}</div>
+      <div style="font-size:12px;color:#888">${formatDate(today)}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:20px;font-weight:700;color:${color}">${pct}%</div>
+      <div style="font-size:12px;color:#888">${concluidas.length}/${total} concluidas</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:1.25rem">
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+  </div>
+  <div id="tareas-list">
+    ${tareasHTML||''}
+    ${newSlotsHTML}
+  </div>
+  ${total>0&&concluidas.length===0?`<div style="font-size:13px;color:#888;margin-top:8px;text-align:center">Presiona "Concluir" en cada tarea al terminarla.</div>`:''}
+  <div class="ok-msg" id="tarea-ok"></div>
+  <div class="err-msg" id="tarea-err" style="margin-top:8px"></div>`;
+}
+
+function mostrarModalConclusion(tareaId, targetEmail){
+  const motivos=[
+    {id:'satisfactorio',txt:'Satisfactoriamente'},
+    {id:'no_satisfactorio',txt:'No satisfactoriamente'},
+    {id:'no_aplica',txt:'Se concluye porque ya no aplica'},
+    {id:'genera_nueva',txt:'Se concluye pero se genera una nueva tarea'},
+    {id:'comentar_superior',txt:'Se comentará con superior'}
+  ];
+  let selected=null;
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-conclusion';
+  overlay.innerHTML=`
+    <div class="modal-box">
+      <div class="modal-title">Concluir tarea</div>
+      <div class="modal-sub">Selecciona el motivo de conclusión:</div>
+      ${motivos.map((m,i)=>`<div class="motivo-opt" id="mopt-${m.id}" onclick="selectMotivo('${m.id}')">
+        <div class="motivo-num">${i+1}</div>
+        <div class="motivo-text">${m.txt}</div>
+      </div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:1rem">
+        <button class="btn btn-full" onclick="cerrarModal()" style="flex:1;margin-top:0">Cancelar</button>
+        <button class="btn btn-success btn-full" id="btn-confirmar-conclusion" onclick="confirmarConclusion('${tareaId}','${targetEmail}')" style="flex:1;margin-top:0" disabled>Confirmar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function selectMotivo(id){
+  document.querySelectorAll('.motivo-opt').forEach(el=>el.classList.remove('selected'));
+  document.getElementById('mopt-'+id)?.classList.add('selected');
+  const btn=document.getElementById('btn-confirmar-conclusion');
+  if(btn){btn.disabled=false;btn.dataset.motivo=id;}
+}
+
+function cerrarModal(){
+  document.getElementById('modal-conclusion')?.remove();
+}
+
+const MOTIVOS_TEXTO={
+  satisfactorio:'Satisfactoriamente',
+  no_satisfactorio:'No satisfactoriamente',
+  no_aplica:'Ya no aplica',
+  genera_nueva:'Genera nueva tarea',
+  comentar_superior:'Se comentará con superior'
+};
+
+async function confirmarConclusion(tareaId,targetEmail){
+  const btn=document.getElementById('btn-confirmar-conclusion');
+  const motivoId=btn?.dataset?.motivo;
+  if(!motivoId) return;
+  cerrarModal();
+  const motivoTxt=MOTIVOS_TEXTO[motivoId]||motivoId;
+  const generaNueva=motivoId==='genera_nueva';
+  const {data:t}=await sbGet('tareas',`?id=eq.${tareaId}&select=bitacora,descripcion,client_id,client_name,fecha_creacion`).then(r=>({data:r?.[0]}));
+  const bits=[...(t?.bitacora||[]),{fecha:nowISO(),evento:`Concluida por ${session.name} — ${motivoTxt}`}];
+  await sbPatch('tareas',`?id=eq.${tareaId}`,{status:'concluida',fecha_conclusion:nowISO(),updated_at:nowISO(),motivo_conclusion:motivoTxt,genera_nueva_tarea:generaNueva,bitacora:bits});
+  if(generaNueva){
+    const today=todayKey();
+    const tareas=await getActiveTareas(targetEmail);
+    const pendientes=tareas.filter(x=>x.status==='pendiente');
+    if(pendientes.length<5){
+      const bitNueva=[{fecha:nowISO(),evento:`Generada por conclusión de tarea anterior — ${session.name}`}];
+      await sbPost('tareas',{email:targetEmail,descripcion:'[NUEVA] '+escH(t?.descripcion||''),client_id:t?.client_id||null,client_name:t?.client_name||'',fecha_creacion:today,status:'pendiente',orden:tareas.length,asignada_por:session.email,bitacora:bitNueva});
+    }
+  }
+  renderMisPlan(targetEmail);
+}
+
+async function eliminarTarea(tareaId,targetEmail){
+  if(!confirm('¿Eliminar esta tarea? Quedará marcada como eliminada en el historial.')) return;
+  const {data:t}=await sbGet('tareas',`?id=eq.${tareaId}&select=bitacora`).then(r=>({data:r?.[0]}));
+  const bits=[...(t?.bitacora||[]),{fecha:nowISO(),evento:`Eliminada por ${session.name}`}];
+  await sbPatch('tareas',`?id=eq.${tareaId}`,{status:'eliminada',updated_at:nowISO(),bitacora:bits});
+  renderMisPlan(targetEmail);
+}
+
+async function addTarea(idx){await addTareaRemota(idx,session.email);}
+
+async function addTareaRemota(idx,targetEmail){
+  const desc=document.getElementById(`ndesc-${idx}`).value.trim();
+  const cliId=document.getElementById(`ncli-${idx}`).value;
+  const cliName=cliId?(clientesCache.find(c=>c.id===cliId)||{}).nombre||'':'';
+  const err=document.getElementById('tarea-err');
+  if(!desc){err.textContent='Escribe una descripción.';err.style.display='block';setTimeout(()=>err.style.display='none',2500);return;}
+  const today=todayKey();
+  const tareas=await getActiveTareas(targetEmail);
+  const pendientes=tareas.filter(t=>t.status==='pendiente');
+  if(pendientes.length>=5){
+    const nm=usersCache[targetEmail]?.name||targetEmail;
+    err.textContent=`${nm} ya tiene 5 tareas pendientes activas.`;err.style.display='block';
+    setTimeout(()=>err.style.display='none',3000);return;
+  }
+  const asignadaPor=targetEmail!==session.email?session.email:null;
+  const nombreCorto=session.name.split(' ').slice(0,2).join(' ');
+  const bitInicial=[{fecha:nowISO(),evento:asignadaPor?`Asignada por ${nombreCorto}`:`Creada por ${nombreCorto}`}];
+  await sbPost('tareas',{email:targetEmail,descripcion:desc,client_id:cliId||null,client_name:cliName,fecha_creacion:today,status:'pendiente',orden:tareas.length,asignada_por:asignadaPor,bitacora:bitInicial});
+  await sendPlanNotification([...tareas,{descripcion:desc,client_name:cliName,status:'pendiente'}],targetEmail);
+  const ok=document.getElementById('tarea-ok');
+  const nm=targetEmail!==session.email?` a ${usersCache[targetEmail]?.name||targetEmail}`:'';
+  ok.textContent=`Tarea asignada${nm}.`;ok.style.display='block';
+  setTimeout(()=>ok.style.display='none',2000);
+  renderMisPlan(targetEmail);
+}
+
+async function concluirTarea(id){await concluirTareaRemota(id,session.email);}
+
+async function concluirTareaRemota(id,targetEmail){
+  mostrarModalConclusion(id,targetEmail);
+}
+
+async function toggleTarea(id,newStatus,targetEmail){
+  const email=targetEmail||session.email;
+  if(newStatus==='concluida'){await concluirTareaRemota(id,email);return;}
+  const bit={fecha:nowISO(),evento:'Reactivada'};
+  const {data:t}=await sbGet('tareas',`?id=eq.${id}&select=bitacora`).then(r=>({data:r?.[0]}));
+  const bits=[...(t?.bitacora||[]),bit];
+  await sbPatch('tareas',`?id=eq.${id}`,{status:'pendiente',fecha_conclusion:null,updated_at:nowISO(),bitacora:bits});
+  renderMisPlan(email);
+}
+
+async function toggleStandby(id,currentlyStandby,targetEmail){
+  const email=targetEmail||session.email;
+  const isStandby=currentlyStandby==='true'||currentlyStandby===true;
+  const newStatus=isStandby?'pendiente':'standby';
+  const evento=isStandby?'Reactivada desde Stand By':'Puesta en Stand By';
+  const {data:t}=await sbGet('tareas',`?id=eq.${id}&select=bitacora,fecha_creacion,updated_at`).then(r=>({data:r?.[0]}));
+  const bits=[...(t?.bitacora||[]),{fecha:nowISO(),evento}];
+  await sbPatch('tareas',`?id=eq.${id}`,{status:newStatus,updated_at:nowISO(),fecha_standup:isStandby?null:nowISO(),bitacora:bits});
+  renderMisPlan(email);
+}
+
+async function sendPlanNotification(tareas,targetEmail){
+  const recipients=targetEmail&&targetEmail!==session.email
+    ? [...new Set([targetEmail,...getNotifyEmails()])]
+    : getNotifyEmails();
+  if(!recipients.length) return;
+  const today=todayKey();
+  const filas=tareas.filter(t=>t.descripcion).map((t,i)=>`<tr>
+    <td style="padding:6px 12px;border-bottom:1px solid #f0f0ec">${i+1}</td>
+    <td style="padding:6px 12px;border-bottom:1px solid #f0f0ec;font-weight:500">${escH(t.descripcion)}</td>
+    <td style="padding:6px 12px;border-bottom:1px solid #f0f0ec;color:#888">${escH(t.client_name||'—')}</td>
+    <td style="padding:6px 12px;border-bottom:1px solid #f0f0ec;color:${t.status==='concluida'?'#8DC63F':'#EF9F27'};font-weight:500">${t.status==='concluida'?'Concluida':'Pendiente'}</td>
+  </tr>`).join('');
+  const html=`<div style="font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:24px">
+    <div style="background:#3B4BC8;color:#fff;border-radius:10px 10px 0 0;padding:20px 24px">
+      <div style="font-size:18px;font-weight:700">MSST Consulting</div>
+      <div style="font-size:13px;opacity:.8">Actualización de tareas — ${today}</div>
+    </div>
+    <div style="background:#fff;border:1px solid #e5e5e0;border-top:none;border-radius:0 0 10px 10px;padding:20px 24px">
+      <p style="font-size:14px;color:#555;margin-bottom:16px"><strong>${session.name}</strong> actualizó sus tareas del día.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <thead><tr style="background:#f5f5f3">
+          <th style="padding:8px 12px;text-align:left;font-size:12px;color:#888">#</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;color:#888">Tarea</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;color:#888">Cliente</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;color:#888">Estatus</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <p style="font-size:12px;color:#bbb;margin-top:20px">Generado automáticamente — MSST Consulting</p>
+    </div>
+  </div>`;
+  try{
+    await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':'Bearer '+RESEND_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:FROM_EMAIL,to:recipients,subject:`Tareas actualizadas — ${session.name} — ${today}`,html})});
+  }catch(e){console.warn('Email error:',e);}
+}
+
+/* ===== DASHBOARD ===== */
+function buildTareaRow(t){
+  var tColor=t.status==='concluida'?'#999':'#555';
+  var dotColor=t.status==='concluida'?'#8DC63F':t.status==='standby'?'#3B4BC8':'#d1d1d1';
+  var dotChar=t.status==='concluida'?'✓':t.status==='standby'?'⏸':'○';
+  var strike=t.status==='concluida'?'text-decoration:line-through':'';
+  var clientTxt=t.client_name?' ('+escH(t.client_name)+')':'';
+  var altaTxt='📅 Alta: '+(t.fecha_creacion||'—');
+  var concTxt=t.status==='concluida'&&t.fecha_conclusion?'✓ Concluida: '+t.fecha_conclusion.slice(0,10):'';
+  var sbTxt=t.status==='standby'?'⏸ Stand By':'';
+  var row='<div style="display:flex;align-items:center;gap:6px;margin:2px 0;font-size:13px;color:'+tColor+'">'+
+    '<span style="color:'+dotColor+';font-size:11px">'+dotChar+'</span>'+
+    '<span style="'+strike+'">'+escH(t.descripcion)+'</span>'+
+    '<span style="font-size:11px;color:#999">'+clientTxt+'</span>'+
+  '</div>'+
+  '<div style="display:flex;gap:10px;margin-left:18px;margin-top:2px;flex-wrap:wrap">'+
+    '<span style="font-size:10px;color:#bbb">'+altaTxt+'</span>';
+  if(concTxt) row+='<span style="font-size:10px;color:#1D9E75;font-weight:500">'+concTxt+'</span>';
+  if(sbTxt) row+='<span style="font-size:10px;color:#3B4BC8;font-weight:500">'+sbTxt+'</span>';
+  row+='</div>';
+  return row;
+}
+function fmtLastLogin(iso){
+  if(!iso) return 'Sin conexión registrada';
+  try{
+    const d=new Date(iso);
+    return d.toLocaleString('es-MX',{timeZone:'America/Tijuana',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  }catch(e){return iso.slice(0,16);}
+}
+async function renderDashboard(date){
+  app.innerHTML=renderTopNav('dashboard')+`<div class="loading" id="dl"><span class="spinner"></span>Cargando...</div><div id="dc"></div>`;
+  const visible=visibleEmails();
+  const allTareas=await sbGet('tareas',`?email=in.(${visible.map(e=>`"${e}"`).join(',')})&select=*&order=created_at.asc`);
+  const today=todayKey();
+  const byEmail={};
+  visible.forEach(em=>{
+    const ut=(allTareas||[]).filter(t=>t.email===em&&(t.status==='pendiente'||t.status==='standby'||(t.status==='concluida'&&t.fecha_conclusion&&t.fecha_conclusion.startsWith(today))||(t.status==='eliminada'&&t.updated_at&&t.updated_at.startsWith(today))));
+    byEmail[em]=ut;
+  });
+  document.getElementById('dl').style.display='none';
+  const dc=document.getElementById('dc');
+
+  let sumRows='';
+  visible.forEach(em=>{
+    const u=usersCache[em];if(!u)return;
+    const tareas=byEmail[em]||[];
+    const total=tareas.length;
+    const done=tareas.filter(t=>t.status==='concluida').length;
+    const pct=total>0?Math.round(done/total*100):0;
+    const color=pc(em);
+    const tList=total>0?tareas.map(t=>buildTareaRow(t)).join(''):'<div style="font-size:13px;color:#bbb">Sin tareas registradas</div>'
+    const canActOn=(session.role==='admin')||(session.role==='manager'&&u.role==='assistant');
+    const isMe=em===session.email;
+    var btnActOn = (canActOn||isMe) ?
+      '<div style="display:flex;gap:6px;flex-shrink:0">'+
+        '<button class="btn btn-sm btn-primary" onclick="renderMisPlan(\''+em+'\')" style="font-size:12px;padding:5px 10px">'+
+          (isMe?'Mis tareas':'Gestionar')+
+        '</button>'+
+      '</div>' : '';
+    var lastLoginTxt = u.last_login ?
+      ('&#128336; Última conexión: '+fmtLastLogin(u.last_login)) :
+      'Sin conexión registrada';
+    sumRows +=
+      '<div style="padding:12px 0;border-bottom:1px solid #f0f0ec">'+
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'+
+          '<div class="avatar '+av(u.av)+'" style="width:32px;height:32px;font-size:12px">'+(u.initials||'??')+'</div>'+
+          '<div style="flex:1">'+
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">'+
+              '<span style="font-size:14px;font-weight:600">'+u.name+'</span>'+roleBadge(u.role)+
+              '<span style="font-size:12px;color:#888;margin-left:auto">'+done+'/'+total+'</span>'+
+            '</div>'+
+            '<div style="font-size:11px;color:#bbb;margin-bottom:4px">'+lastLoginTxt+'</div>'+
+            '<div style="display:flex;align-items:center;gap:8px">'+
+              '<div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:'+pct+'%;background:'+color+'"></div></div>'+
+              '<span style="font-size:12px;font-weight:600;color:'+color+';min-width:32px">'+pct+'%</span>'+
+            '</div>'+
+          '</div>'+
+          btnActOn+
+        '</div>'+
+        tList+
+      '</div>';
+  });
+
+  const totalDone=visible.reduce((s,em)=>s+(byEmail[em]||[]).filter(t=>t.status==='concluida').length,0);
+  const totalStandby=visible.reduce((s,em)=>s+(byEmail[em]||[]).filter(t=>t.status==='standby').length,0);
+  const totalAll=visible.reduce((s,em)=>s+(byEmail[em]||[]).length,0);
+  const registros=visible.filter(em=>(byEmail[em]||[]).length>0).length;
+
+  dc.innerHTML=`
+  <div class="metric-grid">
+    <div class="metric"><div class="metric-label">Con tareas activas</div><div class="metric-val">${registros}<span style="font-size:14px;color:#888">/${visible.length}</span></div></div>
+    <div class="metric"><div class="metric-label">Concluidas hoy</div><div class="metric-val">${totalDone}<span style="font-size:14px;color:#888">/${totalAll}</span></div></div>
+    <div class="metric"><div class="metric-label">En Stand By</div><div class="metric-val">${totalStandby}</div></div>
+  </div>
+  <div class="card">
+    <div class="sec-label">Progreso del equipo — ${formatDate(today)}</div>
+    ${sumRows||'<div style="font-size:14px;color:#888">Sin tareas registradas.</div>'}
+  </div>
+  <div class="grid2" style="margin-bottom:1rem">
+    <div class="card" style="margin:0"><div class="sec-label">Historial — tareas concluidas por día</div><canvas id="chart-hist" height="200"></canvas></div>
+    <div class="card" style="margin:0"><div class="sec-label">Avance hoy por persona</div><canvas id="chart-comp" height="200"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="sec-label">Análisis ejecutivo — Claude</div>
+    <div class="analysis-box" id="abox"><span style="color:#bbb;font-style:italic">Presiona "Analizar" para el resumen ejecutivo.</span></div>
+    <button class="btn btn-purple btn-full" style="margin-top:12px" onclick="runAnalysis()">Analizar con Claude ↗</button>
+  </div>`;
+
+  buildCharts(visible,allTareas||[],byEmail);
+}
+
+function buildCharts(visible,allTareas,byEmail){
+  // Historial: últimos 14 días, tareas concluidas por día por persona
+  const dateMap={};
+  allTareas.forEach(t=>{
+    if(!visible.includes(t.email)||t.status!=='concluida'||!t.fecha_conclusion)return;
+    const d=t.fecha_conclusion.slice(0,10);
+    if(!dateMap[d])dateMap[d]={};
+    dateMap[d][t.email]=(dateMap[d][t.email]||0)+1;
+  });
+  const dates=Object.keys(dateMap).sort().slice(-14);
+  const labels=dates.map(formatDateShort);
+  const datasets=visible.map(em=>{
+    const u=usersCache[em];
+    return{label:u?u.name.split(' ')[0]:em,data:dates.map(d=>(dateMap[d]||{})[em]||0),borderColor:pc(em),backgroundColor:pc(em)+'33',tension:.3,fill:false,pointRadius:4};
+  });
+  const ctx1=document.getElementById('chart-hist');
+  if(ctx1&&labels.length) new Chart(ctx1,{type:'line',data:{labels,datasets},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},scales:{y:{min:0,ticks:{stepSize:1},grid:{color:'#f0f0ec'}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
+  else if(ctx1) ctx1.parentElement.innerHTML+='<div style="font-size:13px;color:#bbb;padding:1rem 0;text-align:center">Sin historial aún</div>';
+
+  const ctx2=document.getElementById('chart-comp');
+  if(ctx2) new Chart(ctx2,{type:'bar',data:{
+    labels:visible.map(em=>usersCache[em]?usersCache[em].name.split(' ')[0]:em),
+    datasets:[
+      {label:'Total',data:visible.map(em=>(byEmail[em]||[]).length),backgroundColor:'#e5e5e0'},
+      {label:'Concluidas',data:visible.map(em=>(byEmail[em]||[]).filter(t=>t.status==='concluida').length),backgroundColor:visible.map(em=>pc(em))}
+    ]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},scales:{y:{min:0,ticks:{stepSize:1},grid:{color:'#f0f0ec'}},x:{grid:{display:false}}}}});
+}
+
+async function runAnalysis(){
+  const visible=visibleEmails();
+  const today=todayKey();
+  const box=document.getElementById('abox');
+  box.innerHTML='<span class="spinner"></span><span style="color:#bbb;font-style:italic"> Analizando...</span>';
+  const allT=await sbGet('tareas',`?email=in.(${visible.map(e=>`"${e}"`).join(',')})&select=*`);
+  const lines=visible.map(em=>{
+    const u=usersCache[em];if(!u)return'';
+    const tareas=(allT||[]).filter(t=>t.email===em&&(t.status==='pendiente'||(t.status==='concluida'&&t.fecha_conclusion?.startsWith(today))));
+    if(!tareas.length)return`${u.name}: sin tareas`;
+    const done=tareas.filter(t=>t.status==='concluida').length;
+    return`${u.name} (${u.role==='admin'?'Director':u.role==='manager'?'Líder de Práctica Fiscal':'Consultor Junior'}) — ${done}/${tareas.length} concluidas:\n`+tareas.map(t=>`  ${t.status==='concluida'?'✓':'·'} ${t.descripcion}${t.client_name?' ['+t.client_name+']':''}`).join('\n');
+  }).filter(Boolean).join('\n\n');
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:`Eres asesor de productividad para MSST Consulting SC, firma de asesoría fiscal mexicana. Equipo: Manuel Santana (Director), Alberto (Líder de Práctica Fiscal), Yosded y Brenda (Consultores Junior).\n\nEstado de tareas hoy ${today}:\n\n${lines}\n\nAnálisis ejecutivo (máx 5 oraciones): (1) avance general del equipo, (2) quién va adelante y quién atrás, (3) recomendación de acción puntual. Tono Big 4, español, prosa corrida.`}]})});
+    const data=await res.json();
+    box.innerHTML=`<span style="font-size:14px;line-height:1.7">${data.content?.map(b=>b.text||'').join('')||'Sin respuesta.'}</span>`;
+  }catch(e){box.innerHTML='<span style="color:#dc2626">Error al conectar.</span>';}
+}
+
+/* ===== HISTORIAL ===== */
+async function renderHistory(){
+  app.innerHTML=renderTopNav('historial')+`<div class="loading" id="hsl"><span class="spinner"></span>Cargando...</div><div id="hsc"></div>`;
+  const visible=visibleEmails();
+  const raw=await sbGet('tareas',`?email=in.(${visible.map(e=>`"${e}"`).join(',')})&select=fecha_creacion,email&order=fecha_creacion.desc`);
+  const dateMap={};
+  (raw||[]).forEach(e=>{
+    const d=e.fecha_creacion;if(!d)return;
+    if(!dateMap[d])dateMap[d]=new Set();
+    dateMap[d].add(e.email);
+  });
+  const dates=Object.keys(dateMap).sort((a,b)=>b.localeCompare(a));
+  document.getElementById('hsl').style.display='none';
+  const hsc=document.getElementById('hsc');
+  if(!dates.length){hsc.innerHTML='<div class="card"><div style="font-size:14px;color:#888">Sin historial aún.</div></div>';return;}
+  hsc.innerHTML=`<div class="card">${dates.map(d=>`
+    <div class="hist-row">
+      <div style="flex:1"><div style="font-weight:600;font-size:14px">${formatDate(d)}</div><div style="font-size:12px;color:#888">${dateMap[d].size}/${visible.length} con tareas</div></div>
+      '+(session.role!=='assistant'?'<button class="btn btn-sm" onclick="renderDashboard(\'"+d+"\')">Dashboard</button>':'')+'
+    </div>`).join('')}</div>`;
+}
+
+/* ===== CLIENTES ===== */
+async function renderClientes(){
+  app.innerHTML=renderTopNav('clientes')+`
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+    <div style="font-size:15px;font-weight:600">Clientes</div>
+    ${session.role==='admin'?`<button class="btn btn-sm btn-purple" onclick="renderGrupos()">Gestionar grupos</button>`:''}
+  </div>
+  <div class="card">
+    <input class="search-input" id="cli-search" placeholder="Buscar cliente..." oninput="filterClientes()">
+    <div class="tab-bar" id="grupo-tabs"></div>
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>Cliente</th><th>RFC</th><th>Tipo</th><th>Grupo</th><th>Responsable</th><th></th></tr></thead>
+      <tbody id="cli-tbody"></tbody>
+    </table></div>
+  </div>`;
+  if(session.role==='admin'||session.role==='manager'){
+    const grupoOpts='<option value="">Sin grupo</option>'+gruposCache.map(g=>'<option value="'+g.id+'">'+escH(g.nombre)+'</option>').join('');
+    const respOpts='<option value="">Sin asignar</option>'+Object.values(usersCache).map(u=>'<option value="'+escH(u.name)+'">'+escH(u.name)+'</option>').join('');
+    const formHTML='<div class="card" id="cli-form-card">'+
+      '<div class="sec-label" id="cli-form-label">Nuevo cliente</div>'+
+      '<div class="grid2" style="margin-bottom:10px">'+
+        '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Nombre *</div><input id="cf-nombre" type="text" placeholder="Razón social o nombre"></div>'+
+        '<div><div style="font-size:12px;color:#888;margin-bottom:4px">RFC / Tax ID</div><input id="cf-rfc" type="text" placeholder="RFC000000000"></div>'+
+        '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Tipo</div>'+
+          '<select id="cf-tipo" style="width:100%"><option value="">Selecciona...</option><option>Persona Física</option><option>Persona Moral</option></select>'+
+        '</div>'+
+        '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Grupo</div>'+
+          '<select id="cf-grupo" style="width:100%">'+grupoOpts+'</select>'+
+        '</div>'+
+        '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Responsable</div>'+
+          '<select id="cf-resp" style="width:100%">'+respOpts+'</select>'+
+        '</div>'+
+        '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Notas</div><input id="cf-notas" type="text" placeholder="Notas opcionales"></div>'+
+      '</div>'+
+      '<input type="hidden" id="cf-editing" value="">'+
+      '<div class="err-msg" id="cf-err"></div>'+
+      '<button class="btn btn-primary btn-full" id="cf-btn" onclick="saveCliente()">Guardar cliente</button>'+
+      '<div class="ok-msg" id="cf-ok">Cliente guardado.</div>'+
+    '</div>';
+    app.innerHTML+=formHTML;
+  }
+
+  renderClientesTabla();renderGrupoTabs();
+}
+let activeGrupoFilter='all';
+function renderGrupoTabs(){
+  const tabs=document.getElementById('grupo-tabs');if(!tabs)return;
+  tabs.innerHTML=`<div class="tab on" onclick="filterByGrupo('all',this)">Todos</div>`+gruposCache.map(g=>`<div class="tab" onclick="filterByGrupo('${g.id}',this)">${escH(g.nombre)}</div>`).join('')+`<div class="tab" onclick="filterByGrupo('none',this)">Sin grupo</div>`;
+}
+function filterByGrupo(id,el){activeGrupoFilter=id;document.querySelectorAll('#grupo-tabs .tab').forEach(t=>t.classList.remove('on'));el.classList.add('on');renderClientesTabla();}
+function filterClientes(){renderClientesTabla();}
+function renderClientesTabla(){
+  const q=(document.getElementById('cli-search')||{value:''}).value.toLowerCase();
+  const tbody=document.getElementById('cli-tbody');if(!tbody)return;
+  let list=clientesCache;
+  if(activeGrupoFilter==='none')list=list.filter(c=>!c.grupo_id);
+  else if(activeGrupoFilter!=='all')list=list.filter(c=>c.grupo_id===activeGrupoFilter);
+  if(q)list=list.filter(c=>(c.nombre+c.rfc+c.notas).toLowerCase().includes(q));
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="6" style="color:#bbb;text-align:center;padding:1rem">Sin resultados</td></tr>`;return;}
+  tbody.innerHTML=list.map(c=>`<tr>
+    <td style="font-weight:500">${escH(c.nombre)}</td>
+    <td style="color:#888">${escH(c.rfc||'—')}</td>
+    <td>${escH(c.tipo||'—')}</td>
+    <td>'+(c.grupos?'<span class="badge badge-group">'+escH(c.grupos.nombre)+'</span>':'—')+'</td>
+    <td>${escH(c.responsable||'—')}</td>
+    <td style="white-space:nowrap">
+      ${(session.role==='admin'||session.role==='manager')?'<button class="btn btn-sm" onclick="editCliente(\''+c.id+'\')">Editar</button>':''}
+      ${(session.role==='admin'||session.role==='manager')?'<button class="btn btn-sm btn-danger" onclick="deleteCliente(\''+c.id+'\')">Eliminar</button>':''}
+    </td>
+  </tr>`).join('');
+}
+function editCliente(id){
+  const c=clientesCache.find(x=>x.id===id);if(!c)return;
+  document.getElementById('cf-nombre').value=c.nombre||'';document.getElementById('cf-rfc').value=c.rfc||'';
+  document.getElementById('cf-tipo').value=c.tipo||'';document.getElementById('cf-grupo').value=c.grupo_id||'';
+  document.getElementById('cf-resp').value=c.responsable||'';document.getElementById('cf-notas').value=c.notas||'';
+  document.getElementById('cf-editing').value=id;
+  document.getElementById('cli-form-label').textContent='Editar cliente';
+  document.getElementById('cf-btn').textContent='Actualizar cliente';
+  document.getElementById('cli-form-card').scrollIntoView({behavior:'smooth'});
+}
+async function saveCliente(){
+  const nombre=document.getElementById('cf-nombre').value.trim();
+  const rfc=document.getElementById('cf-rfc').value.trim().toUpperCase();
+  const tipo=document.getElementById('cf-tipo').value;
+  const grupo_id=document.getElementById('cf-grupo').value||null;
+  const responsable=document.getElementById('cf-resp').value;
+  const notas=document.getElementById('cf-notas').value.trim();
+  const editing=document.getElementById('cf-editing').value;
+  const err=document.getElementById('cf-err');err.style.display='none';
+  if(!nombre){err.textContent='El nombre es obligatorio.';err.style.display='block';return;}
+  const dup=clientesCache.find(c=>c.nombre.toLowerCase()===nombre.toLowerCase()&&c.id!==editing);
+  if(dup){err.textContent='Ya existe un cliente con ese nombre.';err.style.display='block';return;}
+  const btn=document.getElementById('cf-btn');btn.innerHTML='<span class="spinner"></span> Guardando...';btn.disabled=true;
+  if(editing)await sbPatch('clientes',`?id=eq.${editing}`,{nombre,rfc,tipo,grupo_id,responsable,notas});
+  else await sbPost('clientes',{nombre,rfc,tipo,grupo_id,responsable,notas});
+  await loadCaches();
+  btn.innerHTML=editing?'Actualizar cliente':'Guardar cliente';btn.disabled=false;
+  document.getElementById('cf-editing').value='';
+  ['cf-nombre','cf-rfc','cf-notas'].forEach(i=>{document.getElementById(i).value='';});
+  ['cf-tipo','cf-grupo','cf-resp'].forEach(i=>{document.getElementById(i).value='';});
+  const ok=document.getElementById('cf-ok');ok.style.display='block';
+  setTimeout(()=>ok.style.display='none',2000);
+  renderClientesTabla();renderGrupoTabs();
+}
+async function deleteCliente(id){
+  const c=clientesCache.find(x=>x.id===id);
+  if(!confirm(`¿Eliminar "${c?.nombre}"?`))return;
+  await sbDelete('clientes',`?id=eq.${id}`);
+  await loadCaches();renderClientesTabla();
+}
+
+async function renderGrupos(){
+  app.innerHTML=renderTopNav('clientes')+`
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
+    <button class="btn btn-sm" onclick="renderClientes()">← Clientes</button>
+    <div style="font-size:15px;font-weight:600">Grupos de clientes</div>
+  </div>
+  <div class="card"><div class="sec-label">Grupos existentes</div><div id="grupos-list"></div></div>
+  <div class="card">
+    <div class="sec-label">Nuevo grupo</div>
+    <div style="display:flex;gap:8px">
+      <input id="gf-nombre" type="text" placeholder="Nombre del grupo" style="flex:1" onkeydown="if(event.key==='Enter')saveGrupo()">
+      <button class="btn btn-primary" onclick="saveGrupo()">Agregar</button>
+    </div>
+    <div class="err-msg" id="gf-err"></div>
+    <div class="ok-msg" id="gf-ok">Grupo guardado.</div>
+  </div>`;
+  renderGruposList();
+}
+function renderGruposList(){
+  const el=document.getElementById('grupos-list');if(!el)return;
+  if(!gruposCache.length){el.innerHTML='<div style="font-size:14px;color:#888">Sin grupos aún.</div>';return;}
+  el.innerHTML=gruposCache.map(g=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0ec">
+      <span class="badge badge-group">${escH(g.nombre)}</span>
+      <span style="font-size:12px;color:#888">${clientesCache.filter(c=>c.grupo_id===g.id).length} clientes</span>
+      <button class="btn btn-sm btn-danger" style="margin-left:auto" onclick="deleteGrupo('${g.id}','${escH(g.nombre)}')">Eliminar</button>
+    </div>`).join('');
+}
+async function saveGrupo(){
+  const nombre=document.getElementById('gf-nombre').value.trim();
+  const err=document.getElementById('gf-err');err.style.display='none';
+  if(!nombre){err.textContent='Escribe un nombre.';err.style.display='block';return;}
+  if(gruposCache.find(g=>g.nombre.toLowerCase()===nombre.toLowerCase())){err.textContent='Ese grupo ya existe.';err.style.display='block';return;}
+  await sbPost('grupos',{nombre});
+  await loadCaches();
+  document.getElementById('gf-nombre').value='';
+  const ok=document.getElementById('gf-ok');ok.style.display='block';
+  setTimeout(()=>ok.style.display='none',1500);
+  renderGruposList();
+}
+async function deleteGrupo(id,nombre){
+  const count=clientesCache.filter(c=>c.grupo_id===id).length;
+  if(count>0){alert(`No puedes eliminar "${nombre}" — tiene ${count} cliente(s).`);return;}
+  if(!confirm(`¿Eliminar grupo "${nombre}"?`))return;
+  await sbDelete('grupos',`?id=eq.${id}`);
+  await loadCaches();renderGruposList();
+}
+
+/* ===== ADMIN USUARIOS ===== */
+async function renderAdmin(){
+  if(session.role!=='admin'){renderDashboard(todayKey());return;}
+  app.innerHTML=renderTopNav('admin')+`<div class="loading" id="al"><span class="spinner"></span>Cargando...</div><div id="ac"></div>`;
+  const users=await sbGet('users','?select=*&order=role.asc');
+  (users||[]).forEach(u=>{usersCache[u.email]=u;});
+  document.getElementById('al').style.display='none';
+  const AVM={admin:'av-m',manager:'av-a',assistant:'av-y'};
+  let rows=(users||[]).map(u=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #e5e5e0">
+      <div class="avatar ${av(u.av)}" style="width:34px;height:34px;font-size:12px">${u.initials||'??'}</div>
+      <div style="flex:1"><div style="font-size:14px;font-weight:600">${u.name} ${roleBadge(u.role)}</div><div style="font-size:12px;color:#888">${u.email}</div></div>
+      <button class="btn btn-sm" onclick="fillEditUser('${u.email}','${escH(u.name)}','${u.role}','${escH(u.pass)}')">Editar</button>
+      '+(u.email!==session.email?'<button class="btn btn-sm btn-danger" onclick="deleteUser(\'"+u.email+"\')">Eliminar</button>':'')+'
+    </div>`).join('');
+  document.getElementById('ac').innerHTML=`
+  <div class="card"><div class="sec-label">Usuarios activos</div>${rows}</div>
+  <div class="card">
+    <div class="sec-label">Agregar / editar usuario</div>
+    <div class="grid2" style="margin-bottom:10px">
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Nombre</div><input id="un" type="text" placeholder="Nombre Apellido"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Correo</div><input id="ue" type="email" placeholder="usuario@msstconsulting.com"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Contraseña</div><input id="up" type="text" placeholder="Contraseña"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Rol</div>
+        <select id="ur" style="width:100%"><option value="admin">Director</option><option value="manager">Líder de Práctica Fiscal</option><option value="assistant" selected>Consultor Junior</option></select>
+      </div>
+    </div>
+    <input type="hidden" id="uediting" value="">
+    <div class="err-msg" id="aerr"></div>
+    <button class="btn btn-primary btn-full" id="subtn" onclick="saveUser()">Guardar usuario</button>
+    <div class="ok-msg" id="aok">Usuario guardado.</div>
+  </div>`;
+}
+function fillEditUser(email,name,role,pass){
+  document.getElementById('un').value=name;document.getElementById('ue').value=email;
+  document.getElementById('up').value=pass;document.getElementById('ur').value=role;
+  document.getElementById('uediting').value=email;
+}
+async function deleteUser(email){
+  if(email===session.email)return;
+  if(!confirm(`¿Eliminar a ${usersCache[email]?.name}?`))return;
+  await sbDelete('users',`?email=eq.${encodeURIComponent(email)}`);
+  delete usersCache[email];renderAdmin();
+}
+async function saveUser(){
+  const name=document.getElementById('un').value.trim();
+  const email=document.getElementById('ue').value.trim().toLowerCase();
+  const pass=document.getElementById('up').value.trim();
+  const role=document.getElementById('ur').value;
+  const editing=document.getElementById('uediting').value;
+  const err=document.getElementById('aerr');err.style.display='none';
+  if(!name||!email||!pass){err.textContent='Completa todos los campos.';err.style.display='block';return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){err.textContent='Correo inválido.';err.style.display='block';return;}
+  const AVM={admin:'av-m',manager:'av-a',assistant:'av-y'};
+  const initials=name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  const av2=AVM[role]||'av-y';
+  const btn=document.getElementById('subtn');btn.innerHTML='<span class="spinner"></span> Guardando...';btn.disabled=true;
+  if(editing&&editing!==email)await sbDelete('users',`?email=eq.${encodeURIComponent(editing)}`);
+  await sbUpsert('users',{email,name,role,initials,av:av2,pass},'email');
+  usersCache[email]={email,name,role,initials,av:av2,pass};
+  btn.innerHTML='Guardar usuario';btn.disabled=false;
+  document.getElementById('uediting').value='';
+  const ok=document.getElementById('aok');ok.style.display='block';
+  setTimeout(()=>{ok.style.display='none';renderAdmin();},1500);
+}
+
+renderLogin();
+</script>
+</body>
+</html>
