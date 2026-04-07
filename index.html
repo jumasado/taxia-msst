@@ -195,6 +195,7 @@ function renderTopNav(active){
     {id:'plan',label:'Mis tareas',roles:['admin','manager','assistant']},
     {id:'clientes',label:'Clientes',roles:['admin','manager','assistant']},
     {id:'historial',label:'Historial',roles:['admin','manager','assistant']},
+    {id:'devoluciones',label:'Devoluciones IVA',roles:['admin','manager']},
     {id:'admin',label:'Usuarios',roles:['admin']}
   ];
   return `<div class="nav">
@@ -285,6 +286,7 @@ function nav(s){
   else if(s==='plan') renderMisPlan(null);
   else if(s==='clientes') renderClientes();
   else if(s==='historial') renderHistory();
+  else if(s==='devoluciones') renderDevoluciones();
   else if(s==='admin') renderAdmin();
 }
 
@@ -1553,6 +1555,427 @@ async function saveUser(){
   const ok=document.getElementById('aok');ok.style.display='block';
   setTimeout(()=>{ok.style.display='none';renderAdmin();},1500);
 }
+
+
+/* ===== DEVOLUCIONES IVA ===== */
+const DEV_STATUS={
+  requisitos_pendientes:{label:'Requisitos pendientes',color:'#92400E',bg:'#FEF3C7'},
+  solicitud_preparada:{label:'Solicitud preparada',color:'#0C447C',bg:'#E6F1FB'},
+  presentada_sat:{label:'Presentada ante SAT',color:'#3B4BC8',bg:'#EEEDFE'},
+  en_revision_sat:{label:'En revisión SAT',color:'#633806',bg:'#FAEEDA'},
+  requerimiento_sat:{label:'Requerimiento SAT',color:'#dc2626',bg:'#fef2f2'},
+  informacion_entregada:{label:'Información entregada a SAT',color:'#5a8a1a',bg:'#f0f7d4'},
+  devuelta:{label:'Devuelta / Concluida',color:'#5a8a1a',bg:'#f0f7d4'},
+  negada:{label:'Negada / Rechazada',color:'#dc2626',bg:'#fef2f2'}
+};
+
+const DEV_REQUISITOS_SAT=[
+  'e.firma vigente del contribuyente',
+  'Declaración mensual IVA del período presentada',
+  'DIOT del período presentada',
+  'Estado de cuenta bancario (máx. 2 meses) con CLABE',
+  'CLABE registrada en portal SAT',
+  'CFDIs de compras/gastos en formato .zip (máx 4MB c/u)',
+  'Papeles de trabajo del IVA acreditable',
+  'Acuse de declaración mensual',
+  'Buzón tributario activo'
+];
+
+let devCache=[];
+
+function diasHabilesDesde(fechaStr,dias){
+  const festivos=['01-01','02-05','03-21','05-01','09-16','11-20','12-25'];
+  let d=new Date(fechaStr+'T12:00:00');
+  let count=0;
+  while(count<dias){
+    d.setDate(d.getDate()+1);
+    const dow=d.getDay();
+    const mm=(d.getMonth()+1).toString().padStart(2,'0');
+    const dd=d.getDate().toString().padStart(2,'0');
+    const key=mm+'-'+dd;
+    if(dow!==0&&dow!==6&&!festivos.includes(key))count++;
+  }
+  return d.toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
+}
+
+function calcPlazos(dev){
+  if(!dev.fecha_inicio)return{};
+  const fi=dev.fecha_inicio;
+  const fp=dev.fecha_presentacion_sat||diasHabilesDesde(fi,10);
+  return{
+    presentacion:fp,
+    limite_req1:diasHabilesDesde(fp,20),
+    limite_resolucion:diasHabilesDesde(fp,40),
+  };
+}
+
+function devStatusBadge(status){
+  const s=DEV_STATUS[status]||{label:status,color:'#888',bg:'#f5f5f3'};
+  return '<span style="background:'+s.bg+';color:'+s.color+';padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600">'+s.label+'</span>';
+}
+
+function fmtMXN(n){
+  if(!n&&n!==0)return'—';
+  return'$'+Number(n).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function diasRestantes(fechaStr){
+  if(!fechaStr)return null;
+  const hoy=new Date(todayKey()+'T12:00:00');
+  const target=new Date(fechaStr+'T12:00:00');
+  return Math.round((target-hoy)/(1000*60*60*24));
+}
+
+function alertaDias(d,label){
+  if(d===null)return'';
+  if(d<0)return'<span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+label+': vencido hace '+Math.abs(d)+' días</span>';
+  if(d<=5)return'<span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+label+': '+d+' días</span>';
+  return'<span style="background:#f0f7d4;color:#5a8a1a;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+label+': '+d+' días</span>';
+}
+
+async function renderDevoluciones(){
+  app.innerHTML=renderTopNav('devoluciones')+`
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+    <div style="font-size:15px;font-weight:600">Devoluciones IVA</div>
+    <button class="btn btn-primary btn-sm" onclick="renderNuevaDevolucion()">+ Nueva solicitud</button>
+  </div>
+  <div class="loading" id="devl"><span class="spinner"></span>Cargando...</div>
+  <div id="dev-body"></div>`;
+  await loadDevoluciones();
+}
+
+async function loadDevoluciones(){
+  const data=await sbGet('devoluciones_iva','?select=*&order=created_at.desc');
+  devCache=data||[];
+  document.getElementById('devl').style.display='none';
+  renderDevList();
+}
+
+function renderDevList(){
+  const el=document.getElementById('dev-body');if(!el)return;
+  if(!devCache.length){
+    el.innerHTML='<div class="card"><div style="font-size:14px;color:#888;text-align:center;padding:1rem">Sin solicitudes registradas. Crea la primera con "+ Nueva solicitud".</div></div>';
+    return;
+  }
+
+  // Agrupar por status activos vs concluidos
+  const activos=devCache.filter(d=>d.status!=='devuelta'&&d.status!=='negada');
+  const cerrados=devCache.filter(d=>d.status==='devuelta'||d.status==='negada');
+
+  let html='';
+
+  if(activos.length){
+    html+='<div class="sec-label" style="margin-bottom:8px">En proceso ('+activos.length+')</div>';
+    activos.forEach(d=>{
+      const plazos=calcPlazos(d);
+      const drp=d.fecha_presentacion_sat?diasRestantes(plazos.limite_resolucion):null;
+      const drr=d.status==='requerimiento_sat'?diasRestantes(d.fecha_limite_req):null;
+      html+='<div class="card" style="margin-bottom:10px;cursor:pointer" onclick="renderDetalleDevolucion(\''+d.id+'\')">'+
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">'+
+          '<div style="flex:1">'+
+            '<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+escH(d.cliente_nombre||'—')+'</div>'+
+            '<div style="font-size:12px;color:#888;margin-bottom:6px">Período: '+escH(d.periodo)+(d.folio_fed?' · Folio: '+escH(d.folio_fed):'')+'</div>'+
+            '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'+
+              devStatusBadge(d.status)+
+              (d.monto_solicitado?'<span style="font-size:12px;color:#888">Solicitado: <strong>'+fmtMXN(d.monto_solicitado)+'</strong></span>':'')+
+              (d.status==='devuelta'&&d.monto_devuelto?'<span style="font-size:12px;color:#5a8a1a">Devuelto: <strong>'+fmtMXN(d.monto_devuelto)+'</strong></span>':'')+
+            '</div>'+
+            '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+
+              (plazos.presentacion&&!d.fecha_presentacion_sat?alertaDias(diasRestantes(plazos.presentacion),'Presentar'):'')+ 
+              (d.fecha_presentacion_sat&&drp!==null?alertaDias(drp,'Resolución SAT'):'')+ 
+            '</div>'+
+          '</div>'+
+          '<div style="text-align:right;flex-shrink:0">'+
+            '<div style="font-size:11px;color:#888">Responsable</div>'+
+            '<div style="font-size:12px;font-weight:500">'+escH(d.responsable||'—')+'</div>'+
+            '<div style="font-size:11px;color:#888;margin-top:4px">Inicio: '+escH(d.fecha_inicio||'—')+'</div>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    });
+  }
+
+  if(cerrados.length){
+    html+='<div class="sec-label" style="margin-top:1rem;margin-bottom:8px">Concluidas / Negadas ('+cerrados.length+')</div>';
+    cerrados.forEach(d=>{
+      html+='<div class="card" style="margin-bottom:8px;opacity:.8;cursor:pointer" onclick="renderDetalleDevolucion(\''+d.id+'\')">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'+
+          '<div>'+
+            '<div style="font-size:13px;font-weight:600">'+escH(d.cliente_nombre||'—')+'</div>'+
+            '<div style="font-size:11px;color:#888">'+escH(d.periodo)+'</div>'+
+          '</div>'+
+          '<div style="display:flex;align-items:center;gap:10px">'+
+            devStatusBadge(d.status)+
+            '<span style="font-size:12px;color:#888">'+fmtMXN(d.monto_devuelto||d.monto_solicitado)+'</span>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    });
+  }
+
+  el.innerHTML=html;
+}
+
+async function renderNuevaDevolucion(id){
+  const editing=id?devCache.find(d=>d.id===id):null;
+  const respOpts=Object.values(usersCache).map(u=>'<option value="'+escH(u.name)+'"'+(editing&&editing.responsable===u.name?' selected':'')+'>'+escH(u.name)+'</option>').join('');
+  const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+'</option>').join('');
+  const statusOpts=Object.entries(DEV_STATUS).map(([k,v])=>'<option value="'+k+'"'+(editing&&editing.status===k?' selected':k==='requisitos_pendientes'&&!editing?' selected':'')+'>'+v.label+'</option>').join('');
+  const correos=editing&&editing.correos_cliente?(editing.correos_cliente||[]).join(', '):'';
+
+  app.innerHTML=renderTopNav('devoluciones')+`
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
+    <button class="btn btn-sm" onclick="renderDevoluciones()">← Devoluciones</button>
+    <div style="font-size:15px;font-weight:600">${editing?'Editar solicitud':'Nueva solicitud de devolución IVA'}</div>
+  </div>
+  <div class="card">
+    <div class="sec-label">Datos generales</div>
+    <div class="grid2" style="margin-bottom:12px">
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Cliente *</div>
+        <select id="df-cliente" style="width:100%" onchange="document.getElementById('df-cli-nombre').value=this.options[this.selectedIndex].dataset.nombre||''">${cliOpts}</select>
+        <input type="hidden" id="df-cli-nombre" value="${escH(editing?.cliente_nombre||'')}">
+      </div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Período (ej. Febrero 2025) *</div>
+        <input id="df-periodo" type="text" placeholder="Febrero 2025" value="${escH(editing?.periodo||'')}"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Fecha de inicio *</div>
+        <input id="df-inicio" type="date" value="${editing?.fecha_inicio||todayKey()}"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Responsable</div>
+        <select id="df-resp" style="width:100%">${respOpts}</select></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Monto solicitado ($)</div>
+        <input id="df-monto-sol" type="number" placeholder="0.00" value="${editing?.monto_solicitado||''}"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Monto devuelto ($)</div>
+        <input id="df-monto-dev" type="number" placeholder="0.00" value="${editing?.monto_devuelto||''}"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Estatus</div>
+        <select id="df-status" style="width:100%">${statusOpts}</select></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Folio FED / SAT</div>
+        <input id="df-folio" type="text" placeholder="Folio de la solicitud SAT" value="${escH(editing?.folio_fed||'')}"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Fecha presentación SAT</div>
+        <input id="df-fecpres" type="date" value="${editing?.fecha_presentacion_sat||''}"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Fecha depósito</div>
+        <input id="df-fecdep" type="date" value="${editing?.fecha_deposito||''}"></div>
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:12px;color:#888;margin-bottom:4px">Correos del cliente (separados por coma)</div>
+      <input id="df-correos" type="text" placeholder="correo1@empresa.com, correo2@empresa.com" value="${escH(correos)}">
+    </div>
+    <div>
+      <div style="font-size:12px;color:#888;margin-bottom:4px">Motivo de rechazo (si aplica)</div>
+      <input id="df-rechazo" type="text" placeholder="Motivo del rechazo SAT" value="${escH(editing?.motivo_rechazo||'')}">
+    </div>
+    <div style="margin-top:12px">
+      <div style="font-size:12px;color:#888;margin-bottom:4px">Notas internas</div>
+      <input id="df-notas" type="text" placeholder="Notas para el equipo MSST" value="${escH(editing?.notas||'')}">
+    </div>
+    <input type="hidden" id="df-editing" value="${editing?.id||''}">
+    <div class="err-msg" id="df-err"></div>
+    <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="saveDevolucion()">
+      ${editing?'Actualizar solicitud':'Guardar solicitud'}
+    </button>
+  </div>`;
+}
+
+async function saveDevolucion(){
+  const cliSel=document.getElementById('df-cliente');
+  const cliente_id=cliSel.value||null;
+  const cliente_nombre=document.getElementById('df-cli-nombre').value||cliSel.options[cliSel.selectedIndex]?.dataset?.nombre||'';
+  const periodo=document.getElementById('df-periodo').value.trim();
+  const fecha_inicio=document.getElementById('df-inicio').value;
+  const responsable=document.getElementById('df-resp').value;
+  const monto_solicitado=parseFloat(document.getElementById('df-monto-sol').value)||null;
+  const monto_devuelto=parseFloat(document.getElementById('df-monto-dev').value)||null;
+  const status=document.getElementById('df-status').value;
+  const folio_fed=document.getElementById('df-folio').value.trim()||null;
+  const fecha_presentacion_sat=document.getElementById('df-fecpres').value||null;
+  const fecha_deposito=document.getElementById('df-fecdep').value||null;
+  const correos_raw=document.getElementById('df-correos').value;
+  const correos_cliente=correos_raw.split(',').map(s=>s.trim()).filter(Boolean);
+  const motivo_rechazo=document.getElementById('df-rechazo').value.trim()||null;
+  const notas=document.getElementById('df-notas').value.trim()||null;
+  const editing=document.getElementById('df-editing').value;
+  const err=document.getElementById('df-err');err.style.display='none';
+  if(!periodo||!fecha_inicio){err.textContent='Período y fecha de inicio son obligatorios.';err.style.display='block';return;}
+
+  const payload={cliente_id,cliente_nombre,periodo,fecha_inicio,responsable,monto_solicitado,monto_devuelto,status,folio_fed,fecha_presentacion_sat,fecha_deposito,correos_cliente,motivo_rechazo,notas,updated_at:nowISO()};
+
+  if(editing){
+    await sbPatch('devoluciones_iva','?id=eq.'+editing,payload);
+    // Si es nueva, cargar checklist de requisitos SAT
+  } else {
+    const res=await sbPost('devoluciones_iva',payload,'return=representation');
+    const data=await res.json();
+    const newId=(Array.isArray(data)?data[0]:data)?.id;
+    if(newId){
+      // Cargar checklist SAT por defecto
+      const reqs=DEV_REQUISITOS_SAT.map(r=>({devolucion_id:newId,requisito:r,completado:false}));
+      for(const r of reqs) await sbPost('dev_requisitos',r,'return=minimal');
+    }
+  }
+  await loadDevoluciones();
+  renderDevoluciones();
+}
+
+async function renderDetalleDevolucion(id){
+  const dev=devCache.find(d=>d.id===id);if(!dev)return;
+  const plazos=calcPlazos(dev);
+  app.innerHTML=renderTopNav('devoluciones')+`
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
+    <button class="btn btn-sm" onclick="renderDevoluciones()">← Devoluciones</button>
+    <div style="font-size:15px;font-weight:600;flex:1">${escH(dev.cliente_nombre||'—')} — ${escH(dev.periodo)}</div>
+    <button class="btn btn-sm btn-purple" onclick="renderNuevaDevolucion('${id}')">✏️ Editar</button>
+  </div>
+  <div class="loading" id="detl"><span class="spinner"></span>Cargando...</div>
+  <div id="det-body"></div>`;
+
+  const [requisitos,requerimientos]=await Promise.all([
+    sbGet('dev_requisitos','?devolucion_id=eq.'+id+'&select=*&order=id.asc'),
+    sbGet('dev_requerimientos','?devolucion_id=eq.'+id+'&select=*&order=numero_requerimiento.asc,id.asc')
+  ]);
+  document.getElementById('detl').style.display='none';
+
+  // ---- LÍNEA DE TIEMPO ----
+  const hitos=[
+    {label:'Día 0 — Inicio trámite',fecha:dev.fecha_inicio,done:!!dev.fecha_inicio,color:'#3B4BC8'},
+    {label:'Día 10 hábil — Presentar ante SAT',fecha:plazos.presentacion,done:!!dev.fecha_presentacion_sat,color:dev.fecha_presentacion_sat?'#8DC63F':'#EF9F27'},
+    {label:'Día 20 hábil — Límite requerimiento SAT',fecha:plazos.limite_req1,done:dev.status==='informacion_entregada'||dev.status==='devuelta',color:'#EF9F27'},
+    {label:'Día 40 hábil — Resolución SAT',fecha:plazos.limite_resolucion,done:dev.status==='devuelta'||dev.status==='negada',color:dev.status==='devuelta'?'#8DC63F':dev.status==='negada'?'#dc2626':'#888'},
+  ];
+  if(dev.fecha_presentacion_sat) hitos[1]={...hitos[1],fecha:dev.fecha_presentacion_sat,done:true,color:'#8DC63F'};
+
+  let timelineHTML=hitos.map((h,i)=>'<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">'+
+    '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">'+
+      '<div style="width:22px;height:22px;border-radius:50%;background:'+(h.done?h.color:'#e0e0db')+';display:flex;align-items:center;justify-content:center">'+
+        (h.done?'<span style="color:#fff;font-size:11px;font-weight:700">✓</span>':'<span style="color:#888;font-size:10px;">'+(i+1)+'</span>')+
+      '</div>'+
+      (i<hitos.length-1?'<div style="width:2px;height:24px;background:#e0e0db;margin:2px 0"></div>':'')+
+    '</div>'+
+    '<div style="padding-top:2px">'+
+      '<div style="font-size:13px;font-weight:600;color:'+(h.done?'#1a1a1a':'#888')+'">'+h.label+'</div>'+
+      '<div style="font-size:11px;color:#888">'+( h.fecha||'Pendiente')+'</div>'+
+      (h.fecha&&!h.done?alertaDias(diasRestantes(h.fecha),'Quedan'):'')+ 
+    '</div>'+
+  '</div>').join('');
+
+  // ---- CHECKLIST REQUISITOS ----
+  const reqRows=(requisitos||[]).map(r=>'<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid #f0f0ec">'+
+    '<div onclick="toggleRequisito(\''+r.id+'\','+r.completado+',\''+id+'\')" style="width:20px;height:20px;border-radius:50%;border:2px solid '+(r.completado?'#8DC63F':'#d1d1d1')+';flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:'+(r.completado?'#8DC63F':'#fff')+'">'+
+      (r.completado?'<span style="color:#fff;font-size:10px;font-weight:700">✓</span>':'')+
+    '</div>'+
+    '<div style="flex:1;font-size:13px;color:'+(r.completado?'#999':'#1a1a1a')+';'+(r.completado?'text-decoration:line-through':'')+'">'+ escH(r.requisito)+'</div>'+
+    (r.fecha_completado?'<div style="font-size:10px;color:#888">'+r.fecha_completado+'</div>':'')+
+  '</div>').join('');
+  const reqDone=(requisitos||[]).filter(r=>r.completado).length;
+
+  // ---- REQUERIMIENTOS SAT ----
+  const req1=(requerimientos||[]).filter(r=>r.numero_requerimiento===1);
+  const req2=(requerimientos||[]).filter(r=>r.numero_requerimiento===2);
+
+  function renderReqGroup(items,num){
+    if(!items.length&&dev.status!=='requerimiento_sat')return'';
+    let html='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">'+
+      (num===1?'1er Requerimiento SAT':'2do Requerimiento SAT')+
+      (dev.status==='requerimiento_sat'?'<button class="btn btn-sm" style="margin-left:10px;font-size:11px" onclick="agregarPuntoRequerimiento(\''+id+'\','+num+')">+ Agregar punto</button>':'')+
+    '</div>';
+    if(!items.length)return html+'<div style="font-size:13px;color:#bbb;padding:6px 0">Sin puntos registrados aún.</div>';
+    html+=items.map(p=>'<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid #f0f0ec">'+
+      '<div onclick="togglePuntoReq(\''+p.id+'\','+p.atendido+',\''+id+'\')" style="width:20px;height:20px;border-radius:4px;border:2px solid '+(p.atendido?'#3B4BC8':'#d1d1d1')+';flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:'+(p.atendido?'#3B4BC8':'#fff')+'">'+
+        (p.atendido?'<span style="color:#fff;font-size:10px;font-weight:700">✓</span>':'')+
+      '</div>'+
+      '<div style="flex:1;font-size:13px;color:'+(p.atendido?'#999':'#1a1a1a')+'">'+escH(p.punto)+'</div>'+
+      (p.fecha_atendido?'<div style="font-size:10px;color:#888">Atendido: '+p.fecha_atendido+'</div>':'')+
+    '</div>').join('');
+    return html;
+  }
+
+  // ---- DATOS FINANCIEROS ----
+  const difMonto=dev.monto_devuelto&&dev.monto_solicitado?(dev.monto_devuelto-dev.monto_solicitado):null;
+
+  document.getElementById('det-body').innerHTML=
+  // Resumen superior
+  '<div class="card" style="margin-bottom:1rem">'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+
+      '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center">'+
+        '<div style="font-size:11px;color:#888;margin-bottom:3px">Monto solicitado</div>'+
+        '<div style="font-size:16px;font-weight:600;color:#3B4BC8">'+fmtMXN(dev.monto_solicitado)+'</div>'+
+      '</div>'+
+      '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center">'+
+        '<div style="font-size:11px;color:#888;margin-bottom:3px">Monto devuelto</div>'+
+        '<div style="font-size:16px;font-weight:600;color:#8DC63F">'+fmtMXN(dev.monto_devuelto)+'</div>'+
+      '</div>'+
+      '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center">'+
+        '<div style="font-size:11px;color:#888;margin-bottom:3px">Diferencia</div>'+
+        '<div style="font-size:16px;font-weight:600;color:'+(difMonto===null?'#888':difMonto>=0?'#8DC63F':'#dc2626')+'">'+
+          (difMonto!==null?(difMonto>=0?'+':'')+fmtMXN(difMonto):'—')+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'+
+      devStatusBadge(dev.status)+
+      '<span style="font-size:12px;color:#888">Responsable: '+escH(dev.responsable||'—')+'</span>'+
+      (dev.folio_fed?'<span style="font-size:12px;color:#888">Folio: '+escH(dev.folio_fed)+'</span>':'')+
+    '</div>'+
+    (dev.notas?'<div style="font-size:12px;color:#555;margin-top:8px;background:#f5f5f3;padding:8px;border-radius:6px">'+escH(dev.notas)+'</div>':'')+
+  '</div>'+
+  // Línea de tiempo
+  '<div class="card" style="margin-bottom:1rem">'+
+    '<div class="sec-label" style="margin-bottom:10px">Línea de tiempo — Art. 22 CFF</div>'+
+    timelineHTML+
+  '</div>'+
+  // Checklist
+  '<div class="card" style="margin-bottom:1rem">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+      '<div class="sec-label">Requisitos SAT ('+reqDone+'/'+(requisitos||[]).length+')</div>'+
+    '</div>'+
+    reqRows+
+  '</div>'+
+  // Requerimientos SAT
+  '<div class="card" style="margin-bottom:1rem">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'+
+      '<div class="sec-label">Requerimientos SAT</div>'+
+      (dev.status!=='requerimiento_sat'?'<button class="btn btn-sm btn-danger" style="font-size:11px" onclick="activarRequerimiento(\''+id+'\')">Registrar requerimiento SAT</button>':'')+
+    '</div>'+
+    renderReqGroup(req1,1)+
+    (req1.length?renderReqGroup(req2,2):'')+
+  '</div>';
+}
+
+async function toggleRequisito(reqId,actual,devId){
+  const nuevo=!actual;
+  const patch={completado:nuevo};
+  if(nuevo)patch.fecha_completado=todayKey();
+  else patch.fecha_completado=null;
+  await sbPatch('dev_requisitos','?id=eq.'+reqId,patch);
+  renderDetalleDevolucion(devId);
+}
+
+async function togglePuntoReq(pId,actual,devId){
+  const nuevo=!actual;
+  const patch={atendido:nuevo};
+  if(nuevo)patch.fecha_atendido=todayKey();
+  else patch.fecha_atendido=null;
+  await sbPatch('dev_requerimientos','?id=eq.'+pId,patch);
+  renderDetalleDevolucion(devId);
+}
+
+async function activarRequerimiento(devId){
+  await sbPatch('devoluciones_iva','?id=eq.'+devId,{status:'requerimiento_sat',updated_at:nowISO()});
+  const idx=devCache.findIndex(d=>d.id===devId);
+  if(idx>=0)devCache[idx].status='requerimiento_sat';
+  renderDetalleDevolucion(devId);
+}
+
+async function agregarPuntoRequerimiento(devId,numReq){
+  const punto=prompt('Describe el punto requerido por el SAT:');
+  if(!punto||!punto.trim())return;
+  // Verificar que no se repita
+  const existing=await sbGet('dev_requerimientos','?devolucion_id=eq.'+devId+'&select=punto');
+  const puntos=(existing||[]).map(p=>p.punto.toLowerCase().trim());
+  if(puntos.includes(punto.trim().toLowerCase())){
+    alert('Este punto ya fue registrado anteriormente.');return;
+  }
+  await sbPost('dev_requerimientos',{devolucion_id:devId,numero_requerimiento:numReq,punto:punto.trim(),atendido:false,fecha_requerimiento:todayKey()},'return=minimal');
+  renderDetalleDevolucion(devId);
+}
+
 
 renderLogin();
 </script>
