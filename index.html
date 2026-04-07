@@ -858,7 +858,10 @@ async function sendPlanNotification(tareas,targetEmail){
 async function renderDashboard(date){
   app.innerHTML=renderTopNav('dashboard')+`<div class="loading" id="dl"><span class="spinner"></span>Cargando...</div><div id="dc"></div>`;
   const visible=visibleEmails();
-  const allTareas=await sbGet('tareas',`?email=in.(${visible.map(e=>`"${e}"`).join(',')})&select=*&order=created_at.asc`);
+  const [allTareas, allDev]=await Promise.all([
+    sbGet('tareas',`?email=in.(${visible.map(e=>`"${e}"`).join(',')})&select=*&order=created_at.asc`),
+    sbGet('devoluciones_iva','?select=*&order=created_at.desc')
+  ]);
   const today=todayKey();
   const byEmail={};
   visible.forEach(em=>{
@@ -917,14 +920,120 @@ async function renderDashboard(date){
   const totalAll=visible.reduce((s,em)=>s+(byEmail[em]||[]).length,0);
   const registros=visible.filter(em=>(byEmail[em]||[]).length>0).length;
 
+  // ===== DEVOLUCIONES IVA PARA DASHBOARD =====
+  const devActivas=(allDev||[]).filter(d=>d.status!=='devuelta'&&d.status!=='negada');
+  const devTotal=(allDev||[]).length;
+  const devEnProceso=devActivas.length;
+  const devConReq=devActivas.filter(d=>d.status==='requerimiento_sat').length;
+  const montoCartera=devActivas.reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
+  const montoDev=(allDev||[]).filter(d=>d.status==='devuelta').reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
+
+  // Alertas de plazos críticos (<=5 días hábiles)
+  const alertasDev=devActivas.map(d=>{
+    const plazos=calcPlazos(d);
+    const alerts=[];
+    if(!d.fecha_presentacion_sat&&plazos.presentacion){
+      const dr=diasRestantes(plazos.presentacion);
+      if(dr<=5) alerts.push({tipo:'Presentar SAT',dias:dr,cliente:d.cliente_nombre,periodo:d.periodo,id:d.id});
+    }
+    if(d.fecha_presentacion_sat&&plazos.limite_resolucion){
+      const dr=diasRestantes(plazos.limite_resolucion);
+      if(dr<=10) alerts.push({tipo:'Vence plazo resolución',dias:dr,cliente:d.cliente_nombre,periodo:d.periodo,id:d.id});
+    }
+    return alerts;
+  }).flat();
+
+  // Filas tabla devoluciones activas
+  let devRows='';
+  if(devActivas.length){
+    devRows=devActivas.slice(0,8).map(d=>{
+      const plazos=calcPlazos(d);
+      const dr=d.fecha_presentacion_sat?diasRestantes(plazos.limite_resolucion):(plazos.presentacion?diasRestantes(plazos.presentacion):null);
+      const drLabel=d.fecha_presentacion_sat?'Resolución':'Presentar';
+      let drBadge='';
+      if(dr!==null){
+        if(dr<0) drBadge='<span style="background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600">Vencido '+Math.abs(dr)+'d</span>';
+        else if(dr<=5) drBadge='<span style="background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600">'+drLabel+': '+dr+'d</span>';
+        else drBadge='<span style="background:#f0f7d4;color:#5a8a1a;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600">'+drLabel+': '+dr+'d</span>';
+      }
+      const s=DEV_STATUS[d.status]||{label:d.status,color:'#888',bg:'#f5f5f3'};
+      return '<tr onclick="nav('devoluciones')" style="cursor:pointer">'+
+        '<td style="font-weight:500">'+escH(d.cliente_nombre||'—')+'</td>'+
+        '<td style="color:#888">'+escH(d.periodo||'—')+'</td>'+
+        '<td><span style="background:'+s.bg+';color:'+s.color+';padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+s.label+'</span></td>'+
+        '<td style="font-size:12px;color:#3B4BC8;font-weight:500">'+fmtMXN(d.monto_solicitado)+'</td>'+
+        '<td>'+drBadge+'</td>'+
+        '<td style="font-size:11px;color:#888">'+escH(d.responsable||'—')+'</td>'+
+      '</tr>';
+    }).join('');
+  } else {
+    devRows='<tr><td colspan="6" style="text-align:center;color:#bbb;padding:1rem">Sin solicitudes activas</td></tr>';
+  }
+
   dc.innerHTML=`
-  <div class="metric-grid">
+  <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Operaciones del equipo — ${formatDate(today)}</div>
+  <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:1rem">
     <div class="metric"><div class="metric-label">Con tareas activas</div><div class="metric-val">${registros}<span style="font-size:14px;color:#888">/${visible.length}</span></div></div>
     <div class="metric"><div class="metric-label">Concluidas hoy</div><div class="metric-val">${totalDone}<span style="font-size:14px;color:#888">/${totalAll}</span></div></div>
     <div class="metric"><div class="metric-label">En Stand By</div><div class="metric-val">${totalStandby}</div></div>
   </div>
+
+  <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Cartera devoluciones IVA</div>
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:1rem">
+    <div class="metric" style="border-left:3px solid #3B4BC8">
+      <div class="metric-label">En proceso</div>
+      <div class="metric-val" style="color:#3B4BC8">${devEnProceso}</div>
+      <div style="font-size:11px;color:#888;margin-top:2px">de ${devTotal} totales</div>
+    </div>
+    <div class="metric" style="border-left:3px solid #EF9F27">
+      <div class="metric-label">Con requerimiento SAT</div>
+      <div class="metric-val" style="color:#EF9F27">${devConReq}</div>
+      <div style="font-size:11px;color:#888;margin-top:2px">${devConReq>0?'Atención requerida':'Sin alertas'}</div>
+    </div>
+    <div class="metric" style="border-left:3px solid #3B4BC8">
+      <div class="metric-label">Monto en cartera</div>
+      <div class="metric-val" style="font-size:16px;color:#3B4BC8">${montoCartera>0?'$'+Math.round(montoCartera/1000)+'K':'—'}</div>
+      <div style="font-size:11px;color:#888;margin-top:2px">MXN solicitado</div>
+    </div>
+    <div class="metric" style="border-left:3px solid #8DC63F">
+      <div class="metric-label">Monto recuperado</div>
+      <div class="metric-val" style="font-size:16px;color:#8DC63F">${montoDev>0?'$'+Math.round(montoDev/1000)+'K':'—'}</div>
+      <div style="font-size:11px;color:#888;margin-top:2px">MXN devuelto</div>
+    </div>
+  </div>
+
+  ${alertasDev.length?`
+  <div class="card" style="margin-bottom:1rem;border-left:3px solid #dc2626">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="width:8px;height:8px;border-radius:50%;background:#dc2626;flex-shrink:0"></div>
+      <div style="font-size:12px;font-weight:600;color:#dc2626;text-transform:uppercase;letter-spacing:.06em">Alertas de plazos críticos (${alertasDev.length})</div>
+    </div>
+    ${alertasDev.map(a=>'<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid #f0f0ec;cursor:pointer" onclick="nav('devoluciones')">'+
+      '<span style="background:'+(a.dias<0?'#fef2f2':a.dias<=2?'#fef2f2':'#FEF3C7')+';color:'+(a.dias<=2?'#dc2626':'#92400E')+';padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;flex-shrink:0">'+
+        (a.dias<0?'VENCIDO':''+a.dias+'d')+
+      '</span>'+
+      '<div style="flex:1">'+
+        '<div style="font-size:13px;font-weight:500">'+escH(a.cliente)+'</div>'+
+        '<div style="font-size:11px;color:#888">'+escH(a.periodo)+' · '+a.tipo+'</div>'+
+      '</div>'+
+    '</div>').join('')}
+  </div>`:''}
+
+  <div class="card" style="margin-bottom:1rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="sec-label">Devoluciones IVA activas</div>
+      <button class="btn btn-sm btn-purple" onclick="nav('devoluciones')" style="font-size:11px">Ver todas →</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Cliente</th><th>Período</th><th>Estatus</th><th>Monto</th><th>Plazo</th><th>Responsable</th></tr></thead>
+        <tbody>${devRows}</tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="card">
-    <div class="sec-label">Progreso del equipo — ${formatDate(today)}</div>
+    <div class="sec-label">Progreso del equipo</div>
     ${sumRows||'<div style="font-size:14px;color:#888">Sin tareas registradas.</div>'}
   </div>
   <div class="grid2" style="margin-bottom:1rem">
@@ -1735,8 +1844,25 @@ async function renderNuevaDevolucion(id){
         <select id="df-cliente" style="width:100%" onchange="document.getElementById('df-cli-nombre').value=this.options[this.selectedIndex].dataset.nombre||''">${cliOpts}</select>
         <input type="hidden" id="df-cli-nombre" value="${escH(editing?.cliente_nombre||'')}">
       </div>
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Período (ej. Febrero 2025) *</div>
-        <input id="df-periodo" type="text" placeholder="Febrero 2025" value="${escH(editing?.periodo||'')}"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Período *</div>
+        <div style="display:flex;gap:6px">
+          <select id="df-mes" style="flex:1">
+            <option value="">Mes...</option>
+            ${['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].map((m,i)=>{
+              const mesNum=String(i+1).padStart(2,'0');
+              const sel=editing&&editing.periodo&&editing.periodo.startsWith(m)?'selected':'';
+              return '<option value="'+m+'" '+sel+'>'+m+'</option>';
+            }).join('')}
+          </select>
+          <select id="df-anio" style="width:100px">
+            <option value="">Año...</option>
+            ${[2023,2024,2025,2026,2027].map(y=>{
+              const sel=editing&&editing.periodo&&editing.periodo.endsWith(String(y))?'selected':'';
+              return '<option value="'+y+'" '+sel+'>'+y+'</option>';
+            }).join('')}
+          </select>
+        </div>
+      </div>
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Fecha de inicio *</div>
         <input id="df-inicio" type="date" value="${editing?.fecha_inicio||todayKey()}"></div>
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Responsable</div>
@@ -1778,7 +1904,9 @@ async function saveDevolucion(){
   const cliSel=document.getElementById('df-cliente');
   const cliente_id=cliSel.value||null;
   const cliente_nombre=document.getElementById('df-cli-nombre').value||cliSel.options[cliSel.selectedIndex]?.dataset?.nombre||'';
-  const periodo=document.getElementById('df-periodo').value.trim();
+  const mes=document.getElementById('df-mes').value;
+  const anio=document.getElementById('df-anio').value;
+  const periodo=(mes&&anio)?mes+' '+anio:'';
   const fecha_inicio=document.getElementById('df-inicio').value;
   const responsable=document.getElementById('df-resp').value;
   const monto_solicitado=parseFloat(document.getElementById('df-monto-sol').value)||null;
