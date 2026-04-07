@@ -1828,6 +1828,11 @@ function renderDevList(){
 async function renderNuevaDevolucion(id){
   const editing=id?devCache.find(d=>d.id===id):null;
   const respOpts=Object.values(usersCache).map(u=>'<option value="'+escH(u.name)+'"'+(editing&&editing.responsable===u.name?' selected':'')+'>'+escH(u.name)+'</option>').join('');
+  const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const periodoMes=editing&&editing.periodo?editing.periodo.split(' ')[0]:'';
+  const periodoAnio=editing&&editing.periodo?editing.periodo.split(' ')[1]:'';
+  const mesOpts='<option value="">Mes...</option>'+MESES.map(m=>'<option value="'+m+'"'+(periodoMes===m?' selected':'')+'>'+m+'</option>').join('');
+  const anioOpts='<option value="">Año...</option>'+[2023,2024,2025,2026,2027].map(y=>'<option value="'+y+'"'+(periodoAnio===String(y)?' selected':'')+'>'+y+'</option>').join('');
   const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+'</option>').join('');
   const statusOpts=Object.entries(DEV_STATUS).map(([k,v])=>'<option value="'+k+'"'+(editing&&editing.status===k?' selected':k==='requisitos_pendientes'&&!editing?' selected':'')+'>'+v.label+'</option>').join('');
   const correos=editing&&editing.correos_cliente?(editing.correos_cliente||[]).join(', '):'';
@@ -1846,21 +1851,8 @@ async function renderNuevaDevolucion(id){
       </div>
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Período *</div>
         <div style="display:flex;gap:6px">
-          <select id="df-mes" style="flex:1">
-            <option value="">Mes...</option>
-            ${['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].map((m,i)=>{
-              const mesNum=String(i+1).padStart(2,'0');
-              const sel=editing&&editing.periodo&&editing.periodo.startsWith(m)?'selected':'';
-              return '<option value="'+m+'" '+sel+'>'+m+'</option>';
-            }).join('')}
-          </select>
-          <select id="df-anio" style="width:100px">
-            <option value="">Año...</option>
-            ${[2023,2024,2025,2026,2027].map(y=>{
-              const sel=editing&&editing.periodo&&editing.periodo.endsWith(String(y))?'selected':'';
-              return '<option value="'+y+'" '+sel+'>'+y+'</option>';
-            }).join('')}
-          </select>
+          <select id="df-mes" style="flex:1">${mesOpts}</select>
+          <select id="df-anio" style="width:100px">${anioOpts}</select>
         </div>
       </div>
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Fecha de inicio *</div>
