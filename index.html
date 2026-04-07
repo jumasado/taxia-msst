@@ -238,9 +238,46 @@ async function registrarLogout(){
   }catch(e){console.warn('Logout log error:',e);}
 }
 
-async function doLogout(){
+async function doLogout(porInactividad=false){
   await registrarLogout();
-  session=null;usersCache={};clientesCache=[];gruposCache=[];renderLogin();
+  session=null;usersCache={};clientesCache=[];gruposCache=[];
+  clearInactivityTimer();
+  if(porInactividad){
+    renderLogin();
+    setTimeout(()=>{
+      const msg=document.createElement('div');
+      msg.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:10px 20px;border-radius:8px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2)';
+      msg.textContent='Sesión cerrada por inactividad (10 min)';
+      document.body.appendChild(msg);
+      setTimeout(()=>msg.remove(),3500);
+    },100);
+  } else {
+    renderLogin();
+  }
+}
+
+// ===== AUTO-LOGOUT POR INACTIVIDAD =====
+let inactivityTimer=null;
+const INACTIVITY_MS=10*60*1000; // 10 minutos
+
+function resetInactivityTimer(){
+  if(!session)return;
+  clearTimeout(inactivityTimer);
+  inactivityTimer=setTimeout(()=>{
+    if(session) doLogout(true);
+  },INACTIVITY_MS);
+}
+
+function clearInactivityTimer(){
+  clearTimeout(inactivityTimer);
+  inactivityTimer=null;
+}
+
+function startInactivityWatcher(){
+  ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev=>{
+    document.addEventListener(ev,resetInactivityTimer,{passive:true});
+  });
+  resetInactivityTimer();
 }
 function nav(s){
   const t=todayKey();
@@ -503,6 +540,7 @@ async function doLogin(){
     const [allU]=await Promise.all([sbGet('users','?select=*'),loadCaches()]);
     allU.forEach(u=>{usersCache[u.email]=u;});
     await registrarLogin(session.email);
+    startInactivityWatcher();
     if(session.role==='assistant') renderMisPlan();
     else renderDashboard(todayKey());
   }catch(e){
@@ -964,13 +1002,19 @@ async function renderHistory(){
   </div>
   <div id="hist-body"><div class="loading"><span class="spinner"></span>Cargando...</div></div>`;
 
-  // Poblar selector de usuarios
+  // Poblar selector de usuarios según rol
   const sel=document.getElementById('hist-user-sel');
   const visible=visibleEmails();
-  visible.forEach(em=>{
-    const u=usersCache[em];if(!u)return;
-    const opt=document.createElement('option');opt.value=em;opt.textContent=u.name;sel.appendChild(opt);
-  });
+  if(session.role==='assistant'){
+    // Asistentes: ocultar selector, solo ven su propio historial
+    sel.style.display='none';
+  } else {
+    // Admin y Manager: agregar sus usuarios visibles
+    visible.forEach(em=>{
+      const u=usersCache[em];if(!u)return;
+      const opt=document.createElement('option');opt.value=em;opt.textContent=u.name;sel.appendChild(opt);
+    });
+  }
 
   // Fechas por defecto: últimos 30 días
   const hoy=todayKey();
@@ -991,7 +1035,9 @@ async function loadHistorial(){
   body.innerHTML='<div class="loading"><span class="spinner"></span>Cargando...</div>';
 
   const visible=visibleEmails();
-  const emails=filterEmail==='all'?visible:[filterEmail];
+  // Seguridad: si el email filtrado no está en la lista visible del rol, ignorar
+  const emailSafe=filterEmail==='all'||!visible.includes(filterEmail)?'all':filterEmail;
+  const emails=emailSafe==='all'?visible:[emailSafe];
 
   // Cargar sesiones y tareas en paralelo
   const emailFilter='('+emails.map(e=>'"'+e+'"').join(',')+')';
