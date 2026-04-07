@@ -957,7 +957,7 @@ async function renderDashboard(date){
         else drBadge='<span style="background:#f0f7d4;color:#5a8a1a;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600">'+drLabel+': '+dr+'d</span>';
       }
       const s=DEV_STATUS[d.status]||{label:d.status,color:'#888',bg:'#f5f5f3'};
-      return '<tr onclick="nav('devoluciones')" style="cursor:pointer">'+
+      return '<tr onclick="nav(\'devoluciones\')" style="cursor:pointer">'+
         '<td style="font-weight:500">'+escH(d.cliente_nombre||'—')+'</td>'+
         '<td style="color:#888">'+escH(d.periodo||'—')+'</td>'+
         '<td><span style="background:'+s.bg+';color:'+s.color+';padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+s.label+'</span></td>'+
@@ -1008,7 +1008,7 @@ async function renderDashboard(date){
       <div style="width:8px;height:8px;border-radius:50%;background:#dc2626;flex-shrink:0"></div>
       <div style="font-size:12px;font-weight:600;color:#dc2626;text-transform:uppercase;letter-spacing:.06em">Alertas de plazos críticos (${alertasDev.length})</div>
     </div>
-    ${alertasDev.map(a=>'<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid #f0f0ec;cursor:pointer" onclick="nav('devoluciones')">'+
+    ${alertasDev.map(a=>'<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid #f0f0ec;cursor:pointer" onclick="nav(\'devoluciones\')">'+
       '<span style="background:'+(a.dias<0?'#fef2f2':a.dias<=2?'#fef2f2':'#FEF3C7')+';color:'+(a.dias<=2?'#dc2626':'#92400E')+';padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;flex-shrink:0">'+
         (a.dias<0?'VENCIDO':''+a.dias+'d')+
       '</span>'+
@@ -1022,7 +1022,7 @@ async function renderDashboard(date){
   <div class="card" style="margin-bottom:1rem">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div class="sec-label">Devoluciones IVA activas</div>
-      <button class="btn btn-sm btn-purple" onclick="nav('devoluciones')" style="font-size:11px">Ver todas →</button>
+      <button class="btn btn-sm btn-purple" onclick="nav(\'devoluciones\')" style="font-size:11px">Ver todas →</button>
     </div>
     <div class="table-wrap">
       <table class="data-table">
