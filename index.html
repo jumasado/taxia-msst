@@ -1096,7 +1096,7 @@ async function runAnalysis(){
     const data=await res.json();
     const texto=data.text||data.content?.map(b=>b.text||'').join('')||'Sin respuesta.';
     box.innerHTML='<span style="font-size:14px;line-height:1.7">'+texto+'</span>';
-  }catch(e){box.innerHTML='<span style="color:#dc2626">Error al conectar.</span>';}
+  }catch(e){box.innerHTML='<span style="color:#dc2626">Error: '+e.message+'</span>';console.error('runAnalysis error:',e);}
 }
 
 /* ===== HISTORIAL ===== */
