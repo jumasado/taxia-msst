@@ -1094,7 +1094,8 @@ async function runAnalysis(){
     const prompt=`Eres asesor de productividad para MSST Consulting SC, firma de asesoría fiscal mexicana. Equipo: Manuel Santana (Director), Alberto (Líder de Práctica Fiscal), Yosded y Brenda (Consultores Junior).\n\nEstado de tareas hoy ${today}:\n\n${lines}\n\nAnálisis ejecutivo (máx 5 oraciones): (1) avance general del equipo, (2) quién va adelante y quién atrás, (3) recomendación de acción puntual. Tono Big 4, español, prosa corrida.`;
     const res=await fetch(SB_URL+'/functions/v1/claude-analysis',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},body:JSON.stringify({prompt})});
     const data=await res.json();
-    box.innerHTML=`<span style="font-size:14px;line-height:1.7">${data.content?.map(b=>b.text||'').join('')||'Sin respuesta.'}</span>`;
+    const texto=data.text||data.content?.map(b=>b.text||'').join('')||'Sin respuesta.';
+    box.innerHTML='<span style="font-size:14px;line-height:1.7">'+texto+'</span>';
   }catch(e){box.innerHTML='<span style="color:#dc2626">Error al conectar.</span>';}
 }
 
