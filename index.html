@@ -1091,7 +1091,8 @@ async function runAnalysis(){
     return`${u.name} (${u.role==='admin'?'Director':u.role==='manager'?'Líder de Práctica Fiscal':'Consultor Junior'}) — ${done}/${tareas.length} concluidas:\n`+tareas.map(t=>`  ${t.status==='concluida'?'✓':'·'} ${t.descripcion}${t.client_name?' ['+t.client_name+']':''}`).join('\n');
   }).filter(Boolean).join('\n\n');
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:`Eres asesor de productividad para MSST Consulting SC, firma de asesoría fiscal mexicana. Equipo: Manuel Santana (Director), Alberto (Líder de Práctica Fiscal), Yosded y Brenda (Consultores Junior).\n\nEstado de tareas hoy ${today}:\n\n${lines}\n\nAnálisis ejecutivo (máx 5 oraciones): (1) avance general del equipo, (2) quién va adelante y quién atrás, (3) recomendación de acción puntual. Tono Big 4, español, prosa corrida.`}]})});
+    const prompt=`Eres asesor de productividad para MSST Consulting SC, firma de asesoría fiscal mexicana. Equipo: Manuel Santana (Director), Alberto (Líder de Práctica Fiscal), Yosded y Brenda (Consultores Junior).\n\nEstado de tareas hoy ${today}:\n\n${lines}\n\nAnálisis ejecutivo (máx 5 oraciones): (1) avance general del equipo, (2) quién va adelante y quién atrás, (3) recomendación de acción puntual. Tono Big 4, español, prosa corrida.`;
+    const res=await fetch('${SB_URL}/functions/v1/claude-analysis',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},body:JSON.stringify({prompt})});
     const data=await res.json();
     box.innerHTML=`<span style="font-size:14px;line-height:1.7">${data.content?.map(b=>b.text||'').join('')||'Sin respuesta.'}</span>`;
   }catch(e){box.innerHTML='<span style="color:#dc2626">Error al conectar.</span>';}
