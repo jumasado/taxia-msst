@@ -1079,19 +1079,26 @@ function buildCharts(visible,allTareas,byEmail){
 
 async function runAnalysis(){
   const visible=visibleEmails();
+  // Excluir al Director del análisis — solo analizar el equipo
+  const equipo=visible.filter(em=>em!==session.email);
   const today=todayKey();
   const box=document.getElementById('abox');
   box.innerHTML='<span class="spinner"></span><span style="color:#bbb;font-style:italic"> Analizando...</span>';
-  const allT=await sbGet('tareas',`?email=in.(${visible.map(e=>`"${e}"`).join(',')})&select=*`);
-  const lines=visible.map(em=>{
+  if(!equipo.length){box.innerHTML='<span style="color:#888;font-style:italic">No hay miembros del equipo para analizar.</span>';return;}
+  const allT=await sbGet('tareas',`?email=in.(${equipo.map(e=>`"${e}"`).join(',')})&select=*`);
+  // Devoluciones activas asignadas al equipo
+  const allDev=await sbGet('devoluciones_iva','?status=neq.devuelta&status=neq.negada&select=cliente_nombre,periodo,status,monto_solicitado,responsable');
+  const lines=equipo.map(em=>{
     const u=usersCache[em];if(!u)return'';
-    const tareas=(allT||[]).filter(t=>t.email===em&&(t.status==='pendiente'||(t.status==='concluida'&&t.fecha_conclusion?.startsWith(today))));
-    if(!tareas.length)return`${u.name}: sin tareas`;
+    const tareas=(allT||[]).filter(t=>t.email===em&&(t.status==='pendiente'||t.status==='standby'||(t.status==='concluida'&&t.fecha_conclusion?.startsWith(today))));
+    if(!tareas.length)return u.name+' ('+( u.role==='manager'?'Líder de Práctica Fiscal':'Consultor Junior')+'): sin tareas hoy';
     const done=tareas.filter(t=>t.status==='concluida').length;
-    return`${u.name} (${u.role==='admin'?'Director':u.role==='manager'?'Líder de Práctica Fiscal':'Consultor Junior'}) — ${done}/${tareas.length} concluidas:\n`+tareas.map(t=>`  ${t.status==='concluida'?'✓':'·'} ${t.descripcion}${t.client_name?' ['+t.client_name+']':''}`).join('\n');
+    const sb=tareas.filter(t=>t.status==='standby').length;
+    return u.name+' ('+(u.role==='manager'?'Líder de Práctica Fiscal':'Consultor Junior')+') — '+done+'/'+tareas.length+' concluidas'+(sb?' · '+sb+' en Stand By':'')+': \n'+tareas.map(t=>'  '+(t.status==='concluida'?'✓':t.status==='standby'?'⏸':'·')+' '+t.descripcion+(t.client_name?' ['+t.client_name+']':'')).join('\n');
   }).filter(Boolean).join('\n\n');
+  const devLines=(allDev||[]).length?'\n\nDevoluciones IVA activas:\n'+(allDev||[]).map(d=>'  · '+d.cliente_nombre+' ('+d.periodo+') — '+d.status+(d.responsable?' — Resp: '+d.responsable:'')+(d.monto_solicitado?' — $'+Number(d.monto_solicitado).toLocaleString('es-MX'):'')).join('\n'):'';
   try{
-    const prompt=`Eres asesor de productividad para MSST Consulting SC, firma de asesoría fiscal mexicana. Equipo: Manuel Santana (Director), Alberto (Líder de Práctica Fiscal), Yosded y Brenda (Consultores Junior).\n\nEstado de tareas hoy ${today}:\n\n${lines}\n\nAnálisis ejecutivo (máx 5 oraciones): (1) avance general del equipo, (2) quién va adelante y quién atrás, (3) recomendación de acción puntual. Tono Big 4, español, prosa corrida.`;
+    const prompt='Eres asesor senior de MSST Consulting SC, firma de asesoría fiscal mexicana en Tijuana. Analizas el desempeño del equipo operativo (excluyendo al Director que es quien lee este análisis).\n\nEstado del equipo hoy '+today+':\n\n'+lines+devLines+'\n\nAnálisis ejecutivo Big 4 (máx 6 oraciones en prosa corrida, español formal): (1) avance general del equipo hoy, (2) quién destaca positivamente y quién requiere atención, (3) estado de la cartera de devoluciones IVA si hay activas, (4) recomendación de acción puntual para el Director.';
     const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
     const res=await fetch(SB_URL+'/functions/v1/claude-analysis',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},body:JSON.stringify({prompt})});
     const data=await res.json();
