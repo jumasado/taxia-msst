@@ -1092,7 +1092,8 @@ async function runAnalysis(){
   }).filter(Boolean).join('\n\n');
   try{
     const prompt=`Eres asesor de productividad para MSST Consulting SC, firma de asesoría fiscal mexicana. Equipo: Manuel Santana (Director), Alberto (Líder de Práctica Fiscal), Yosded y Brenda (Consultores Junior).\n\nEstado de tareas hoy ${today}:\n\n${lines}\n\nAnálisis ejecutivo (máx 5 oraciones): (1) avance general del equipo, (2) quién va adelante y quién atrás, (3) recomendación de acción puntual. Tono Big 4, español, prosa corrida.`;
-    const res=await fetch(SB_URL+'/functions/v1/claude-analysis',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+SB_KEY},body:JSON.stringify({prompt})});
+    const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+    const res=await fetch(SB_URL+'/functions/v1/claude-analysis',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},body:JSON.stringify({prompt})});
     const data=await res.json();
     const texto=data.text||data.content?.map(b=>b.text||'').join('')||'Sin respuesta.';
     box.innerHTML='<span style="font-size:14px;line-height:1.7">'+texto+'</span>';
