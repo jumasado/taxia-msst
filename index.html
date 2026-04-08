@@ -1103,54 +1103,71 @@ async function runAnalysis(){
 
 /* ===== HISTORIAL ===== */
 async function renderHistory(){
-  app.innerHTML=renderTopNav('historial')+`
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
-    <div style="font-size:15px;font-weight:600">Historial de actividad</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <select id="hist-user-sel" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none" onchange="loadHistorial()">
-        <option value="all">Todos los usuarios</option>
-      </select>
-      <input type="date" id="hist-desde" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none" onchange="loadHistorial()">
-      <input type="date" id="hist-hasta" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none" onchange="loadHistorial()">
-      <button class="btn btn-sm btn-purple" onclick="imprimirHistorial()">⎙ Imprimir / PDF</button>
-    </div>
-  </div>
-  <div id="hist-body"><div class="loading"><span class="spinner"></span>Cargando...</div></div>`;
-
-  // Poblar selector de usuarios según rol
-  const sel=document.getElementById('hist-user-sel');
   const visible=visibleEmails();
-  if(session.role==='assistant'){
-    // Asistentes: ocultar selector, solo ven su propio historial
-    sel.style.display='none';
-  } else {
-    // Admin y Manager: agregar sus usuarios visibles
+  const hoy=todayKey();
+  const hace7=new Date(new Date(hoy+'T12:00:00')-7*24*60*60*1000).toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
+
+  // Construir opciones de usuario para ambos selectores
+  let userOptsHTML='';
+  if(session.role!=='assistant'){
+    userOptsHTML='<option value="all">Todos los usuarios</option>';
     visible.forEach(em=>{
       const u=usersCache[em];if(!u)return;
-      const opt=document.createElement('option');opt.value=em;opt.textContent=u.name;sel.appendChild(opt);
+      userOptsHTML+='<option value="'+em+'">'+escH(u.name)+'</option>';
     });
   }
 
-  // Fechas por defecto: últimos 30 días
-  const hoy=todayKey();
-  const hace30=new Date(new Date(hoy+'T12:00:00')-30*24*60*60*1000).toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
-  document.getElementById('hist-desde').value=hace30;
-  document.getElementById('hist-hasta').value=hoy;
+  app.innerHTML=renderTopNav('historial')+`
+  <div style="font-size:15px;font-weight:600;margin-bottom:1rem">Historial de actividad</div>
+
+  <!-- REPORTE DE ACTIVIDAD -->
+  <div class="card" style="margin-bottom:1rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:13px;font-weight:600">Reporte de actividad</div>
+        <div style="font-size:11px;color:#888;margin-top:2px">Tareas, sesiones y avance por usuario</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        ${session.role!=='assistant'?'<select id="hist-user-sel" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none">'+userOptsHTML+'</select>':''}
+        <input type="date" id="hist-desde" value="${hace7}" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none">
+        <input type="date" id="hist-hasta" value="${hoy}" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none">
+        <button class="btn btn-sm btn-primary" onclick="loadHistorial()">Ver reporte</button>
+        <button class="btn btn-sm btn-purple" onclick="imprimirHistorial()">⎙ PDF</button>
+      </div>
+    </div>
+  </div>
+  <div id="hist-body"></div>
+
+  <!-- HISTORIAL DE SESIONES -->
+  <div class="card" style="margin-bottom:1rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:13px;font-weight:600">Historial de sesiones</div>
+        <div style="font-size:11px;color:#888;margin-top:2px">Entradas y salidas del sistema — últimos 7 días</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        ${session.role!=='assistant'?'<select id="ses-user-sel" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none">'+userOptsHTML+'</select>':''}
+        <input type="date" id="ses-desde" value="${hace7}" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none">
+        <input type="date" id="ses-hasta" value="${hoy}" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none">
+        <button class="btn btn-sm btn-primary" onclick="loadSesiones()">Ver sesiones</button>
+      </div>
+    </div>
+    <div id="ses-body" style="margin-top:12px"></div>
+  </div>`;
 
   await loadHistorial();
 }
 
 async function loadHistorial(){
   const sel=document.getElementById('hist-user-sel');
-  const desde=document.getElementById('hist-desde').value;
-  const hasta=document.getElementById('hist-hasta').value;
+  const desde=document.getElementById('hist-desde')?.value||todayKey();
+  const hasta=document.getElementById('hist-hasta')?.value||todayKey();
   const filterEmail=sel?sel.value:'all';
   const body=document.getElementById('hist-body');
   if(!body)return;
-  body.innerHTML='<div class="loading"><span class="spinner"></span>Cargando...</div>';
+  body.innerHTML='<div class="loading"><span class="spinner"></span>Cargando reporte...</div>';
 
   const visible=visibleEmails();
-  // Seguridad: si el email filtrado no está en la lista visible del rol, ignorar
   const emailSafe=filterEmail==='all'||!visible.includes(filterEmail)?'all':filterEmail;
   const emails=emailSafe==='all'?visible:[emailSafe];
 
@@ -1360,6 +1377,75 @@ async function loadHistorial(){
       }
     });
   }
+}
+
+async function loadSesiones(){
+  const sel=document.getElementById('ses-user-sel');
+  const desde=document.getElementById('ses-desde')?.value||todayKey();
+  const hasta=document.getElementById('ses-hasta')?.value||todayKey();
+  const filterEmail=sel?sel.value:'all';
+  const body=document.getElementById('ses-body');
+  if(!body)return;
+  body.innerHTML='<div class="loading"><span class="spinner"></span>Cargando sesiones...</div>';
+
+  const visible=visibleEmails();
+  const emailSafe=filterEmail==='all'||!visible.includes(filterEmail)?'all':filterEmail;
+  const emails=emailSafe==='all'?visible:[emailSafe];
+
+  const desdeDt=new Date(desde+'T00:00:00');
+  const hastaDt=new Date(hasta+'T23:59:59');
+  const emailFilter='('+emails.map(e=>'"'+e+'"').join(',')+')';
+
+  const sesiones=await sbGet('sesiones','?email=in.'+emailFilter+'&order=login_at.desc&select=*');
+  const sesFilt=(sesiones||[]).filter(s=>{
+    const d=new Date(s.login_at);return d>=desdeDt&&d<=hastaDt;
+  });
+
+  if(!sesFilt.length){
+    body.innerHTML='<div style="font-size:13px;color:#888;padding:8px 0">Sin sesiones en el período seleccionado.</div>';
+    return;
+  }
+
+  // Agrupar por usuario
+  const byUser={};
+  emails.forEach(e=>{byUser[e]=[];});
+  sesFilt.forEach(s=>{if(byUser[s.email])byUser[s.email].push(s);});
+
+  let html='';
+  emails.forEach(em=>{
+    const u=usersCache[em];if(!u)return;
+    const sess=byUser[em]||[];
+    if(!sess.length)return;
+    const totalMin=sess.reduce((s,x)=>s+(x.duracion_min||0),0);
+    const hrs=Math.floor(totalMin/60);
+    const mins=totalMin%60;
+
+    html+='<div style="margin-bottom:14px">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;padding-bottom:6px;border-bottom:0.5px solid #e5e5e0">'+
+        '<div class="avatar '+av(u.av)+'" style="width:28px;height:28px;font-size:11px">'+(u.initials||'??')+'</div>'+
+        '<div style="flex:1;font-size:13px;font-weight:600">'+escH(u.name)+'</div>'+
+        '<div style="font-size:11px;color:#888">'+sess.length+' sesiones · '+(totalMin>0?hrs+'h '+mins+'m total':'—')+'</div>'+
+      '</div>'+
+      '<div class="table-wrap">'+
+        '<table class="data-table">'+
+          '<thead><tr><th>Entrada</th><th>Salida</th><th>Duración</th><th>Estado</th></tr></thead>'+
+          '<tbody>'+
+          sess.map(s=>{
+            const entrada=new Date(s.login_at).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'});
+            const salida=s.logout_at?new Date(s.logout_at).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'}):'—';
+            const dur=s.duracion_min!=null?(s.duracion_min>=60?Math.floor(s.duracion_min/60)+'h '+(s.duracion_min%60)+'min':s.duracion_min+' min'):'—';
+            const estado=s.logout_at?
+              '<span style="background:#f0f7d4;color:#5a8a1a;padding:1px 8px;border-radius:999px;font-size:10px;font-weight:600">Cerrada</span>':
+              '<span style="background:#FEF3C7;color:#92400E;padding:1px 8px;border-radius:999px;font-size:10px;font-weight:600">Activa</span>';
+            return '<tr><td>'+entrada+'</td><td>'+salida+'</td><td style="font-weight:500">'+dur+'</td><td>'+estado+'</td></tr>';
+          }).join('')+
+          '</tbody>'+
+        '</table>'+
+      '</div>'+
+    '</div>';
+  });
+
+  body.innerHTML=html;
 }
 
 function imprimirHistorial(){
