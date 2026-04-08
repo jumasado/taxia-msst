@@ -2032,6 +2032,7 @@ async function renderDetalleDevolucion(id){
     <button class="btn btn-sm" onclick="renderDevoluciones()">← Devoluciones</button>
     <div style="font-size:15px;font-weight:600;flex:1">${escH(dev.cliente_nombre||'—')} — ${escH(dev.periodo)}</div>
     <button class="btn btn-sm btn-purple" onclick="renderNuevaDevolucion('${id}')">✏️ Editar</button>
+    ${session.role==='admin'?'<button class="btn btn-sm btn-danger" onclick="deleteDevolucion(\''+id+'\')">🗑 Eliminar</button>':''}
   </div>
   <div class="loading" id="detl"><span class="spinner"></span>Cargando...</div>
   <div id="det-body"></div>`;
@@ -2146,6 +2147,16 @@ async function renderDetalleDevolucion(id){
     renderReqGroup(req1,1)+
     (req1.length?renderReqGroup(req2,2):'')+
   '</div>';
+}
+
+async function deleteDevolucion(id){
+  const dev=devCache.find(d=>d.id===id);
+  if(!confirm('¿Eliminar la solicitud de '+( dev?.cliente_nombre||'este cliente')+' — '+(dev?.periodo||'')+' ? Esta acción no se puede deshacer.'))return;
+  await sbDelete('dev_requisitos','?devolucion_id=eq.'+id);
+  await sbDelete('dev_requerimientos','?devolucion_id=eq.'+id);
+  await sbDelete('devoluciones_iva','?id=eq.'+id);
+  await loadDevoluciones();
+  renderDevoluciones();
 }
 
 async function toggleRequisito(reqId,actual,devId){
