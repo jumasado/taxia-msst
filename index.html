@@ -1531,6 +1531,167 @@ function imprimirHistorial(){
   setTimeout(()=>win.print(),800);
 }
 
+/* ===== REPORTE PDF DEVOLUCIONES ===== */
+async function reporteDevolucionesPDF(){
+  // Construir opciones de cliente
+  const clientes=[...new Set(devCache.map(d=>d.cliente_nombre).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const cliOpts='<option value="all">Todos los clientes</option>'+clientes.map(c=>'<option value="'+escH(c)+'">'+escH(c)+'</option>').join('');
+
+  // Mostrar modal de selección
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-reporte-dev';
+  overlay.innerHTML='<div class="modal-box">'+
+    '<div class="modal-title">Reporte PDF — Devoluciones IVA</div>'+
+    '<div class="modal-sub">Selecciona el alcance del reporte</div>'+
+    '<div style="margin-bottom:12px">'+
+      '<div style="font-size:12px;color:#888;margin-bottom:4px">Cliente</div>'+
+      '<select id="rep-cli" style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px">'+cliOpts+'</select>'+
+    '</div>'+
+    '<div style="margin-bottom:16px">'+
+      '<div style="font-size:12px;color:#888;margin-bottom:4px">Incluir</div>'+
+      '<div style="display:flex;flex-direction:column;gap:6px">'+
+        '<label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" id="rep-activas" checked> En proceso</label>'+
+        '<label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" id="rep-cerradas" checked> Concluidas / Negadas</label>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-full" onclick="document.getElementById(\'modal-reporte-dev\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="generarReporteDevPDF()" style="flex:1;margin-top:0">Generar PDF</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(overlay);
+}
+
+function generarReporteDevPDF(){
+  const cliFilter=document.getElementById('rep-cli')?.value||'all';
+  const incActivas=document.getElementById('rep-activas')?.checked!==false;
+  const incCerradas=document.getElementById('rep-cerradas')?.checked!==false;
+  document.getElementById('modal-reporte-dev')?.remove();
+
+  let lista=sortDevoluciones(devCache);
+  if(cliFilter!=='all') lista=lista.filter(d=>d.cliente_nombre===cliFilter);
+  if(!incActivas) lista=lista.filter(d=>d.status==='devuelta'||d.status==='negada');
+  if(!incCerradas) lista=lista.filter(d=>d.status!=='devuelta'&&d.status!=='negada');
+
+  if(!lista.length){alert('No hay solicitudes con los filtros seleccionados.');return;}
+
+  const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
+  const tituloCliente=cliFilter!=='all'?'Cliente: '+cliFilter:'Todos los clientes';
+
+  // Agrupar por cliente para el reporte
+  const porCliente={};
+  lista.forEach(d=>{
+    const k=d.cliente_nombre||'Sin cliente';
+    if(!porCliente[k])porCliente[k]=[];
+    porCliente[k].push(d);
+  });
+
+  let seccionesHTML='';
+  Object.entries(porCliente).forEach(([cli,devs])=>{
+    const totalSol=devs.reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
+    const totalDev=devs.reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
+    const rows=devs.map(d=>{
+      const plazos=calcPlazos(d);
+      const s=DEV_STATUS[d.status]||{label:d.status,color:'#888',bg:'#f5f5f3'};
+      const dr=d.fecha_presentacion_sat?diasRestantes(plazos.limite_resolucion):(plazos.presentacion?diasRestantes(plazos.presentacion):null);
+      const plazoTxt=d.status==='devuelta'?'Concluida':d.status==='negada'?'Negada':(dr===null?'—':dr<0?'Vencido '+Math.abs(dr)+'d':dr+'d');
+      return '<tr>'+
+        '<td>'+escH(d.periodo||'—')+'</td>'+
+        '<td><span style="background:'+s.bg+';color:'+s.color+';padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">'+s.label+'</span></td>'+
+        '<td>'+escH(d.fecha_inicio||'—')+'</td>'+
+        '<td>'+escH(d.fecha_presentacion_sat||'—')+'</td>'+
+        '<td>'+escH(plazos.limite_resolucion||'—')+'</td>'+
+        '<td style="font-weight:600">'+fmtMXN(d.monto_solicitado)+'</td>'+
+        '<td style="font-weight:600;color:'+(d.monto_devuelto?'#5a8a1a':'#888')+'">'+fmtMXN(d.monto_devuelto)+'</td>'+
+        '<td style="color:'+(dr!==null&&dr<0?'#dc2626':dr!==null&&dr<=5?'#92400E':'#5a8a1a')+'">'+plazoTxt+'</td>'+
+        '<td>'+escH(d.responsable||'—')+'</td>'+
+      '</tr>';
+    }).join('');
+
+    seccionesHTML+='<div style="margin-bottom:24px;break-inside:avoid">'+
+      '<div style="background:#3B4BC8;color:#fff;padding:8px 12px;border-radius:6px 6px 0 0;display:flex;justify-content:space-between;align-items:center">'+
+        '<span style="font-size:13px;font-weight:700">'+escH(cli)+'</span>'+
+        '<span style="font-size:11px;opacity:.85">'+devs.length+' solicitud'+(devs.length>1?'es':'')+(totalSol?' · Sol: '+fmtMXN(totalSol):'')+(totalDev?' · Dev: '+fmtMXN(totalDev):'')+'</span>'+
+      '</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #e5e5e0;border-top:none">'+
+        '<thead><tr style="background:#f5f5f3">'+
+          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Período</th>'+
+          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Estatus</th>'+
+          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Inicio</th>'+
+          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Presentación SAT</th>'+
+          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Límite resolución</th>'+
+          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Solicitado</th>'+
+          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Devuelto</th>'+
+          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Plazo</th>'+
+          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Responsable</th>'+
+        '</tr></thead>'+
+        '<tbody>'+rows+'</tbody>'+
+      '</table>'+
+    '</div>';
+  });
+
+  // Totales generales
+  const totalGenSol=lista.reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
+  const totalGenDev=lista.reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
+  const enProceso=lista.filter(d=>d.status!=='devuelta'&&d.status!=='negada').length;
+  const concluidas=lista.filter(d=>d.status==='devuelta').length;
+  const negadas=lista.filter(d=>d.status==='negada').length;
+
+  const win=window.open('','_blank');
+  win.document.write('<!DOCTYPE html><html lang="es"><head>'+
+    '<meta charset="UTF-8">'+
+    '<title>Reporte Devoluciones IVA — MSST Consulting</title>'+
+    '<style>'+
+      '*{box-sizing:border-box;margin:0;padding:0}'+
+      'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:12px;color:#1a1a1a;padding:24px}'+
+      'table td{padding:6px 8px;border-bottom:1px solid #f0f0ec;vertical-align:middle}'+
+      'table tr:last-child td{border-bottom:none}'+
+      '@media print{body{padding:12px}div{break-inside:avoid}}'+
+    '</style>'+
+  '</head><body>'+
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:14px;border-bottom:2px solid #3B4BC8;margin-bottom:20px">'+
+      '<div>'+
+        '<div style="font-size:18px;font-weight:700;color:#3B4BC8">T<span style="color:#8DC63F">ax</span>IA <span style="color:#8DC63F">día a día</span></div>'+
+        '<div style="font-size:11px;color:#888;margin-top:2px">MSST Consulting SC</div>'+
+      '</div>'+
+      '<div style="text-align:right">'+
+        '<div style="font-size:14px;font-weight:700">Reporte de Devoluciones IVA</div>'+
+        '<div style="font-size:11px;color:#888">'+tituloCliente+'</div>'+
+        '<div style="font-size:11px;color:#888">Generado: '+hoy+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:20px">'+
+      '<div style="background:#f5f5f3;border-radius:6px;padding:10px;text-align:center;border-left:3px solid #3B4BC8">'+
+        '<div style="font-size:10px;color:#888;margin-bottom:3px">Total solicitudes</div>'+
+        '<div style="font-size:20px;font-weight:700;color:#3B4BC8">'+lista.length+'</div>'+
+      '</div>'+
+      '<div style="background:#f5f5f3;border-radius:6px;padding:10px;text-align:center;border-left:3px solid #EF9F27">'+
+        '<div style="font-size:10px;color:#888;margin-bottom:3px">En proceso</div>'+
+        '<div style="font-size:20px;font-weight:700;color:#EF9F27">'+enProceso+'</div>'+
+      '</div>'+
+      '<div style="background:#f5f5f3;border-radius:6px;padding:10px;text-align:center;border-left:3px solid #8DC63F">'+
+        '<div style="font-size:10px;color:#888;margin-bottom:3px">Concluidas</div>'+
+        '<div style="font-size:20px;font-weight:700;color:#8DC63F">'+concluidas+'</div>'+
+      '</div>'+
+      '<div style="background:#f5f5f3;border-radius:6px;padding:10px;text-align:center;border-left:3px solid #3B4BC8">'+
+        '<div style="font-size:10px;color:#888;margin-bottom:3px">Monto solicitado</div>'+
+        '<div style="font-size:14px;font-weight:700;color:#3B4BC8">'+fmtMXN(totalGenSol)+'</div>'+
+      '</div>'+
+      '<div style="background:#f5f5f3;border-radius:6px;padding:10px;text-align:center;border-left:3px solid #8DC63F">'+
+        '<div style="font-size:10px;color:#888;margin-bottom:3px">Monto devuelto</div>'+
+        '<div style="font-size:14px;font-weight:700;color:#8DC63F">'+fmtMXN(totalGenDev)+'</div>'+
+      '</div>'+
+    '</div>'+
+    seccionesHTML+
+    '<div style="margin-top:20px;padding-top:10px;border-top:1px solid #e5e5e0;font-size:10px;color:#bbb;text-align:center">'+
+      'Reporte generado por TaxIA día a día — MSST Consulting SC — Confidencial — '+hoy+
+    '</div>'+
+  '</body></html>');
+  win.document.close();
+  setTimeout(()=>win.print(),600);
+}
+
 /* ===== CLIENTES ===== */
 async function renderClientes(){
   app.innerHTML=renderTopNav('clientes')+`
@@ -1843,7 +2004,10 @@ async function renderDevoluciones(){
   app.innerHTML=renderTopNav('devoluciones')+`
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
     <div style="font-size:15px;font-weight:600">Devoluciones IVA</div>
+    <div style="display:flex;gap:8px">
+    <button class="btn btn-sm btn-purple" onclick="reporteDevolucionesPDF()">⎙ Reporte PDF</button>
     <button class="btn btn-primary btn-sm" onclick="renderNuevaDevolucion()">+ Nueva solicitud</button>
+  </div>
   </div>
   <div class="loading" id="devl"><span class="spinner"></span>Cargando...</div>
   <div id="dev-body"></div>`;
@@ -1857,6 +2021,24 @@ async function loadDevoluciones(){
   renderDevList();
 }
 
+
+function sortDevoluciones(arr){
+  const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  return arr.slice().sort((a,b)=>{
+    // Primero por cliente
+    const nc=(a.cliente_nombre||'').toLowerCase();
+    const nb=(b.cliente_nombre||'').toLowerCase();
+    if(nc!==nb)return nc.localeCompare(nb,'es');
+    // Luego por período (mes año)
+    const pa=(a.periodo||'').toLowerCase().split(' ');
+    const pb=(b.periodo||'').toLowerCase().split(' ');
+    const ma=MESES.indexOf(pa[0]);const ya=parseInt(pa[1])||0;
+    const mb=MESES.indexOf(pb[0]);const yb=parseInt(pb[1])||0;
+    if(ya!==yb)return ya-yb;
+    return ma-mb;
+  });
+}
+
 function renderDevList(){
   const el=document.getElementById('dev-body');if(!el)return;
   if(!devCache.length){
@@ -1864,9 +2046,9 @@ function renderDevList(){
     return;
   }
 
-  // Agrupar por status activos vs concluidos
-  const activos=devCache.filter(d=>d.status!=='devuelta'&&d.status!=='negada');
-  const cerrados=devCache.filter(d=>d.status==='devuelta'||d.status==='negada');
+  // Agrupar por status activos vs concluidos — ordenados por cliente y período
+  const activos=sortDevoluciones(devCache.filter(d=>d.status!=='devuelta'&&d.status!=='negada'));
+  const cerrados=sortDevoluciones(devCache.filter(d=>d.status==='devuelta'||d.status==='negada'));
 
   let html='';
 
