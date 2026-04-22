@@ -291,129 +291,37 @@ function nav(s){
 }
 
 
-// Pool de noticias fiscales verificadas — se rotan 2 por día
-const NEWS_POOL = [
-  {
-    titulo: 'Declaración Anual ISR 2025 personas morales — vence el 31 de marzo',
-    resumen: 'El SAT fija el 31 de marzo como fecha límite definitiva para que personas morales presenten su Declaración Anual del ISR 2025. Multas de hasta $44,790 por incumplimiento.',
-    fuente: 'El Financiero',
-    url: 'https://www.elfinanciero.com.mx/tags/sat/',
-    fecha: 'Mar 2026'
-  },
-  {
-    titulo: 'Declaración Anual personas físicas: del 1 al 30 de abril 2026',
-    resumen: 'Las personas físicas con ingresos >$400,000, dos o más patrones, honorarios o arrendamiento deben presentar su declaración anual ante el SAT en abril 2026.',
-    fuente: 'El Informador',
-    url: 'https://www.informador.mx/mexico/declaracion-anual-2026-quienes-estan-obligados-a-presentarla-ante-el-sat-20260318-0129.html',
-    fecha: '23 Mar 2026'
-  },
-  {
-    titulo: 'SAT auditará 1,200 grandes contribuyentes y 12,000 PyMEs en 2026',
-    resumen: 'El SAT presentó su Plan Maestro de Fiscalización 2026: revisará 1,200 grandes empresas y 12,000 PyMEs enfocándose en factureras, simulación de pérdidas y abuso de estímulos fiscales.',
-    fuente: 'El Imparcial',
-    url: 'https://www.elimparcial.com/dinero/2026/03/24/el-sat-auditara-a-1200-grandes-contribuyentes-y-12000-pymes-en-2026-para-combatir-el-uso-de-factureras-la-simulacion-de-perdidas-y-el-abuso-de-estimulos-fiscales/',
-    fecha: '24 Mar 2026'
-  },
-  {
-    titulo: 'Regularización Fiscal 2026: hasta 100% de reducción en multas y recargos',
-    resumen: 'El SAT ofrece reducción de hasta 100% en multas, recargos y gastos de ejecución para personas físicas y PyMEs con ingresos hasta $300 millones en el ejercicio 2024.',
-    fuente: 'SAT / El Financiero',
-    url: 'https://www.sat.gob.mx/minisitio/RegularizacionFiscal/RegularizacionFiscal/index.html',
-    fecha: 'Ene 2026'
-  },
-  {
-    titulo: 'SAT y CFDI falsos: penas de 2 a 9 años de prisión desde 2026',
-    resumen: 'La Reforma Fiscal 2026 incorpora sanciones penales severas para quienes emitan o den efectos a CFDI falsos. Un solo comprobante cuestionado puede detonar consecuencias sobre todos los CFDI del contribuyente.',
-    fuente: 'El Financiero',
-    url: 'https://www.elfinanciero.com.mx/mis-finanzas/2026/01/04/aguas-con-el-sat-en-2026-que-sabemos-de-los-cambios-que-aplicara-para-combatir-las-facturas-falsas/',
-    fecha: '4 Ene 2026'
-  },
-  {
-    titulo: 'Días inhábiles SAT: 2 y 3 de abril 2026 (Jueves y Viernes Santo)',
-    resumen: 'La Regla 2.1.6 de la RMF 2026 declara inhábiles el 2 y 3 de abril para actos y trámites ante el SAT. Ajusta tus plazos de presentación y pago si vencen en esas fechas.',
-    fuente: 'RMF 2026 / Siempre Al Día',
-    url: 'https://siemprealdia.co/mexico/fiscal/dias-inhabiles-del-sat/',
-    fecha: 'Mar 2026'
-  },
-  {
-    titulo: 'SAT intensifica vigilancia de transferencias electrónicas en 2026',
-    resumen: 'El SAT mantiene monitoreo de operaciones electrónicas y reporta movimientos inusuales. Depósitos en efectivo >$15,000 mensuales son reportados automáticamente por los bancos.',
-    fuente: 'El Imparcial',
-    url: 'https://www.elimparcial.com/mexico/2026/03/09/sat-mantiene-vigilancia-sobre-transferencias-en-marzo-de-2026-y-aclara-que-conceptos-pueden-generar-alertas-automaticas-en-el-sistema-financiero/',
-    fecha: '9 Mar 2026'
-  },
-  {
-    titulo: 'Dictamen de estados financieros vence el 15 de mayo 2026',
-    resumen: 'Personas morales obligadas u opcionales deben presentar el dictamen de estados financieros ante el SAT a más tardar el 15 de mayo de 2026. Omitirlo expone a revisiones profundas.',
-    fuente: 'BBVA Calendario Fiscal',
-    url: 'https://www.bbva.com/es/mx/empresas/calendario-fiscal-2026-para-personas-morales-en-mexico-y-fechas-esenciales-del-sat/',
-    fecha: 'Mar 2026'
-  },
-  {
-    titulo: 'e.Firma: saldo a favor >$10,000 requiere certificado activo para devolución',
-    resumen: 'El SAT advierte que contribuyentes con saldo a favor mayor a $10,000 pesos necesitan e.firma vigente para solicitar devolución. Verifica la vigencia de tu certificado antes del cierre anual.',
-    fuente: 'SAT',
-    url: 'https://www.sat.gob.mx',
-    fecha: 'Mar 2026'
-  },
-  {
-    titulo: 'Garantía obligatoria al impugnar créditos fiscales desde 2026',
-    resumen: 'La Reforma Fiscal 2026 obliga a garantizar créditos fiscales impugnados incluso al interponer Recurso de Revocación ante el SAT. El plazo para constituir garantía es de 6 meses desde la presentación.',
-    fuente: 'Holland & Knight',
-    url: 'https://www.hklaw.com/en/insights/publications/2025/11/reforma-fiscal-para-2026-en-mexico',
-    fecha: 'Nov 2025'
-  },
-  {
-    titulo: 'SAT verifica cédula profesional en honorarios médicos para deducciones',
-    resumen: 'Como parte de la revisión de facturas, el SAT verificará que la cédula profesional en honorarios médicos coincida con la persona que emitió el CFDI. Aplica para deducciones personales 2025.',
-    fuente: 'El Financiero',
-    url: 'https://www.elfinanciero.com.mx/tags/sat/',
-    fecha: 'Feb 2026'
-  },
-  {
-    titulo: 'Recaudación tributaria enero 2026 creció 11% real: SAT',
-    resumen: 'La recaudación tributaria en enero 2026 alcanzó $595,758 millones de pesos, representando un crecimiento real del 11% respecto al mismo mes del año anterior, informó el SAT.',
-    fuente: 'El Financiero',
-    url: 'https://www.elfinanciero.com.mx/tags/sat/',
-    fecha: 'Feb 2026'
-  },
-  {
-    titulo: 'Plataformas digitales obligadas a dar acceso al SAT desde abril 2026',
-    resumen: 'A partir del 1 de abril 2026, las plataformas digitales de servicios e intermediación deben permitir al SAT acceso a información de operaciones en tiempo real conforme al CFDI 4.0.',
-    fuente: 'BBVA / SAT',
-    url: 'https://www.bbva.com/es/mx/empresas/calendario-fiscal-2026-para-personas-morales-en-mexico-y-fechas-esenciales-del-sat/',
-    fecha: 'Mar 2026'
-  },
-  {
-    titulo: 'PRODECON habilita micrositio guía para declaración anual 2026',
-    resumen: 'La Procuraduría de la Defensa del Contribuyente (PRODECON) habilitó un micrositio con guía paso a paso para apoyar a contribuyentes en la presentación de su declaración anual ante el SAT.',
-    fuente: 'PRODECON',
-    url: 'https://www.prodecon.gob.mx',
-    fecha: 'Mar 2026'
-  }
-];
+// Noticias dinámicas desde fiscalia.com vía Edge Function
+let noticiasCache = [];
 
-function getTodayNews() {
-  // Selecciona 2 noticias diferentes cada día basado en el día del año
-  const now = new Date();
-  const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
-  const idx1 = dayOfYear % NEWS_POOL.length;
-  const idx2 = (dayOfYear + 7) % NEWS_POOL.length;
-  // Evitar duplicados
-  const i2 = idx1 === idx2 ? (idx2 + 1) % NEWS_POOL.length : idx2;
-  return [NEWS_POOL[idx1], NEWS_POOL[i2]];
+async function fetchNoticias() {
+  try {
+    const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+    const res = await fetch(SB_URL+'/functions/v1/fetch-noticias', {
+      method: 'GET',
+      headers: {'Authorization': 'Bearer '+ANON_KEY}
+    });
+    const data = await res.json();
+    if (data.noticias && Array.isArray(data.noticias)) {
+      noticiasCache = data.noticias;
+    }
+  } catch(e) {
+    console.warn('No se pudieron cargar noticias:', e);
+  }
 }
 
 function renderNewsCards() {
-  const noticias = getTodayNews();
-  return noticias.map(n => `
-    <a href="${n.url}" target="_blank" rel="noopener" class="news-card">
+  if (!noticiasCache.length) {
+    return '<div style="font-size:13px;color:#bbb;font-style:italic;padding:8px 0">Cargando noticias fiscales...</div>';
+  }
+  return noticiasCache.slice(0, 3).map(n => `
+    <a href="${n.url||'https://www.fiscalia.com/mexico/'}" target="_blank" rel="noopener" class="news-card">
       <div class="news-card-top">
-        <span class="news-fuente">${escH(n.fuente)}</span>
-        <span class="news-fecha">${escH(n.fecha)}</span>
+        <span class="news-fuente">${escH(n.fuente||'Fiscalia.com')}</span>
+        <span class="news-fecha">${escH(n.fecha||'')}</span>
       </div>
-      <div class="news-titulo">${escH(n.titulo)}</div>
-      <div class="news-resumen">${escH(n.resumen)}</div>
+      <div class="news-titulo">${escH(n.titulo||'')}</div>
+      <div class="news-resumen">${escH(n.resumen||'')}</div>
       <div class="news-link">Leer más →</div>
     </a>`).join('');
 }
@@ -426,31 +334,21 @@ function renderNewsSection() {
       <span class="news-badge">Fiscal MX — Hoy</span>
       <span class="news-date">${dateStr}</span>
     </div>
-    ${renderNewsCards()}
+    <div id='news-container'><div style='font-size:12px;color:#bbb;font-style:italic;padding:6px 0'>Cargando noticias fiscales...</div></div>
   </div>`;
 }
 
 
-function renderLogin(){
+async function renderLogin(){
   document.body.style.margin='0';
   document.body.style.padding='0';
   document.body.style.background='#f8f9ff';
   app.style.maxWidth='100%';
   app.style.padding='0';
-  
+
   const now = new Date();
   const dateStr = now.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
-  const noticias = getTodayNews();
-  const newsHTML = noticias.map(n=>`
-    <a href="${n.url}" target="_blank" rel="noopener" style="display:block;background:#fff;border:1px solid #dde0f5;border-radius:10px;padding:10px 12px;margin-bottom:8px;text-decoration:none;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:10px;font-weight:700;color:#3B4BC8;background:#EEEDFE;padding:2px 7px;border-radius:4px">${escH(n.fuente)}</span>
-        <span style="font-size:10px;color:#bbb">${escH(n.fecha)}</span>
-      </div>
-      <div style="font-size:12px;font-weight:600;color:#1a1a1a;margin-bottom:3px;line-height:1.4">${escH(n.titulo)}</div>
-      <div style="font-size:11px;color:#666;line-height:1.4;margin-bottom:4px">${escH(n.resumen)}</div>
-      <div style="font-size:11px;color:#3B4BC8;font-weight:600">Leer más →</div>
-    </a>`).join('');
+  const newsHTML = '<div id="news-container"><div style="font-size:12px;color:#bbb;font-style:italic;padding:6px 0">Cargando noticias fiscales...</div></div>';
 
   app.innerHTML=`
   <style>
@@ -527,6 +425,13 @@ function renderLogin(){
       </div>
     </div>
   </div>`;
+  // Cargar noticias después de que el DOM esté listo
+  setTimeout(()=>{
+    fetchNoticias().then(()=>{
+      const newsEl=document.getElementById('news-container');
+      if(newsEl) newsEl.innerHTML=renderNewsCards();
+    });
+  }, 100);
 }
 
 
