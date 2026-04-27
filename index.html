@@ -2016,7 +2016,7 @@ async function renderNuevaDevolucion(id){
   const periodoMes=editing&&editing.periodo?editing.periodo.split(' ')[0]:'';
   const periodoAnio=editing&&editing.periodo?editing.periodo.split(' ')[1]:'';
   const mesOpts='<option value="">Mes...</option>'+MESES.map(m=>'<option value="'+m+'"'+(periodoMes===m?' selected':'')+'>'+m+'</option>').join('');
-  const anioOpts='<option value="">Año...</option>'+[2023,2024,2025,2026,2027].map(y=>'<option value="'+y+'"'+(periodoAnio===String(y)?' selected':'')+'>'+y+'</option>').join('');
+  const anioOpts='<option value="">Año...</option>'+[2020,2021,2022,2023,2024,2025,2026,2027].map(y=>'<option value="'+y+'"'+(periodoAnio===String(y)?' selected':'')+'>'+y+'</option>').join('');
   const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+'</option>').join('');
   const statusOpts=Object.entries(DEV_STATUS).map(([k,v])=>'<option value="'+k+'"'+(editing&&editing.status===k?' selected':k==='requisitos_pendientes'&&!editing?' selected':'')+'>'+v.label+'</option>').join('');
   const correos=editing&&editing.correos_cliente?(editing.correos_cliente||[]).join(', '):'';
