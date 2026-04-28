@@ -1460,18 +1460,26 @@ async function reporteDevolucionesPDF(){
         '<label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" id="rep-cerradas" checked> Concluidas / Negadas</label>'+
       '</div>'+
     '</div>'+
+    '<div style="margin-bottom:16px">'+
+      '<div style="font-size:12px;color:#888;margin-bottom:4px">Enviar por correo (opcional)</div>'+
+      '<input id="rep-correo" type="email" placeholder="correo@ejemplo.com, correo2@ejemplo.com" style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px;box-sizing:border-box">'+
+      '<div style="font-size:11px;color:#bbb;margin-top:3px">Separa múltiples correos con coma</div>'+
+    '</div>'+
     '<div style="display:flex;gap:8px">'+
       '<button class="btn btn-full" onclick="document.getElementById(\'modal-reporte-dev\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="generarReporteDevPDF()" style="flex:1;margin-top:0">Generar PDF</button>'+
+      '<button class="btn btn-purple btn-full" onclick="generarReporteDevPDF(true)" style="flex:1;margin-top:0">✉ Solo correo</button>'+
+      '<button class="btn btn-primary btn-full" onclick="generarReporteDevPDF(false)" style="flex:1;margin-top:0">⎙ PDF</button>'+
     '</div>'+
   '</div>';
   document.body.appendChild(overlay);
 }
 
-function generarReporteDevPDF(){
+async function generarReporteDevPDF(soloCorreo=false){
   const cliFilter=document.getElementById('rep-cli')?.value||'all';
   const incActivas=document.getElementById('rep-activas')?.checked!==false;
   const incCerradas=document.getElementById('rep-cerradas')?.checked!==false;
+  const correoRaw=document.getElementById('rep-correo')?.value||'';
+  const destinatarios=correoRaw.split(',').map(s=>s.trim()).filter(s=>s.includes('@'));
   document.getElementById('modal-reporte-dev')?.remove();
 
   let lista=sortDevoluciones(devCache);
@@ -1594,7 +1602,47 @@ function generarReporteDevPDF(){
     '</div>'+
   '</body></html>');
   win.document.close();
-  setTimeout(()=>win.print(),600);
+  if(!soloCorreo) setTimeout(()=>win.print(),600);
+
+  // Enviar por correo si hay destinatarios
+  if(destinatarios.length){
+    const asunto='Reporte Devoluciones IVA — '+tituloCliente+' — '+hoy;
+    const htmlCorreo='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>'+asunto+'</title></head><body>'+
+      '<div style="font-family:-apple-system,sans-serif;max-width:700px;margin:0 auto">'+
+      '<div style="background:#3B4BC8;padding:20px 24px;border-radius:12px 12px 0 0">'+
+        '<div style="font-size:18px;font-weight:700;color:#fff">TaxIA día a día</div>'+
+        '<div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:2px">Reporte de Devoluciones IVA — MSST Consulting SC</div>'+
+      '</div>'+
+      '<div style="background:#fff;border:1px solid #e5e5e0;border-top:none;border-radius:0 0 12px 12px;padding:20px 24px">'+
+        '<p style="font-size:13px;color:#555;margin:0 0 16px">'+tituloCliente+' · Generado: '+hoy+'</p>'+
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">'+
+          '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center;border-left:3px solid #3B4BC8"><div style="font-size:11px;color:#888">Total</div><div style="font-size:20px;font-weight:700;color:#3B4BC8">'+lista.length+'</div></div>'+
+          '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center;border-left:3px solid #EF9F27"><div style="font-size:11px;color:#888">En proceso</div><div style="font-size:20px;font-weight:700;color:#EF9F27">'+enProceso+'</div></div>'+
+          '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center;border-left:3px solid #8DC63F"><div style="font-size:11px;color:#888">Concluidas</div><div style="font-size:20px;font-weight:700;color:#8DC63F">'+concluidas+'</div></div>'+
+        '</div>'+
+        seccionesHTML+
+        '<div style="border-top:1px solid #f0f0ec;padding-top:12px;margin-top:16px">'+
+          '<p style="font-size:11px;color:#bbb;margin:0">Generado por TaxIA día a día · MSST Consulting SC · Confidencial</p>'+
+        '</div>'+
+      '</div></div></body></html>';
+
+    try{
+      const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+      const res=await fetch(SB_URL+'/functions/v1/send-reporte-dev',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},
+        body:JSON.stringify({destinatarios,asunto,html:htmlCorreo})
+      });
+      const data=await res.json();
+      if(data.ok){
+        const msg=document.createElement('div');
+        msg.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:10px 20px;border-radius:8px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+        msg.textContent='✉ Reporte enviado a '+destinatarios.join(', ');
+        document.body.appendChild(msg);
+        setTimeout(()=>msg.remove(),4000);
+      }
+    }catch(e){console.error('Error enviando correo:',e);}
+  }
 }
 
 /* ===== CLIENTES ===== */
