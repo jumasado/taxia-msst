@@ -2179,9 +2179,10 @@ async function renderDetalleDevolucion(id){
   <div class="loading" id="detl"><span class="spinner"></span>Cargando...</div>
   <div id="det-body"></div>`;
 
-  const [requisitos,requerimientos]=await Promise.all([
+  const [requisitos,requerimientos,comentarios]=await Promise.all([
     sbGet('dev_requisitos','?devolucion_id=eq.'+id+'&select=*&order=id.asc'),
-    sbGet('dev_requerimientos','?devolucion_id=eq.'+id+'&select=*&order=numero_requerimiento.asc,id.asc')
+    sbGet('dev_requerimientos','?devolucion_id=eq.'+id+'&select=*&order=numero_requerimiento.asc,id.asc'),
+    sbGet('dev_comentarios','?devolucion_id=eq.'+id+'&select=*&order=created_at.asc')
   ]);
   document.getElementById('detl').style.display='none';
 
@@ -2276,23 +2277,63 @@ async function renderDetalleDevolucion(id){
 
   function renderReqGroup(items,num){
     if(!items.length&&dev.status!=='requerimiento_sat')return'';
-    let html='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px">'+
-      (num===1?'1er Requerimiento SAT':'2do Requerimiento SAT')+
-      (dev.status==='requerimiento_sat'?'<button class="btn btn-sm" style="margin-left:10px;font-size:11px" onclick="agregarPuntoRequerimiento(\''+id+'\','+num+')">+ Agregar punto</button>':'')+
+    let html='<div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 8px">'+
+      '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em">'+
+        (num===1?'1er Requerimiento SAT':'2do Requerimiento SAT')+
+      '</div>'+
+      (dev.status==='requerimiento_sat'?'<button class="btn btn-sm" style="font-size:11px" onclick="agregarPuntoRequerimiento(\''+id+'\','+num+')">+ Agregar punto</button>':'')+
     '</div>';
     if(!items.length)return html+'<div style="font-size:13px;color:#bbb;padding:6px 0">Sin puntos registrados aún.</div>';
-    html+=items.map(p=>'<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid #f0f0ec">'+
-      '<div onclick="togglePuntoReq(\''+p.id+'\','+p.atendido+',\''+id+'\')" style="width:20px;height:20px;border-radius:4px;border:2px solid '+(p.atendido?'#3B4BC8':'#d1d1d1')+';flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:'+(p.atendido?'#3B4BC8':'#fff')+'">'+
-        (p.atendido?'<span style="color:#fff;font-size:10px;font-weight:700">✓</span>':'')+
-      '</div>'+
-      '<div style="flex:1;font-size:13px;color:'+(p.atendido?'#999':'#1a1a1a')+'">'+escH(p.punto)+'</div>'+
-      (p.fecha_atendido?'<div style="font-size:10px;color:#888">Atendido: '+p.fecha_atendido+'</div>':'')+
-    '</div>').join('');
+    html+=items.map((p,i)=>{
+      const subidoPor=p.subido_por_nombre||p.subido_por||'—';
+      return '<div style="background:#fafafa;border:0.5px solid #e5e5e0;border-radius:8px;padding:10px 12px;margin-bottom:8px">'+
+        '<div style="display:flex;align-items:flex-start;gap:10px">'+
+          '<div onclick="togglePuntoReq(\''+p.id+'\','+p.atendido+',\''+id+'\')" style="width:20px;height:20px;border-radius:4px;border:2px solid '+(p.atendido?'#3B4BC8':'#d1d1d1')+';flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:'+(p.atendido?'#3B4BC8':'#fff')+';margin-top:1px">'+
+            (p.atendido?'<span style="color:#fff;font-size:10px;font-weight:700">\u2713</span>':'')+
+          '</div>'+
+          '<div style="flex:1">'+
+            '<div style="font-size:13px;font-weight:500;color:'+(p.atendido?'#999':'#1a1a1a')+';'+(p.atendido?'text-decoration:line-through':'')+';margin-bottom:6px">'+
+              '<span style="font-size:10px;font-weight:700;color:#888;margin-right:6px">'+(i+1)+'.</span>'+escH(p.punto)+
+            '</div>'+
+            '<div style="display:flex;flex-wrap:wrap;gap:12px">'+
+              '<div style="font-size:10px;color:#888"><span style="font-weight:600">Registrado:</span> '+(p.fecha_requerimiento||'—')+'</div>'+
+              '<div style="font-size:10px;color:#888"><span style="font-weight:600">Notificado:</span> '+(p.fecha_notificacion||'—')+
+                (!p.fecha_notificacion?
+                  ' <span onclick="registrarNotificacion(\''+p.id+'\',\''+id+'\')" style="color:#3B4BC8;cursor:pointer;font-weight:600">[registrar]</span>':'')+
+              '</div>'+
+              '<div style="font-size:10px;color:#888"><span style="font-weight:600">Subido por:</span> '+escH(subidoPor)+'</div>'+
+              (p.atendido&&p.fecha_atendido?'<div style="font-size:10px;color:#5a8a1a"><span style="font-weight:600">Atendido:</span> '+p.fecha_atendido+'</div>':'')+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
     return html;
   }
 
   // ---- DATOS FINANCIEROS ----
   const difMonto=dev.monto_devuelto&&dev.monto_solicitado?(dev.monto_devuelto-dev.monto_solicitado):null;
+
+  // ---- COMENTARIOS ----
+  const comentariosHTML=(comentarios||[]).map(c=>{
+    const esPropio=c.email===session.email;
+    const initials=c.nombre.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const u=usersCache[c.email];
+    const avClass=u?'av-'+u.av.replace('av-',''):'av-x';
+    const fecha=new Date(c.created_at).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'});
+    return '<div style="display:flex;gap:10px;margin-bottom:12px;'+(esPropio?'flex-direction:row-reverse':'')+'">' +
+      '<div class="avatar '+avClass+'" style="width:32px;height:32px;font-size:11px;flex-shrink:0">'+initials+'</div>'+
+      '<div style="max-width:75%">'+
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;'+(esPropio?'justify-content:flex-end':'')+'">'+
+          '<span style="font-size:11px;font-weight:600;color:#1a1a1a">'+escH(c.nombre)+'</span>'+
+          '<span style="font-size:10px;color:#bbb">'+fecha+'</span>'+
+        '</div>'+
+        '<div style="background:'+(esPropio?'#EEEDFE':'#f5f5f3')+';border-radius:'+(esPropio?'12px 2px 12px 12px':'2px 12px 12px 12px')+';padding:10px 12px;font-size:13px;color:#1a1a1a;line-height:1.5">'+
+          escH(c.mensaje)+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
 
   document.getElementById('det-body').innerHTML=
   // Resumen superior
@@ -2340,7 +2381,75 @@ async function renderDetalleDevolucion(id){
     '</div>'+
     renderReqGroup(req1,1)+
     (req1.length?renderReqGroup(req2,2):'')+
+  '</div>'+
+  // Comentarios
+  '<div class="card" style="margin-bottom:1rem">'+
+    '<div class="sec-label" style="margin-bottom:12px">Comentarios ('+(comentarios||[]).length+')</div>'+
+    '<div id="dev-comentarios-list" style="max-height:320px;overflow-y:auto;margin-bottom:12px;padding-right:4px">'+
+      (comentariosHTML||'<div style="font-size:13px;color:#bbb;text-align:center;padding:16px 0">Sin comentarios aún. Sé el primero en comentar.</div>')+
+    '</div>'+
+    '<div style="display:flex;gap:8px;align-items:flex-end">'+
+      '<textarea id="dev-comentario-input" placeholder="Escribe un comentario..." style="flex:1;padding:10px;border:1px solid #e0e0db;border-radius:8px;font-size:13px;font-family:inherit;resize:none;outline:none;line-height:1.5" rows="2" onkeydown="handleCommentKey(event,\''+id+'\')"></textarea>'+
+      '<button class="btn btn-primary" style="padding:10px 16px;flex-shrink:0" onclick="agregarComentario(\''+id+'\')">Enviar</button>'+
+    '</div>'+
+    '<div style="font-size:10px;color:#bbb;margin-top:4px">Enter para enviar · Shift+Enter para nueva línea</div>'+
   '</div>';
+}
+
+function handleCommentKey(event,devId){
+  if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();agregarComentario(devId);}
+}
+
+async function agregarComentario(devId){
+  const input=document.getElementById('dev-comentario-input');
+  const mensaje=input?.value.trim();
+  if(!mensaje)return;
+  input.value='';
+  input.disabled=true;
+  await sbPost('dev_comentarios',{
+    devolucion_id:devId,
+    email:session.email,
+    nombre:session.name||usersCache[session.email]?.name||session.email,
+    mensaje
+  },'return=minimal');
+  input.disabled=false;
+  // Recargar solo los comentarios sin refrescar toda la pantalla
+  const nuevos=await sbGet('dev_comentarios','?devolucion_id=eq.'+devId+'&select=*&order=created_at.asc');
+  const lista=document.getElementById('dev-comentarios-list');
+  if(lista){
+    const html=(nuevos||[]).map(c=>{
+      const esPropio=c.email===session.email;
+      const initials=c.nombre.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+      const u=usersCache[c.email];
+      const avClass=u?'av-'+u.av.replace('av-',''):'av-x';
+      const fecha=new Date(c.created_at).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'});
+      return '<div style="display:flex;gap:10px;margin-bottom:12px;'+(esPropio?'flex-direction:row-reverse':'')+'">' +
+        '<div class="avatar '+avClass+'" style="width:32px;height:32px;font-size:11px;flex-shrink:0">'+initials+'</div>'+
+        '<div style="max-width:75%">'+
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;'+(esPropio?'justify-content:flex-end':'')+'">'+
+            '<span style="font-size:11px;font-weight:600;color:#1a1a1a">'+escH(c.nombre)+'</span>'+
+            '<span style="font-size:10px;color:#bbb">'+fecha+'</span>'+
+          '</div>'+
+          '<div style="background:'+(esPropio?'#EEEDFE':'#f5f5f3')+';border-radius:'+(esPropio?'12px 2px 12px 12px':'2px 12px 12px 12px')+';padding:10px 12px;font-size:13px;color:#1a1a1a;line-height:1.5">'+
+            escH(c.mensaje)+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    lista.innerHTML=html||'<div style="font-size:13px;color:#bbb;text-align:center;padding:16px 0">Sin comentarios aún.</div>';
+    lista.scrollTop=lista.scrollHeight;
+    // Actualizar contador
+    const sec=lista.previousElementSibling;
+    if(sec) sec.textContent='Comentarios ('+(nuevos||[]).length+')';
+  }
+  input.focus();
+}
+
+async function registrarNotificacion(puntoId,devId){
+  const fecha=prompt('Fecha de notificación (YYYY-MM-DD):',todayKey());
+  if(!fecha||!fecha.match(/^\d{4}-\d{2}-\d{2}$/)){alert('Fecha inválida.');return;}
+  await sbPatch('dev_requerimientos','?id=eq.'+puntoId,{fecha_notificacion:fecha});
+  renderDetalleDevolucion(devId);
 }
 
 async function deleteDevolucion(id){
@@ -2387,7 +2496,7 @@ async function agregarPuntoRequerimiento(devId,numReq){
   if(puntos.includes(punto.trim().toLowerCase())){
     alert('Este punto ya fue registrado anteriormente.');return;
   }
-  await sbPost('dev_requerimientos',{devolucion_id:devId,numero_requerimiento:numReq,punto:punto.trim(),atendido:false,fecha_requerimiento:todayKey()},'return=minimal');
+  await sbPost('dev_requerimientos',{devolucion_id:devId,numero_requerimiento:numReq,punto:punto.trim(),atendido:false,fecha_requerimiento:todayKey(),subido_por:session.email,subido_por_nombre:session.name||usersCache[session.email]?.name||session.email},'return=minimal');
   renderDetalleDevolucion(devId);
 }
 
