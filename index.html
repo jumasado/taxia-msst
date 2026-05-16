@@ -2640,7 +2640,7 @@ async function renderNuevaProyeccion(id){
     <div class="sec-label" style="margin-bottom:12px">Datos generales</div>
     <div class="grid2" style="margin-bottom:12px">
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Cliente *</div>
-        <select id="pf-cliente" style="width:100%" onchange="document.getElementById('pf-cli-nombre').value=this.options[this.selectedIndex].dataset.nombre||''">${cliOpts}</select>
+        <select id="pf-cliente" style="width:100%" onchange="pfSetCliente(this)">${cliOpts}</select>
         <input type="hidden" id="pf-cli-nombre" value="${escH(editing?.cliente_nombre||'')}">
       </div>
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Ejercicio *</div>
@@ -2656,10 +2656,17 @@ async function renderNuevaProyeccion(id){
   </div>`;
 }
 
+function pfSetCliente(sel){
+  const opt=sel.options[sel.selectedIndex];
+  const nombre=opt?.dataset?.nombre||opt?.text||'';
+  const el=document.getElementById('pf-cli-nombre');
+  if(el) el.value=nombre;
+}
+
 async function saveProyeccion(){
   const cliSel=document.getElementById('pf-cliente');
   const cliente_id=cliSel.value||null;
-  const cliente_nombre=document.getElementById('pf-cli-nombre').value||cliSel.options[cliSel.selectedIndex]?.dataset?.nombre||'';
+  const cliente_nombre=document.getElementById('pf-cli-nombre').value||(cliSel.selectedIndex>0?cliSel.options[cliSel.selectedIndex]?.dataset?.nombre||cliSel.options[cliSel.selectedIndex]?.text||'':'');
   const ejercicio=parseInt(document.getElementById('pf-ejercicio').value);
   const tasa_isr=parseFloat(document.getElementById('pf-tasa').value)||30;
   const notas=document.getElementById('pf-notas').value.trim()||null;
@@ -2971,4 +2978,3 @@ renderLogin();
 </script>
 </body>
 </html>
-
