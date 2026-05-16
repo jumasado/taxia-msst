@@ -2735,7 +2735,7 @@ async function renderDetalleProyeccion(id){
   const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
   const totalPP=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
-  const cuPct=totalIngresos>0?(utilidadFiscal/totalIngresos*100).toFixed(4):'0.0000';
+  const cuPct=totalIngresos>0?(utilidadFiscal/totalIngresos*100).toFixed(2):'0.00';
   const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
   const isrACargo=Math.max(0,isrEstimado-totalPP);
   const saldoFavor=Math.max(0,totalPP-isrEstimado);
@@ -2786,8 +2786,14 @@ async function renderDetalleProyeccion(id){
       '<td style="text-align:right;font-size:12px">'+fmtMXN(totalOtrosGas)+'</td>'+
       '<td style="text-align:right;font-size:12px;color:'+(utilidadContable>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidadContable)+'</td>'+'<td style="text-align:right;font-size:12px;color:#888">'+fmtMXN(totalPP)+'</td><td></td></tr>'+
 
-      '<tr style="background:#EEEDFE;font-weight:700"><td colspan="7" style="font-size:12px;color:#3B4BC8">Coeficiente de utilidad estimado (CU) — Art. 14 LISR</td>'+
-      '<td style="text-align:right;font-size:12px;color:#3B4BC8">'+cuPct+'%</td><td></td></tr>'+
+      '<tr style="background:#EEEDFE">'+
+      '<td colspan="6" style="font-size:11px;color:#3B4BC8">'+
+        '<div style="font-weight:700">Coeficiente de Utilidad (CU) — Art. 14 LISR</div>'+
+        '<div style="font-size:10px;color:#666;margin-top:2px">CU = Utilidad Fiscal / Ingresos Nominales = '+fmtMXN(utilidadFiscal)+' / '+fmtMXN(totalIngresos)+'</div>'+
+      '</td>'+
+      '<td style="text-align:right;font-size:14px;font-weight:700;color:#3B4BC8">'+cuPct+'%</td>'+
+      '<td style="text-align:right;font-size:11px;color:#888">'+fmtMXN(totalPP)+'<br><span style="font-size:9px">PP total</span></td>'+
+      '<td></td></tr>'+
       '</tbody></table></div>'+
   '</div>'+
   '<div class="card" style="margin-bottom:1rem">'+
@@ -3029,6 +3035,8 @@ async function reporteProyeccionPDF(id){
   const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
   const totalPP2=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
+  const isrACargoP=Math.max(0,isrEstimado-totalPP2);
+  const saldoFavorP=Math.max(0,totalPP2-isrEstimado);
   const cuPDF=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
   const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
   const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
@@ -3120,6 +3128,7 @@ async function reporteProyeccionPDF(id){
     '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.otros_ingresos)+'</td>'+
     '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.otros_gastos)+'</td>'+
     '<td style="padding:5px 8px;font-size:11px;text-align:right;font-weight:700;border-bottom:1px solid #f0f0ec;color:'+(parseFloat(m.utilidad_neta_contable||0)>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(m.utilidad_neta_contable)+'</td>'+
+    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;color:#888">'+(m.pago_provisional?fmtMXN(m.pago_provisional)+(m.real?'':' <span style="font-size:8px;color:#8DC63F">p</span>'):'—')+'</td>'+
   '</tr>').join('');
 
   // Tabla conciliación
@@ -3243,7 +3252,7 @@ async function reporteProyeccionPDF(id){
     </div>
     <div class="kpi">
       <div class="kpi-label">Coeficiente de utilidad</div>
-      <div class="kpi-val">${cuPDF.toFixed(4)}%</div>
+      <div class="kpi-val">${cuPDF.toFixed(2)}%</div>
       <div class="kpi-sub">Art. 14 LISR</div>
     </div>
   </div>
@@ -3278,6 +3287,7 @@ async function reporteProyeccionPDF(id){
         <th class="right">Otros ing.</th>
         <th class="right">Otros gas.</th>
         <th class="right">Util. neta</th>
+        <th class="right">Pago prov.</th>
       </tr></thead>
       <tbody>${mesRowsHTML}
       <tr class="total-row">
@@ -3288,7 +3298,7 @@ async function reporteProyeccionPDF(id){
         <td style="text-align:right">${fmtMXN(totalOtrosIng)}</td>
         <td style="text-align:right">${fmtMXN(totalOtrosGas)}</td>
         <td style="text-align:right;color:${utilidadContable>=0?'#3B4BC8':'#dc2626'}">${fmtMXN(utilidadContable)}</td>
-      </tr>
+      <td class="right" style="color:#888">${fmtMXN(totalPP2)}</td></tr>
       </tbody>
     </table>
   </div>
@@ -3331,6 +3341,24 @@ async function reporteProyeccionPDF(id){
           <td colspan="2">ISR estimado del ejercicio (${proy.tasa_isr}%)</td>
           <td style="text-align:right">${fmtMXN(isrEstimado)}</td>
           <td></td>
+        </tr>
+        <tr style="background:#f5f5f3">
+          <td colspan="2" style="color:#888;font-size:10px">- Pagos provisionales (reales + proyectados)</td>
+          <td style="text-align:right;color:#888;font-weight:600">(${fmtMXN(totalPP2)})</td>
+          <td style="font-size:10px;color:#bbb">Acumulado del ejercicio</td>
+        </tr>
+        <tr style="background:${isrACargoP>0?'#fef2f2':'#f0f7d4'}">
+          <td colspan="2" style="font-weight:700;font-size:13px;color:${isrACargoP>0?'#dc2626':'#5a8a1a'}">${isrACargoP>0?'ISR a cargo del ejercicio':'Saldo a favor del contribuyente'}</td>
+          <td style="text-align:right;font-weight:700;font-size:13px;color:${isrACargoP>0?'#dc2626':'#5a8a1a'}">${isrACargoP>0?fmtMXN(isrACargoP):fmtMXN(saldoFavorP)}</td>
+          <td></td>
+        </tr>
+        <tr style="background:#f0f4ff">
+          <td colspan="3" style="font-size:10px;color:#3B4BC8;padding:8px">
+            <strong>Coeficiente de Utilidad (CU) — Art. 14 LISR:</strong>
+            CU = Utilidad Fiscal (${fmtMXN(utilidadFiscal)}) ÷ Ingresos Nominales (${fmtMXN(totalIngresos)}) = <strong>${cuPDF.toFixed(2)}%</strong>
+            &nbsp;·&nbsp; Aplicable para pagos provisionales del ejercicio siguiente.
+          </td>
+          <td style="text-align:right;font-size:16px;font-weight:700;color:#3B4BC8">${cuPDF.toFixed(2)}%</td>
         </tr>
       </tfoot>
     </table>
