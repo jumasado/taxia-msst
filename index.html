@@ -2866,6 +2866,8 @@ async function guardarMes(){
 }
 
 function agregarAjusteFiscal(proyId,tipoDefault){
+  // Cerrar modal anterior si existe
+  document.getElementById('modal-ajuste')?.remove();
   const overlay=document.createElement('div');
   overlay.className='modal-overlay';
   overlay.id='modal-ajuste';
@@ -3011,8 +3013,6 @@ async function reporteProyeccionPDF(id){
   }
 
   const totalIngresos=proyectados.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
-  const totalPP2=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
-  const cuPDF=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
   const totalCosto=proyectados.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
   const totalGastosOp=proyectados.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
   const totalOtrosIng=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
@@ -3022,6 +3022,8 @@ async function reporteProyeccionPDF(id){
   const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
+  const totalPP2=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
+  const cuPDF=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
   const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
   const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
 
