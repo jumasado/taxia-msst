@@ -2724,8 +2724,6 @@ async function renderDetalleProyeccion(id){
   }
 
   const totalIngresos=proyectados.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
-  const totalPP2=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
-  const cuPDF=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
   const totalCosto=proyectados.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
   const totalGastosOp=proyectados.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
   const totalOtrosIng=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
@@ -2736,12 +2734,11 @@ async function renderDetalleProyeccion(id){
   const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
+  const totalPP=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
+  const cuPct=totalIngresos>0?(utilidadFiscal/totalIngresos*100).toFixed(4):'0.0000';
   const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
 
-  const totalPP=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
   // Coeficiente de utilidad (CU) = utilidad fiscal / ingresos nominales
-  const cu=totalIngresos>0?(utilidadFiscal/totalIngresos):0;
-  const cuPct=(cu*100).toFixed(4);
   const mesRows=proyectados.map(m=>'<tr style="background:'+(m.real?'#fff':'#f5fff5')+'">'+
     '<td style="font-weight:500;font-size:12px">'+MESES_NOMBRES[m.mes-1]+(m.real?'':' <span style="font-size:9px;color:#8DC63F;font-weight:700">PROY</span>')+'</td>'+
     '<td style="text-align:right;font-size:12px">'+fmtMXN(m.ingresos)+'</td>'+
