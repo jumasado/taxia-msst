@@ -2761,11 +2761,12 @@ async function renderDetalleProyeccion(id){
   '</tr>').join('');
 
   document.getElementById('pf-det-body').innerHTML=
-  '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:1rem">'+
-    '<div class="metric" style="border-left:3px solid #3B4BC8"><div class="metric-label">Ingresos proyectados</div><div class="metric-val" style="font-size:14px;color:#3B4BC8">'+fmtMXN(totalIngresos)+'</div><div style="font-size:10px;color:#888">'+nMeses+' meses reales</div></div>'+
-    '<div class="metric" style="border-left:3px solid #EF9F27"><div class="metric-label">Utilidad contable</div><div class="metric-val" style="font-size:14px;color:'+(utilidadContable>=0?'#EF9F27':'#dc2626')+'">'+fmtMXN(utilidadContable)+'</div></div>'+
-    '<div class="metric" style="border-left:3px solid #8DC63F"><div class="metric-label">Utilidad fiscal estimada</div><div class="metric-val" style="font-size:14px;color:'+(utilidadFiscal>=0?'#8DC63F':'#dc2626')+'">'+fmtMXN(utilidadFiscal)+'</div></div>'+
-    '<div class="metric" style="border-left:3px solid '+(isrEstimado>0?'#dc2626':'#8DC63F')+'"><div class="metric-label">ISR estimado ('+proy.tasa_isr+'%)</div><div class="metric-val" style="font-size:14px;color:'+(isrEstimado>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isrEstimado)+'</div></div>'+
+  '<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:1rem">'+
+    '<div class="metric" style="border-left:3px solid #3B4BC8"><div class="metric-label">Ingresos proyectados</div><div class="metric-val" style="font-size:13px;color:#3B4BC8">'+fmtMXN(totalIngresos)+'</div><div style="font-size:10px;color:#888">'+nMeses+' meses reales</div></div>'+
+    '<div class="metric" style="border-left:3px solid #EF9F27"><div class="metric-label">Utilidad contable</div><div class="metric-val" style="font-size:13px;color:'+(utilidadContable>=0?'#EF9F27':'#dc2626')+'">'+fmtMXN(utilidadContable)+'</div></div>'+
+    '<div class="metric" style="border-left:3px solid #8DC63F"><div class="metric-label">Utilidad fiscal estimada</div><div class="metric-val" style="font-size:13px;color:'+(utilidadFiscal>=0?'#8DC63F':'#dc2626')+'">'+fmtMXN(utilidadFiscal)+'</div></div>'+
+    '<div class="metric" style="border-left:3px solid '+(isrEstimado>0?'#dc2626':'#8DC63F')+'"><div class="metric-label">ISR estimado ('+proy.tasa_isr+'%)</div><div class="metric-val" style="font-size:13px;color:'+(isrEstimado>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isrEstimado)+'</div></div>'+
+    '<div class="metric" style="border-left:3px solid #3B4BC8"><div class="metric-label">Coeficiente de utilidad</div><div class="metric-val" style="font-size:13px;color:#3B4BC8">'+cuPct+'%</div><div style="font-size:10px;color:#888">Art. 14 LISR</div></div>'+
   '</div>'+
   '<div class="card" style="margin-bottom:1rem">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
@@ -2866,25 +2867,26 @@ async function guardarMes(){
 }
 
 function agregarAjusteFiscal(proyId,tipoDefault){
-  // Cerrar modal anterior si existe
   document.getElementById('modal-ajuste')?.remove();
   const overlay=document.createElement('div');
   overlay.className='modal-overlay';
   overlay.id='modal-ajuste';
-  const conceptoOpts=AJUSTES_BASE.map(a=>'<option value="'+escH(a.concepto)+'" data-tipo="'+a.tipo+'" data-ref="'+escH(a.referencia_legal||'')+'" data-notas="'+escH(a.notas||'')+'">'+escH(a.concepto)+'</option>').join('');
+  const sugerencias=tipoDefault==='suma'?
+    ['Ingresos acumulables no contabilizados (LISR Art. 16)','Ajuste anual por inflación acumulable (LISR Art. 44-46)','Utilidad por enajenación de activos (LISR Art. 18)','Ganancia cambiaria (LISR Art. 20)','Otros ingresos acumulables']:
+    ['Depreciación fiscal adicional (LISR Art. 31-38)','Ajuste anual por inflación deducible (LISR Art. 44-46)','PTU pagada deducible (LISR Art. 25 Fr. III)','Pérdida por enajenación de activos (LISR Art. 25 Fr. IV)','Deducción inmediata (LISR Art. 220)','Gastos no deducibles a revertir','Otras deducciones autorizadas'];
+  const sugerOpts='<option value="">Elige sugerencia o escribe abajo...</option>'+sugerencias.map(s=>'<option value="'+escH(s)+'">'+escH(s)+'</option>').join('');
   overlay.innerHTML='<div class="modal-box">'+
-    '<div class="modal-title">Agregar ajuste fiscal</div>'+
-    '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto</div>'+
-      '<select id="aj-concepto" style="width:100%" onchange="pfAutoFillAjuste(this)">'+
-        '<option value="">Selecciona...</option>'+conceptoOpts+
-        '<option value="__custom__">Otro (personalizado)</option>'+
-      '</select></div>'+
-    '<div style="margin-bottom:10px;display:none" id="aj-custom-wrap">'+
-      '<div style="font-size:11px;color:#888;margin-bottom:3px">Concepto personalizado</div>'+
-      '<input id="aj-concepto-custom" type="text" placeholder="Describe el ajuste"></div>'+
+    '<div class="modal-title">'+(tipoDefault==='suma'?'Agregar ingreso acumulable':'Agregar deducción adicional')+'</div>'+
+    '<div style="margin-bottom:8px"><div style="font-size:11px;color:#888;margin-bottom:3px">Sugerencias frecuentes</div>'+
+      '<select id="aj-suger" style="width:100%" onchange="pfFillSuger(this)">'+sugerOpts+'</select></div>'+
+    '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto (editable) *</div>'+
+      '<input id="aj-concepto" type="text" placeholder="Escribe o edita el concepto..." style="width:100%"></div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
       '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Tipo</div>'+
-        '<select id="aj-tipo" style="width:100%"><option value="suma"'+(tipoDefault==="suma"?' selected':'')+'>Acumulable (suma)</option><option value="resta"'+(tipoDefault==="resta"?' selected':'')+'>Deducible (resta)</option></select></div>'+
+        '<select id="aj-tipo" style="width:100%">'+
+          '<option value="suma"'+(tipoDefault==='suma'?' selected':'')+'>Acumulable (suma)</option>'+
+          '<option value="resta"'+(tipoDefault==='resta'?' selected':'')+'>Deducible (resta)</option>'+
+        '</select></div>'+
       '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Importe</div>'+
         '<input id="aj-importe" type="number" placeholder="0.00"></div>'+
       '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
@@ -2901,19 +2903,17 @@ function agregarAjusteFiscal(proyId,tipoDefault){
   document.body.appendChild(overlay);
 }
 
-function pfAutoFillAjuste(sel){
-  const opt=sel.options[sel.selectedIndex];
-  const cw=document.getElementById('aj-custom-wrap');
-  if(sel.value==='__custom__'){cw.style.display='block';return;}
-  cw.style.display='none';
-  if(opt.dataset.tipo) document.getElementById('aj-tipo').value=opt.dataset.tipo;
-  if(opt.dataset.ref) document.getElementById('aj-ref').value=opt.dataset.ref;
-  if(opt.dataset.notas) document.getElementById('aj-notas').value=opt.dataset.notas;
+function pfFillSuger(sel){
+  const val=sel.value;if(!val)return;
+  const inp=document.getElementById('aj-concepto');
+  if(inp){inp.value=val;sel.value='';}
 }
 
+
+
+
 async function guardarAjuste(){
-  const sel=document.getElementById('aj-concepto');
-  const concepto=sel.value==='__custom__'?document.getElementById('aj-concepto-custom').value.trim():sel.value;
+  const concepto=document.getElementById('aj-concepto')?.value.trim();
   const tipo=document.getElementById('aj-tipo').value;
   const importe=parseFloat(document.getElementById('aj-importe').value)||0;
   const referencia_legal=document.getElementById('aj-ref').value.trim()||null;
@@ -3036,7 +3036,7 @@ async function reporteProyeccionPDF(id){
   const maxU=Math.max(Math.abs(Math.min(...dataUtilidad)),Math.max(...dataUtilidad))*1.2||1;
 
   // SVG Gráfica 1 — Ingresos vs Egresos
-  const gW=680,gH=180,gX=60,gY=20,gBW=gW-80,gBH=gH-50;
+  const gW=920,gH=180,gX=60,gY=20,gBW=gW-80,gBH=gH-50;
   const barPair=Math.floor(gBW/12);
   const barW=Math.floor(barPair/2)-2;
   let svg1='<svg width="100%" viewBox="0 0 '+gW+' '+gH+'" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif">';
@@ -3151,8 +3151,9 @@ async function reporteProyeccionPDF(id){
 <title>Proyección Fiscal ${proy.ejercicio} — ${proy.cliente_nombre}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;color:#1a1a1a;background:#fff}
-  .page{max-width:780px;margin:0 auto;padding:32px 40px}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
+  .page{max-width:1050px;margin:0 auto;padding:24px 32px}
+  @page{size:A4 landscape;margin:15mm}
   .header{display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:20px;border-bottom:3px solid #3B4BC8;margin-bottom:24px}
   .logo-area{}
   .logo-mark{font-size:22px;font-weight:700;color:#3B4BC8;letter-spacing:-0.5px}
@@ -3193,7 +3194,7 @@ async function reporteProyeccionPDF(id){
   .footer-right{text-align:right}
   .conf-badge{background:#3B4BC8;color:#fff;font-size:9px;font-weight:700;padding:3px 10px;border-radius:4px;letter-spacing:.05em}
   .disclaimer{font-size:9px;color:#bbb;margin-top:4px;text-align:right}
-  @media print{body{padding:0}.page{padding:20px 28px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  @media print{body{padding:0}.page{padding:12px 20px;max-width:100%}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
 </head><body>
 <div class="page">
@@ -3213,7 +3214,7 @@ async function reporteProyeccionPDF(id){
   </div>
 
   <!-- KPIs -->
-  <div class="kpi-grid">
+  <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr)">
     <div class="kpi">
       <div class="kpi-label">Ingresos proyectados</div>
       <div class="kpi-val">${fmtMXN(totalIngresos)}</div>
@@ -3233,6 +3234,11 @@ async function reporteProyeccionPDF(id){
       <div class="kpi-label">ISR estimado (${proy.tasa_isr}%)</div>
       <div class="kpi-val">${fmtMXN(isrEstimado)}</div>
       <div class="kpi-sub">${isrEstimado>0?'A cargo':'Sin ISR estimado'}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Coeficiente de utilidad</div>
+      <div class="kpi-val">${cuPDF.toFixed(4)}%</div>
+      <div class="kpi-sub">Art. 14 LISR</div>
     </div>
   </div>
 
