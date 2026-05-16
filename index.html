@@ -2736,7 +2736,7 @@ async function renderDetalleProyeccion(id){
   const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
-  const totalPP=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
+  const totalPP=proyectados.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
   const cuPct=totalIngresos>0?(utilidadFiscal/totalIngresos*100).toFixed(2):'0.00';
   const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
   const isrACargo=Math.max(0,isrEstimado-totalPP);
@@ -2757,10 +2757,11 @@ async function renderDetalleProyeccion(id){
 
   const ajustesSorted=[...ajustesData].sort((a,b)=>a.tipo===b.tipo?0:a.tipo==='suma'?-1:1);
   const ajusteRows=ajustesSorted.map(a=>'<tr>'+
-    '<td style="font-size:12px">'+escH(a.concepto)+'</td>'+
+    '<td style="font-size:12px;font-weight:500">'+escH(a.concepto)+'</td>'+
     '<td><span style="background:'+(a.tipo==='suma'?'#f0f7d4':'#fef2f2')+';color:'+(a.tipo==='suma'?'#5a8a1a':'#dc2626')+';padding:1px 8px;border-radius:999px;font-size:10px;font-weight:600">'+(a.tipo==='suma'?'Acumulable':'Deducible')+'</span></td>'+
     '<td style="text-align:right;font-size:12px;font-weight:600">'+fmtMXN(a.importe)+'</td>'+
     '<td style="font-size:11px;color:#888">'+escH(a.referencia_legal||'')+'</td>'+
+    '<td style="font-size:11px;color:#888;font-style:italic">'+escH(a.notas||'')+'</td>'+
     '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="editarAjuste(\''+a.id+'\',\''+id+'\')">✏️</button></td>'+
   '</tr>').join('');
 
@@ -2789,12 +2790,18 @@ async function renderDetalleProyeccion(id){
       '<td style="text-align:right;font-size:12px;color:'+(utilidadContable>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidadContable)+'</td>'+'<td style="text-align:right;font-size:12px;color:#888">'+fmtMXN(totalPP)+'</td><td></td></tr>'+
 
       '<tr style="background:#EEEDFE">'+
-      '<td colspan="6" style="font-size:11px;color:#3B4BC8">'+
-        '<div style="font-weight:700">Coeficiente de Utilidad (CU) — Art. 14 LISR</div>'+
-        '<div style="font-size:10px;color:#666;margin-top:2px">CU = Utilidad Fiscal / Ingresos Nominales = '+fmtMXN(utilidadFiscal)+' / '+fmtMXN(totalIngresos)+'</div>'+
+      '<td colspan="6" style="padding:10px 8px">'+
+        '<div style="font-size:12px;font-weight:700;color:#3B4BC8;margin-bottom:4px">Coeficiente de Utilidad (CU) — Art. 14 LISR</div>'+
+        '<div style="font-size:11px;color:#555;line-height:1.6">'+
+          '<b>Procedimiento:</b><br>'+
+          '1. Utilidad fiscal estimada: '+fmtMXN(utilidadFiscal)+'<br>'+
+          '2. Ingresos nominales proyectados: '+fmtMXN(totalIngresos)+'<br>'+
+          '3. CU = Utilidad fiscal ÷ Ingresos nominales = '+fmtMXN(utilidadFiscal)+' ÷ '+fmtMXN(totalIngresos)+' = <b>'+cuPct+'%</b><br>'+
+          '<span style="font-size:10px;color:#888">Aplicable para determinación de pagos provisionales del ejercicio siguiente (Art. 14 LISR)</span>'+
+        '</div>'+
       '</td>'+
-      '<td style="text-align:right;font-size:14px;font-weight:700;color:#3B4BC8">'+cuPct+'%</td>'+
-      '<td style="text-align:right;font-size:11px;color:#888">'+fmtMXN(totalPP)+'<br><span style="font-size:9px">PP total</span></td>'+
+      '<td style="text-align:right;font-size:16px;font-weight:700;color:#3B4BC8;vertical-align:middle">'+cuPct+'%</td>'+
+      '<td style="text-align:right;font-size:11px;color:#888;vertical-align:middle">'+fmtMXN(totalPP)+'<br><span style="font-size:9px">PP acumulado</span></td>'+
       '<td></td></tr>'+
       '</tbody></table></div>'+
   '</div>'+
@@ -2805,7 +2812,7 @@ async function renderDetalleProyeccion(id){
       '<button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:4px" id="btn-add-resta" data-proy="'+id+'">+ Deducción</button>'+
     '</div>'+
     '<div class="table-wrap"><table class="data-table">'+
-      '<thead><tr><th>Concepto</th><th>Tipo</th><th style="text-align:right">Importe</th><th>Ref. Legal</th><th></th></tr></thead>'+
+      '<thead><tr><th>Concepto</th><th>Tipo</th><th style="text-align:right">Importe</th><th>Ref. Legal</th><th>Notas / Identificación</th><th></th></tr></thead>'+
       '<tbody>'+ajusteRows+'</tbody>'+
       '<tfoot>'+
         '<tr style="background:#f5f5f3"><td colspan="2" style="font-weight:700;font-size:12px">Utilidad contable base</td><td style="text-align:right;font-weight:700;font-size:12px">'+fmtMXN(utilidadContable)+'</td><td colspan="2"></td></tr>'+
@@ -3043,11 +3050,11 @@ async function reporteProyeccionPDF(id){
   const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
-  const totalPP2=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
+  const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
+  const totalPP2=proyectados.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
   const isrACargoP=Math.max(0,isrEstimado-totalPP2);
   const saldoFavorP=Math.max(0,totalPP2-isrEstimado);
   const cuPDF=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
-  const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
   const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
 
   // Datos para gráficas
@@ -3143,10 +3150,10 @@ async function reporteProyeccionPDF(id){
   // Tabla conciliación
   const ajustesSortedPDF=[...ajustesData].sort((a,b)=>a.tipo===b.tipo?0:a.tipo==='suma'?-1:1);
   const concilRows=ajustesSortedPDF.map(a=>'<tr>'+
-    '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #f0f0ec">'+escH(a.concepto)+'</td>'+
-    '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #f0f0ec;color:'+(a.tipo==='suma'?'#5a8a1a':'#dc2626')+'">'+(a.tipo==='suma'?'Acumulable':'Deducible')+'</td>'+
+    '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #f0f0ec;color:'+( a.tipo==='suma'?'#5a8a1a':'#dc2626')+'">'+( a.tipo==='suma'?'Acumulable':'Deducible')+'</td>'+
     '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;font-weight:600">'+fmtMXN(a.importe)+'</td>'+
     '<td style="padding:5px 8px;font-size:10px;color:#888;border-bottom:1px solid #f0f0ec">'+escH(a.referencia_legal||'')+'</td>'+
+    '<td style="padding:5px 8px;font-size:10px;color:#888;font-style:italic;border-bottom:1px solid #f0f0ec">'+escH(a.notas||'')+'</td>'+
   '</tr>').join('');
 
   // Notas y recomendaciones automáticas
@@ -3317,7 +3324,7 @@ async function reporteProyeccionPDF(id){
     <div class="section-title">Conciliación contable-fiscal — Art. 9 LISR</div>
     <table>
       <thead><tr>
-        <th>Concepto</th><th>Tipo</th><th class="right">Importe</th><th>Ref. Legal</th>
+        <th>Concepto</th><th>Tipo</th><th class="right">Importe</th><th>Ref. Legal</th><th>Notas / Identificación</th>
       </tr></thead>
       <tbody>
         <tr style="background:#f8f9ff">
