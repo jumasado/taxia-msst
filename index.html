@@ -196,6 +196,7 @@ function renderTopNav(active){
     {id:'clientes',label:'Clientes',roles:['admin','manager','assistant']},
     {id:'historial',label:'Historial',roles:['admin','manager','assistant']},
     {id:'devoluciones',label:'Devoluciones IVA',roles:['admin','manager','assistant']},
+    {id:'proyeccion',label:'Proyección Fiscal',roles:['admin']},
     {id:'admin',label:'Usuarios',roles:['admin']}
   ];
   return `<div class="nav">
@@ -287,6 +288,7 @@ function nav(s){
   else if(s==='clientes') renderClientes();
   else if(s==='historial') renderHistory();
   else if(s==='devoluciones') renderDevoluciones();
+  else if(s==='proyeccion') renderProyeccion();
   else if(s==='admin') renderAdmin();
 }
 
@@ -2570,7 +2572,403 @@ async function agregarPuntoRequerimiento(devId,numReq){
 }
 
 
+
+/* ===== PROYECCIÓN FISCAL ANUAL ===== */
+const MESES_NOMBRES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const AJUSTES_BASE=[
+  {concepto:'Depreciación fiscal (LISR Art. 31-38)',tipo:'resta',referencia_legal:'LISR Art. 31-38',importe:0,notas:'Diferencia entre depreciación fiscal y contable'},
+  {concepto:'Ajuste anual por inflación acumulable (LISR Art. 44-46)',tipo:'suma',referencia_legal:'LISR Art. 44-46',importe:0,notas:'Cuando deudas > créditos'},
+  {concepto:'Ajuste anual por inflación deducible (LISR Art. 44-46)',tipo:'resta',referencia_legal:'LISR Art. 44-46',importe:0,notas:'Cuando créditos > deudas'},
+  {concepto:'PTU pagada deducible (LISR Art. 25 Fr. III)',tipo:'resta',referencia_legal:'LISR Art. 25 Fr. III',importe:0,notas:'PTU pagada en el ejercicio'},
+  {concepto:'Utilidad por enajenación de activos (LISR Art. 18)',tipo:'suma',referencia_legal:'LISR Art. 18',importe:0,notas:'MOI fiscal vs precio de venta'},
+  {concepto:'Pérdida por enajenación de activos (LISR Art. 25 Fr. IV)',tipo:'resta',referencia_legal:'LISR Art. 25 Fr. IV',importe:0,notas:''},
+  {concepto:'Otros ingresos acumulables (LISR Art. 16)',tipo:'suma',referencia_legal:'LISR Art. 16',importe:0,notas:''},
+  {concepto:'Deducción inmediata (LISR Art. 220)',tipo:'resta',referencia_legal:'LISR Art. 220',importe:0,notas:''},
+];
+
+let pfCache=[];
+
+async function renderProyeccion(){
+  app.innerHTML=renderTopNav('proyeccion')+`
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+    <div style="font-size:15px;font-weight:600">Proyección Fiscal Anual</div>
+    <button class="btn btn-primary btn-sm" onclick="renderNuevaProyeccion()">+ Nueva proyección</button>
+  </div>
+  <div class="loading" id="pfl"><span class="spinner"></span>Cargando...</div>
+  <div id="pf-body"></div>`;
+  const data=await sbGet('pf_proyecciones','?select=*&order=ejercicio.desc,cliente_nombre.asc');
+  pfCache=data||[];
+  document.getElementById('pfl').style.display='none';
+  renderPFList();
+}
+
+function renderPFList(){
+  const el=document.getElementById('pf-body');if(!el)return;
+  if(!pfCache.length){
+    el.innerHTML='<div class="card"><div style="font-size:14px;color:#888;text-align:center;padding:1rem">Sin proyecciones. Crea la primera con "+ Nueva proyección".</div></div>';
+    return;
+  }
+  const porEjercicio={};
+  pfCache.forEach(p=>{if(!porEjercicio[p.ejercicio])porEjercicio[p.ejercicio]=[];porEjercicio[p.ejercicio].push(p);});
+  let html='';
+  Object.keys(porEjercicio).sort((a,b)=>b-a).forEach(ej=>{
+    html+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Ejercicio '+ej+'</div>';
+    porEjercicio[ej].forEach(p=>{
+      html+='<div class="card" style="margin-bottom:10px;cursor:pointer" onclick="renderDetalleProyeccion(\''+p.id+'\')">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'+
+          '<div><div style="font-size:14px;font-weight:600">'+escH(p.cliente_nombre)+'</div>'+
+          '<div style="font-size:12px;color:#888;margin-top:2px">Ejercicio '+p.ejercicio+' · Tasa ISR: '+p.tasa_isr+'%'+(p.notas?' · '+escH(p.notas):'')+'</div></div>'+
+          '<div style="font-size:11px;color:#888">'+new Date(p.created_at).toLocaleDateString('es-MX',{timeZone:'America/Tijuana'})+'</div>'+
+        '</div>'+
+      '</div>';
+    });
+  });
+  el.innerHTML=html;
+}
+
+async function renderNuevaProyeccion(id){
+  const editing=id?pfCache.find(p=>p.id===id):null;
+  const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+'</option>').join('');
+  const anioActual=new Date().getFullYear();
+  const anioOpts=[anioActual-1,anioActual,anioActual+1].map(y=>'<option value="'+y+'"'+(editing?editing.ejercicio===y?' selected':'':y===anioActual?' selected':'')+'>'+y+'</option>').join('');
+  app.innerHTML=renderTopNav('proyeccion')+`
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
+    <button class="btn btn-sm" onclick="renderProyeccion()">← Proyecciones</button>
+    <div style="font-size:15px;font-weight:600">${editing?'Editar proyección':'Nueva proyección fiscal'}</div>
+  </div>
+  <div class="card">
+    <div class="sec-label" style="margin-bottom:12px">Datos generales</div>
+    <div class="grid2" style="margin-bottom:12px">
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Cliente *</div>
+        <select id="pf-cliente" style="width:100%" onchange="document.getElementById('pf-cli-nombre').value=this.options[this.selectedIndex].dataset.nombre||''">${cliOpts}</select>
+        <input type="hidden" id="pf-cli-nombre" value="${escH(editing?.cliente_nombre||'')}">
+      </div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Ejercicio *</div>
+        <select id="pf-ejercicio" style="width:100%">${anioOpts}</select></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Tasa ISR (%)</div>
+        <input id="pf-tasa" type="number" value="${editing?.tasa_isr||30}" min="0" max="100" step="0.01"></div>
+    </div>
+    <div style="margin-bottom:12px"><div style="font-size:12px;color:#888;margin-bottom:4px">Notas internas</div>
+      <input id="pf-notas" type="text" placeholder="Notas sobre esta proyección" value="${escH(editing?.notas||'')}"></div>
+    <input type="hidden" id="pf-editing" value="${editing?.id||''}">
+    <div class="err-msg" id="pf-err"></div>
+    <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="saveProyeccion()">${editing?'Actualizar':'Crear proyección'}</button>
+  </div>`;
+}
+
+async function saveProyeccion(){
+  const cliSel=document.getElementById('pf-cliente');
+  const cliente_id=cliSel.value||null;
+  const cliente_nombre=document.getElementById('pf-cli-nombre').value||cliSel.options[cliSel.selectedIndex]?.dataset?.nombre||'';
+  const ejercicio=parseInt(document.getElementById('pf-ejercicio').value);
+  const tasa_isr=parseFloat(document.getElementById('pf-tasa').value)||30;
+  const notas=document.getElementById('pf-notas').value.trim()||null;
+  const editing=document.getElementById('pf-editing').value;
+  const err=document.getElementById('pf-err');err.style.display='none';
+  if(!cliente_nombre||!ejercicio){err.textContent='Cliente y ejercicio son obligatorios.';err.style.display='block';return;}
+  const payload={cliente_id,cliente_nombre,ejercicio,tasa_isr,notas,updated_at:nowISO()};
+  let newId=editing;
+  if(editing){
+    await sbPatch('pf_proyecciones','?id=eq.'+editing,payload);
+  } else {
+    const res=await sbPost('pf_proyecciones',payload,'return=representation');
+    const data=await res.json();
+    newId=(Array.isArray(data)?data[0]:data)?.id;
+    if(newId){for(const a of AJUSTES_BASE) await sbPost('pf_ajustes',{...a,proyeccion_id:newId},'return=minimal');}
+  }
+  const updated=await sbGet('pf_proyecciones','?select=*&order=ejercicio.desc,cliente_nombre.asc');
+  pfCache=updated||[];
+  if(newId) renderDetalleProyeccion(newId);
+  else renderProyeccion();
+}
+
+async function renderDetalleProyeccion(id){
+  const proy=pfCache.find(p=>p.id===id);if(!proy)return;
+  app.innerHTML=renderTopNav('proyeccion')+`
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
+    <button class="btn btn-sm" onclick="renderProyeccion()">← Proyecciones</button>
+    <div style="font-size:15px;font-weight:600;flex:1">${escH(proy.cliente_nombre)} — ${proy.ejercicio}</div>
+    <button class="btn btn-sm btn-purple" onclick="renderNuevaProyeccion('${id}')">✏️ Editar</button>
+    <button class="btn btn-sm btn-danger" onclick="deleteProyeccion('${id}')">🗑 Eliminar</button>
+  </div>
+  <div class="loading" id="pf-detl"><span class="spinner"></span>Cargando...</div>
+  <div id="pf-det-body"></div>`;
+
+  const [meses,ajustes]=await Promise.all([
+    sbGet('pf_meses','?proyeccion_id=eq.'+id+'&select=*&order=mes.asc'),
+    sbGet('pf_ajustes','?proyeccion_id=eq.'+id+'&select=*&order=created_at.asc')
+  ]);
+  document.getElementById('pf-detl').style.display='none';
+
+  const mesesData=meses||[];
+  const mesesConDatos=mesesData.filter(m=>m.ingresos!==null);
+  const nMeses=mesesConDatos.length;
+  const avg=campo=>nMeses?mesesConDatos.reduce((s,m)=>s+(parseFloat(m[campo])||0),0)/nMeses:0;
+
+  const proyectados=[];
+  for(let m=1;m<=12;m++){
+    const real=mesesData.find(md=>md.mes===m);
+    if(real&&real.ingresos!==null) proyectados.push({mes:m,real:true,...real});
+    else {
+      const ing=avg('ingresos'),cv=avg('costo_ventas'),go=avg('gastos_operacion'),oi=avg('otros_ingresos'),og=avg('otros_gastos');
+      proyectados.push({mes:m,real:false,ingresos:ing,costo_ventas:cv,utilidad_bruta:ing-cv,gastos_operacion:go,utilidad_operacion:ing-cv-go,otros_ingresos:oi,otros_gastos:og,utilidad_neta_contable:ing-cv-go+oi-og});
+    }
+  }
+
+  const totalIngresos=proyectados.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
+  const totalCosto=proyectados.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
+  const totalGastosOp=proyectados.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
+  const totalOtrosIng=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
+  const totalOtrosGas=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_gastos)||0),0);
+  const utilidadContable=totalIngresos-totalCosto-totalGastosOp+totalOtrosIng-totalOtrosGas;
+
+  const ajustesData=ajustes||[];
+  const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
+  const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
+  const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
+  const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
+
+  const mesRows=proyectados.map(m=>'<tr style="background:'+(m.real?'#fff':'#f5fff5')+'">'+
+    '<td style="font-weight:500;font-size:12px">'+MESES_NOMBRES[m.mes-1]+(m.real?'':' <span style="font-size:9px;color:#8DC63F;font-weight:700">PROY</span>')+'</td>'+
+    '<td style="text-align:right;font-size:12px">'+fmtMXN(m.ingresos)+'</td>'+
+    '<td style="text-align:right;font-size:12px">'+fmtMXN(m.costo_ventas)+'</td>'+
+    '<td style="text-align:right;font-size:12px">'+fmtMXN(m.gastos_operacion)+'</td>'+
+    '<td style="text-align:right;font-size:12px">'+fmtMXN(m.otros_ingresos)+'</td>'+
+    '<td style="text-align:right;font-size:12px">'+fmtMXN(m.otros_gastos)+'</td>'+
+    '<td style="text-align:right;font-size:12px;font-weight:600;color:'+(parseFloat(m.utilidad_neta_contable||0)>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(m.utilidad_neta_contable)+'</td>'+
+    '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="abrirCapturaMes(\''+id+'\','+m.mes+',\''+(m.id||'')+'\')">'+( m.real?'✏️':'+ Capturar')+'</button></td>'+
+  '</tr>').join('');
+
+  const ajusteRows=ajustesData.map(a=>'<tr>'+
+    '<td style="font-size:12px">'+escH(a.concepto)+'</td>'+
+    '<td><span style="background:'+(a.tipo==='suma'?'#f0f7d4':'#fef2f2')+';color:'+(a.tipo==='suma'?'#5a8a1a':'#dc2626')+';padding:1px 8px;border-radius:999px;font-size:10px;font-weight:600">'+(a.tipo==='suma'?'Acumulable':'Deducible')+'</span></td>'+
+    '<td style="text-align:right;font-size:12px;font-weight:600">'+fmtMXN(a.importe)+'</td>'+
+    '<td style="font-size:11px;color:#888">'+escH(a.referencia_legal||'')+'</td>'+
+    '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="editarAjuste(\''+a.id+'\',\''+id+'\')">✏️</button></td>'+
+  '</tr>').join('');
+
+  document.getElementById('pf-det-body').innerHTML=
+  '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:1rem">'+
+    '<div class="metric" style="border-left:3px solid #3B4BC8"><div class="metric-label">Ingresos proyectados</div><div class="metric-val" style="font-size:14px;color:#3B4BC8">'+fmtMXN(totalIngresos)+'</div><div style="font-size:10px;color:#888">'+nMeses+' meses reales</div></div>'+
+    '<div class="metric" style="border-left:3px solid #EF9F27"><div class="metric-label">Utilidad contable</div><div class="metric-val" style="font-size:14px;color:'+(utilidadContable>=0?'#EF9F27':'#dc2626')+'">'+fmtMXN(utilidadContable)+'</div></div>'+
+    '<div class="metric" style="border-left:3px solid #8DC63F"><div class="metric-label">Utilidad fiscal estimada</div><div class="metric-val" style="font-size:14px;color:'+(utilidadFiscal>=0?'#8DC63F':'#dc2626')+'">'+fmtMXN(utilidadFiscal)+'</div></div>'+
+    '<div class="metric" style="border-left:3px solid '+(isrEstimado>0?'#dc2626':'#8DC63F')+'"><div class="metric-label">ISR estimado ('+proy.tasa_isr+'%)</div><div class="metric-val" style="font-size:14px;color:'+(isrEstimado>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isrEstimado)+'</div></div>'+
+  '</div>'+
+  '<div class="card" style="margin-bottom:1rem">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+      '<div class="sec-label">Estado de Resultados mensual</div>'+
+      '<div style="font-size:10px;color:#888;background:#f5fff5;padding:2px 8px;border-radius:4px">Verde claro = proyectado por promedio</div>'+
+    '</div>'+
+    '<div class="table-wrap"><table class="data-table">'+
+      '<thead><tr><th>Mes</th><th style="text-align:right">Ingresos</th><th style="text-align:right">Costo venta</th><th style="text-align:right">Gastos op.</th><th style="text-align:right">Otros ing.</th><th style="text-align:right">Otros gas.</th><th style="text-align:right">Util. neta</th><th></th></tr></thead>'+
+      '<tbody>'+mesRows+
+      '<tr style="background:#f5f5f3;font-weight:700"><td style="font-size:12px">TOTAL ANUAL</td>'+
+      '<td style="text-align:right;font-size:12px">'+fmtMXN(totalIngresos)+'</td>'+
+      '<td style="text-align:right;font-size:12px">'+fmtMXN(totalCosto)+'</td>'+
+      '<td style="text-align:right;font-size:12px">'+fmtMXN(totalGastosOp)+'</td>'+
+      '<td style="text-align:right;font-size:12px">'+fmtMXN(totalOtrosIng)+'</td>'+
+      '<td style="text-align:right;font-size:12px">'+fmtMXN(totalOtrosGas)+'</td>'+
+      '<td style="text-align:right;font-size:12px;color:'+(utilidadContable>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidadContable)+'</td><td></td></tr>'+
+      '</tbody></table></div>'+
+  '</div>'+
+  '<div class="card" style="margin-bottom:1rem">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+      '<div class="sec-label">Conciliación contable-fiscal</div>'+
+      '<button class="btn btn-sm btn-primary" style="font-size:11px" onclick="agregarAjusteFiscal(\''+id+'\')">+ Ajuste</button>'+
+    '</div>'+
+    '<div class="table-wrap"><table class="data-table">'+
+      '<thead><tr><th>Concepto</th><th>Tipo</th><th style="text-align:right">Importe</th><th>Ref. Legal</th><th></th></tr></thead>'+
+      '<tbody>'+ajusteRows+'</tbody>'+
+      '<tfoot>'+
+        '<tr style="background:#f5f5f3"><td colspan="2" style="font-weight:700;font-size:12px">Utilidad contable base</td><td style="text-align:right;font-weight:700;font-size:12px">'+fmtMXN(utilidadContable)+'</td><td colspan="2"></td></tr>'+
+        '<tr><td colspan="2" style="font-size:12px;color:#5a8a1a">+ Ajustes acumulables</td><td style="text-align:right;font-size:12px;color:#5a8a1a">'+fmtMXN(totalSumas)+'</td><td colspan="2"></td></tr>'+
+        '<tr><td colspan="2" style="font-size:12px;color:#dc2626">- Ajustes deducibles</td><td style="text-align:right;font-size:12px;color:#dc2626">('+fmtMXN(totalRestas)+')</td><td colspan="2"></td></tr>'+
+        '<tr style="background:#EEEDFE"><td colspan="2" style="font-weight:700;font-size:13px;color:#3B4BC8">= Utilidad fiscal estimada</td><td style="text-align:right;font-weight:700;font-size:13px;color:'+(utilidadFiscal>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidadFiscal)+'</td><td colspan="2"></td></tr>'+
+        '<tr style="background:'+(isrEstimado>0?'#fef2f2':'#f0f7d4')+'"><td colspan="2" style="font-weight:700;font-size:13px;color:'+(isrEstimado>0?'#dc2626':'#5a8a1a')+'">ISR estimado ('+proy.tasa_isr+'%)</td><td style="text-align:right;font-weight:700;font-size:13px;color:'+(isrEstimado>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isrEstimado)+'</td><td colspan="2"></td></tr>'+
+      '</tfoot>'+
+    '</table></div>'+
+  '</div>';
+}
+
+function abrirCapturaMes(proyId,mes,mesId){
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-mes';
+  overlay.innerHTML='<div class="modal-box" style="max-width:480px">'+
+    '<div class="modal-title">'+MESES_NOMBRES[mes-1]+' — Captura de datos</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Ingresos</div><input id="ms-ing" type="number" placeholder="0.00"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Costo de ventas</div><input id="ms-cv" type="number" placeholder="0.00"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Gastos de operación</div><input id="ms-go" type="number" placeholder="0.00"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Otros ingresos</div><input id="ms-oi" type="number" placeholder="0.00"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Otros gastos</div><input id="ms-og" type="number" placeholder="0.00"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Activo fijo bruto</div><input id="ms-afb" type="number" placeholder="0.00"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Depreciación acumulada</div><input id="ms-dac" type="number" placeholder="0.00"></div>'+
+    '</div>'+
+    '<input type="hidden" id="ms-proy-id" value="'+proyId+'">'+
+    '<input type="hidden" id="ms-mes" value="'+mes+'">'+
+    '<input type="hidden" id="ms-id" value="'+(mesId||'')+'">'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-full" onclick="document.getElementById(\'modal-mes\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="guardarMes()" style="flex:1;margin-top:0">Guardar</button>'+
+    '</div>'+
+  '</div>';
+  if(mesId){
+    sbGet('pf_meses','?id=eq.'+mesId+'&select=*').then(data=>{
+      const m=data?.[0];if(!m)return;
+      ['ing','cv','go','oi','og','afb','dac'].forEach((f,i)=>{
+        const campos=['ingresos','costo_ventas','gastos_operacion','otros_ingresos','otros_gastos','activo_fijo_bruto','depreciacion_acumulada_contable'];
+        const el=document.getElementById('ms-'+f);if(el) el.value=m[campos[i]]||'';
+      });
+    });
+  }
+  document.body.appendChild(overlay);
+}
+
+async function guardarMes(){
+  const proyId=document.getElementById('ms-proy-id').value;
+  const mes=parseInt(document.getElementById('ms-mes').value);
+  const mesId=document.getElementById('ms-id').value;
+  const ingresos=parseFloat(document.getElementById('ms-ing').value)||0;
+  const costo_ventas=parseFloat(document.getElementById('ms-cv').value)||0;
+  const gastos_operacion=parseFloat(document.getElementById('ms-go').value)||0;
+  const otros_ingresos=parseFloat(document.getElementById('ms-oi').value)||0;
+  const otros_gastos=parseFloat(document.getElementById('ms-og').value)||0;
+  const activo_fijo_bruto=parseFloat(document.getElementById('ms-afb').value)||0;
+  const depreciacion_acumulada_contable=parseFloat(document.getElementById('ms-dac').value)||0;
+  const utilidad_bruta=ingresos-costo_ventas;
+  const utilidad_operacion=utilidad_bruta-gastos_operacion;
+  const utilidad_neta_contable=utilidad_operacion+otros_ingresos-otros_gastos;
+  const payload={proyeccion_id:proyId,mes,ingresos,costo_ventas,utilidad_bruta,gastos_operacion,utilidad_operacion,otros_ingresos,otros_gastos,utilidad_neta_contable,activo_fijo_bruto,depreciacion_acumulada_contable,fuente:'manual'};
+  document.getElementById('modal-mes').remove();
+  if(mesId) await sbPatch('pf_meses','?id=eq.'+mesId,payload);
+  else await sbPost('pf_meses',payload,'return=minimal');
+  renderDetalleProyeccion(proyId);
+}
+
+function agregarAjusteFiscal(proyId){
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-ajuste';
+  const conceptoOpts=AJUSTES_BASE.map(a=>'<option value="'+escH(a.concepto)+'" data-tipo="'+a.tipo+'" data-ref="'+escH(a.referencia_legal||'')+'" data-notas="'+escH(a.notas||'')+'">'+escH(a.concepto)+'</option>').join('');
+  overlay.innerHTML='<div class="modal-box">'+
+    '<div class="modal-title">Agregar ajuste fiscal</div>'+
+    '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto</div>'+
+      '<select id="aj-concepto" style="width:100%" onchange="pfAutoFillAjuste(this)">'+
+        '<option value="">Selecciona...</option>'+conceptoOpts+
+        '<option value="__custom__">Otro (personalizado)</option>'+
+      '</select></div>'+
+    '<div style="margin-bottom:10px;display:none" id="aj-custom-wrap">'+
+      '<div style="font-size:11px;color:#888;margin-bottom:3px">Concepto personalizado</div>'+
+      '<input id="aj-concepto-custom" type="text" placeholder="Describe el ajuste"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Tipo</div>'+
+        '<select id="aj-tipo" style="width:100%"><option value="suma">Acumulable (suma)</option><option value="resta">Deducible (resta)</option></select></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Importe</div>'+
+        '<input id="aj-importe" type="number" placeholder="0.00"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
+        '<input id="aj-ref" type="text" placeholder="LISR Art. ..."></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas</div>'+
+      '<input id="aj-notas" type="text" placeholder="Notas adicionales"></div>'+
+    '<input type="hidden" id="aj-proy-id" value="'+proyId+'">'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-full" onclick="document.getElementById(\'modal-ajuste\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="guardarAjuste()" style="flex:1;margin-top:0">Guardar</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(overlay);
+}
+
+function pfAutoFillAjuste(sel){
+  const opt=sel.options[sel.selectedIndex];
+  const cw=document.getElementById('aj-custom-wrap');
+  if(sel.value==='__custom__'){cw.style.display='block';return;}
+  cw.style.display='none';
+  if(opt.dataset.tipo) document.getElementById('aj-tipo').value=opt.dataset.tipo;
+  if(opt.dataset.ref) document.getElementById('aj-ref').value=opt.dataset.ref;
+  if(opt.dataset.notas) document.getElementById('aj-notas').value=opt.dataset.notas;
+}
+
+async function guardarAjuste(){
+  const sel=document.getElementById('aj-concepto');
+  const concepto=sel.value==='__custom__'?document.getElementById('aj-concepto-custom').value.trim():sel.value;
+  const tipo=document.getElementById('aj-tipo').value;
+  const importe=parseFloat(document.getElementById('aj-importe').value)||0;
+  const referencia_legal=document.getElementById('aj-ref').value.trim()||null;
+  const notas=document.getElementById('aj-notas').value.trim()||null;
+  const proyId=document.getElementById('aj-proy-id').value;
+  if(!concepto){alert('El concepto es obligatorio.');return;}
+  document.getElementById('modal-ajuste').remove();
+  await sbPost('pf_ajustes',{proyeccion_id:proyId,concepto,tipo,importe,referencia_legal,notas},'return=minimal');
+  renderDetalleProyeccion(proyId);
+}
+
+async function editarAjuste(ajusteId,proyId){
+  const data=await sbGet('pf_ajustes','?id=eq.'+ajusteId+'&select=*');
+  const a=data?.[0];if(!a)return;
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-edit-ajuste';
+  overlay.innerHTML='<div class="modal-box">'+
+    '<div class="modal-title">Editar ajuste fiscal</div>'+
+    '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto</div>'+
+      '<input id="eaj-concepto" type="text" value="'+escH(a.concepto||'')+'"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Tipo</div>'+
+        '<select id="eaj-tipo" style="width:100%"><option value="suma"'+(a.tipo==='suma'?' selected':'')+'>Acumulable</option><option value="resta"'+(a.tipo==='resta'?' selected':'')+'>Deducible</option></select></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Importe</div>'+
+        '<input id="eaj-importe" type="number" value="'+(a.importe||0)+'"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
+        '<input id="eaj-ref" type="text" value="'+escH(a.referencia_legal||'')+'"></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas</div>'+
+      '<input id="eaj-notas" type="text" value="'+escH(a.notas||'')+'"></div>'+
+    '<input type="hidden" id="eaj-id" value="'+ajusteId+'">'+
+    '<input type="hidden" id="eaj-proy-id" value="'+proyId+'">'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-sm btn-danger" onclick="eliminarAjuste(\''+ajusteId+'\',\''+proyId+'\')" style="margin-top:0">Eliminar</button>'+
+      '<div style="flex:1"></div>'+
+      '<button class="btn btn-full" onclick="document.getElementById(\'modal-edit-ajuste\').remove()" style="margin-top:0">Cancelar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="actualizarAjuste()" style="margin-top:0">Guardar</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(overlay);
+}
+
+async function actualizarAjuste(){
+  const id=document.getElementById('eaj-id').value;
+  const proyId=document.getElementById('eaj-proy-id').value;
+  const concepto=document.getElementById('eaj-concepto').value.trim();
+  const tipo=document.getElementById('eaj-tipo').value;
+  const importe=parseFloat(document.getElementById('eaj-importe').value)||0;
+  const referencia_legal=document.getElementById('eaj-ref').value.trim()||null;
+  const notas=document.getElementById('eaj-notas').value.trim()||null;
+  document.getElementById('modal-edit-ajuste').remove();
+  await sbPatch('pf_ajustes','?id=eq.'+id,{concepto,tipo,importe,referencia_legal,notas});
+  renderDetalleProyeccion(proyId);
+}
+
+async function eliminarAjuste(ajusteId,proyId){
+  if(!confirm('¿Eliminar este ajuste?'))return;
+  document.getElementById('modal-edit-ajuste')?.remove();
+  await sbDelete('pf_ajustes','?id=eq.'+ajusteId);
+  renderDetalleProyeccion(proyId);
+}
+
+async function deleteProyeccion(id){
+  const p=pfCache.find(x=>x.id===id);
+  if(!confirm('¿Eliminar la proyección de '+(p?.cliente_nombre||'este cliente')+' '+(p?.ejercicio||'')+'? Esta acción no se puede deshacer.'))return;
+  await sbDelete('pf_meses','?proyeccion_id=eq.'+id);
+  await sbDelete('pf_ajustes','?proyeccion_id=eq.'+id);
+  await sbDelete('pf_proyecciones','?id=eq.'+id);
+  pfCache=pfCache.filter(x=>x.id!==id);
+  renderProyeccion();
+}
+
+
 renderLogin();
 </script>
 </body>
 </html>
+
