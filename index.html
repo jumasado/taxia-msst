@@ -2707,6 +2707,8 @@ async function renderDetalleProyeccion(id){
     sbGet('pf_ajustes','?proyeccion_id=eq.'+id+'&select=*&order=created_at.asc')
   ]);
   document.getElementById('pf-detl').style.display='none';
+  // Guardar id para event listeners
+  const devProyId=id;
 
   const mesesData=meses||[];
   const mesesConDatos=mesesData.filter(m=>m.ingresos!==null);
@@ -2799,8 +2801,8 @@ async function renderDetalleProyeccion(id){
   '<div class="card" style="margin-bottom:1rem">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
       '<div class="sec-label">Conciliación contable-fiscal</div>'+
-      '<button class="btn btn-sm" style="font-size:11px;background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" onclick="agregarAjusteFiscal(\''+id+'\',\'suma\')">+ Ingreso acumulable</button>'+
-      '<button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:4px" onclick="agregarAjusteFiscal(\''+id+'\',\'resta\')">+ Deducción</button>'+
+      '<button class="btn btn-sm" style="font-size:11px;background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" id="btn-add-suma" data-proy="'+id+'">+ Ingreso acumulable</button>'+
+      '<button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:4px" id="btn-add-resta" data-proy="'+id+'">+ Deducción</button>'+
     '</div>'+
     '<div class="table-wrap"><table class="data-table">'+
       '<thead><tr><th>Concepto</th><th>Tipo</th><th style="text-align:right">Importe</th><th>Ref. Legal</th><th></th></tr></thead>'+
@@ -2818,6 +2820,13 @@ async function renderDetalleProyeccion(id){
       '</tfoot>'+
     '</table></div>'+
   '</div>';
+  // Event listeners para botones de ajuste (evita problemas de escapado de comillas)
+  setTimeout(()=>{
+    const btnSuma=document.getElementById('btn-add-suma');
+    const btnResta=document.getElementById('btn-add-resta');
+    if(btnSuma) btnSuma.addEventListener('click',()=>agregarAjusteFiscal(btnSuma.dataset.proy,'suma'));
+    if(btnResta) btnResta.addEventListener('click',()=>agregarAjusteFiscal(btnResta.dataset.proy,'resta'));
+  },50);
 }
 
 function abrirCapturaMes(proyId,mes,mesId){
