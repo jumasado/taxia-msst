@@ -2295,14 +2295,26 @@ async function renderDetalleDevolucion(id){
             '<div style="font-size:13px;font-weight:500;color:'+(p.atendido?'#999':'#1a1a1a')+';'+(p.atendido?'text-decoration:line-through':'')+';margin-bottom:6px">'+
               '<span style="font-size:10px;font-weight:700;color:#888;margin-right:6px">'+(i+1)+'.</span>'+escH(p.punto)+
             '</div>'+
-            '<div style="display:flex;flex-wrap:wrap;gap:12px">'+
+            '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:6px">'+
               '<div style="font-size:10px;color:#888"><span style="font-weight:600">Registrado:</span> '+(p.fecha_requerimiento||'—')+'</div>'+
               '<div style="font-size:10px;color:#888"><span style="font-weight:600">Notificado:</span> '+(p.fecha_notificacion||'—')+
                 (!p.fecha_notificacion?
                   ' <span onclick="registrarNotificacion(\''+p.id+'\',\''+id+'\')" style="color:#3B4BC8;cursor:pointer;font-weight:600">[registrar]</span>':'')+
               '</div>'+
+              (p.fecha_notificacion?(()=>{
+                const venc=diasHabilesDesde(p.fecha_notificacion,num===1?20:10);
+                const dr=diasRestantes(venc);
+                const vencColor=dr<0?'#dc2626':dr<=5?'#92400E':'#5a8a1a';
+                const vencBg=dr<0?'#fef2f2':dr<=5?'#FEF3C7':'#f0f7d4';
+                return '<div style="font-size:10px;font-weight:600;background:'+vencBg+';color:'+vencColor+';padding:1px 8px;border-radius:999px">'+
+                  'Vence: '+venc+(dr<0?' (VENCIDO '+Math.abs(dr)+'d)':dr===0?' (HOY)':' ('+dr+'d)')+
+                '</div>';
+              })():'<div style="font-size:10px;color:#bbb">Vencimiento: pendiente notificación</div>')+
               '<div style="font-size:10px;color:#888"><span style="font-weight:600">Subido por:</span> '+escH(subidoPor)+'</div>'+
               (p.atendido&&p.fecha_atendido?'<div style="font-size:10px;color:#5a8a1a"><span style="font-weight:600">Atendido:</span> '+p.fecha_atendido+'</div>':'')+
+            '</div>'+
+            '<div style="display:flex;gap:6px">'+
+              '<button class="btn btn-sm" style="font-size:10px;padding:3px 8px" onclick="editarPuntoReq(\''+p.id+'\',\''+id+'\')">✏️ Editar</button>'+
             '</div>'+
           '</div>'+
         '</div>'+
@@ -2443,6 +2455,63 @@ async function agregarComentario(devId){
     if(sec) sec.textContent='Comentarios ('+(nuevos||[]).length+')';
   }
   input.focus();
+}
+
+async function editarPuntoReq(puntoId,devId){
+  // Obtener datos actuales del punto
+  const puntos=await sbGet('dev_requerimientos','?id=eq.'+puntoId+'&select=*');
+  const p=puntos?.[0];
+  if(!p)return;
+
+  // Crear modal de edición
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-edit-req';
+  overlay.innerHTML='<div class="modal-box">'+
+    '<div class="modal-title">Editar punto de requerimiento</div>'+
+    '<div style="margin-bottom:12px">'+
+      '<div style="font-size:12px;color:#888;margin-bottom:4px">Descripción del punto *</div>'+
+      '<textarea id="eq-punto" rows="3" style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box">'+escH(p.punto||'')+'</textarea>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'+
+      '<div>'+
+        '<div style="font-size:12px;color:#888;margin-bottom:4px">Fecha registrado</div>'+
+        '<input id="eq-freg" type="date" value="'+(p.fecha_requerimiento||'')+'" style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px">'+
+      '</div>'+
+      '<div>'+
+        '<div style="font-size:12px;color:#888;margin-bottom:4px">Fecha notificado</div>'+
+        '<input id="eq-fnot" type="date" value="'+(p.fecha_notificacion||'')+'" style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px">'+
+      '</div>'+
+      '<div>'+
+        '<div style="font-size:12px;color:#888;margin-bottom:4px">Fecha atendido</div>'+
+        '<input id="eq-fat" type="date" value="'+(p.fecha_atendido||'')+'" style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px">'+
+      '</div>'+
+      '<div>'+
+        '<div style="font-size:12px;color:#888;margin-bottom:4px">Estatus</div>'+
+        '<select id="eq-atendido" style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px">'+
+          '<option value="false"'+(p.atendido?'':' selected')+'>Pendiente</option>'+
+          '<option value="true"'+(p.atendido?' selected':'')+'>Atendido</option>'+
+        '</select>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-full" onclick="document.getElementById(\'modal-edit-req\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="guardarEdicionReq(\''+puntoId+'\',\''+devId+'\')" style="flex:1;margin-top:0">Guardar</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(overlay);
+}
+
+async function guardarEdicionReq(puntoId,devId){
+  const punto=document.getElementById('eq-punto')?.value.trim();
+  const fecha_requerimiento=document.getElementById('eq-freg')?.value||null;
+  const fecha_notificacion=document.getElementById('eq-fnot')?.value||null;
+  const fecha_atendido=document.getElementById('eq-fat')?.value||null;
+  const atendido=document.getElementById('eq-atendido')?.value==='true';
+  if(!punto){alert('El punto no puede estar vacío.');return;}
+  document.getElementById('modal-edit-req')?.remove();
+  await sbPatch('dev_requerimientos','?id=eq.'+puntoId,{punto,fecha_requerimiento,fecha_notificacion,fecha_atendido,atendido});
+  renderDetalleDevolucion(devId);
 }
 
 async function registrarNotificacion(puntoId,devId){
