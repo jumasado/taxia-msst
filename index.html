@@ -2724,6 +2724,8 @@ async function renderDetalleProyeccion(id){
   }
 
   const totalIngresos=proyectados.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
+  const totalPP2=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
+  const cuPDF=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
   const totalCosto=proyectados.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
   const totalGastosOp=proyectados.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
   const totalOtrosIng=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
@@ -2736,6 +2738,10 @@ async function renderDetalleProyeccion(id){
   const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
   const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
 
+  const totalPP=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
+  // Coeficiente de utilidad (CU) = utilidad fiscal / ingresos nominales
+  const cu=totalIngresos>0?(utilidadFiscal/totalIngresos):0;
+  const cuPct=(cu*100).toFixed(4);
   const mesRows=proyectados.map(m=>'<tr style="background:'+(m.real?'#fff':'#f5fff5')+'">'+
     '<td style="font-weight:500;font-size:12px">'+MESES_NOMBRES[m.mes-1]+(m.real?'':' <span style="font-size:9px;color:#8DC63F;font-weight:700">PROY</span>')+'</td>'+
     '<td style="text-align:right;font-size:12px">'+fmtMXN(m.ingresos)+'</td>'+
@@ -2744,10 +2750,12 @@ async function renderDetalleProyeccion(id){
     '<td style="text-align:right;font-size:12px">'+fmtMXN(m.otros_ingresos)+'</td>'+
     '<td style="text-align:right;font-size:12px">'+fmtMXN(m.otros_gastos)+'</td>'+
     '<td style="text-align:right;font-size:12px;font-weight:600;color:'+(parseFloat(m.utilidad_neta_contable||0)>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(m.utilidad_neta_contable)+'</td>'+
+    '<td style="text-align:right;font-size:12px;color:#888">'+(m.real&&m.pago_provisional?fmtMXN(m.pago_provisional):'—')+'</td>'+
     '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="abrirCapturaMes(\''+id+'\','+m.mes+',\''+(m.id||'')+'\')">'+( m.real?'✏️':'+ Capturar')+'</button></td>'+
   '</tr>').join('');
 
-  const ajusteRows=ajustesData.map(a=>'<tr>'+
+  const ajustesSorted=[...ajustesData].sort((a,b)=>a.tipo===b.tipo?0:a.tipo==='suma'?-1:1);
+  const ajusteRows=ajustesSorted.map(a=>'<tr>'+
     '<td style="font-size:12px">'+escH(a.concepto)+'</td>'+
     '<td><span style="background:'+(a.tipo==='suma'?'#f0f7d4':'#fef2f2')+';color:'+(a.tipo==='suma'?'#5a8a1a':'#dc2626')+';padding:1px 8px;border-radius:999px;font-size:10px;font-weight:600">'+(a.tipo==='suma'?'Acumulable':'Deducible')+'</span></td>'+
     '<td style="text-align:right;font-size:12px;font-weight:600">'+fmtMXN(a.importe)+'</td>'+
@@ -2768,7 +2776,7 @@ async function renderDetalleProyeccion(id){
       '<div style="font-size:10px;color:#888;background:#f5fff5;padding:2px 8px;border-radius:4px">Verde claro = proyectado por promedio</div>'+
     '</div>'+
     '<div class="table-wrap"><table class="data-table">'+
-      '<thead><tr><th>Mes</th><th style="text-align:right">Ingresos</th><th style="text-align:right">Costo venta</th><th style="text-align:right">Gastos op.</th><th style="text-align:right">Otros ing.</th><th style="text-align:right">Otros gas.</th><th style="text-align:right">Util. neta</th><th></th></tr></thead>'+
+      '<thead><tr><th>Mes</th><th style="text-align:right">Ingresos</th><th style="text-align:right">Costo venta</th><th style="text-align:right">Gastos op.</th><th style="text-align:right">Otros ing.</th><th style="text-align:right">Otros gas.</th><th style="text-align:right">Util. neta</th><th style="text-align:right">Pago prov.</th><th></th></tr></thead>'+
       '<tbody>'+mesRows+
       '<tr style="background:#f5f5f3;font-weight:700"><td style="font-size:12px">TOTAL ANUAL</td>'+
       '<td style="text-align:right;font-size:12px">'+fmtMXN(totalIngresos)+'</td>'+
@@ -2776,13 +2784,17 @@ async function renderDetalleProyeccion(id){
       '<td style="text-align:right;font-size:12px">'+fmtMXN(totalGastosOp)+'</td>'+
       '<td style="text-align:right;font-size:12px">'+fmtMXN(totalOtrosIng)+'</td>'+
       '<td style="text-align:right;font-size:12px">'+fmtMXN(totalOtrosGas)+'</td>'+
-      '<td style="text-align:right;font-size:12px;color:'+(utilidadContable>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidadContable)+'</td><td></td></tr>'+
+      '<td style="text-align:right;font-size:12px;color:'+(utilidadContable>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidadContable)+'</td>'+'<td style="text-align:right;font-size:12px;color:#888">'+fmtMXN(totalPP)+'</td><td></td></tr>'+
+
+      '<tr style="background:#EEEDFE;font-weight:700"><td colspan="7" style="font-size:12px;color:#3B4BC8">Coeficiente de utilidad estimado (CU) — Art. 14 LISR</td>'+
+      '<td style="text-align:right;font-size:12px;color:#3B4BC8">'+cuPct+'%</td><td></td></tr>'+
       '</tbody></table></div>'+
   '</div>'+
   '<div class="card" style="margin-bottom:1rem">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
       '<div class="sec-label">Conciliación contable-fiscal</div>'+
-      '<button class="btn btn-sm btn-primary" style="font-size:11px" onclick="agregarAjusteFiscal(\''+id+'\')">+ Ajuste</button>'+
+      '<button class="btn btn-sm" style="font-size:11px;background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" onclick="agregarAjusteFiscal(\''+id+'\',\'suma\')">+ Ingreso acumulable</button>'+
+      '<button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:4px" onclick="agregarAjusteFiscal(\''+id+'\',\'resta\')">+ Deducción</button>'+
     '</div>'+
     '<div class="table-wrap"><table class="data-table">'+
       '<thead><tr><th>Concepto</th><th>Tipo</th><th style="text-align:right">Importe</th><th>Ref. Legal</th><th></th></tr></thead>'+
@@ -2812,6 +2824,7 @@ function abrirCapturaMes(proyId,mes,mesId){
       '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Otros gastos</div><input id="ms-og" type="number" placeholder="0.00"></div>'+
       '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Activo fijo bruto</div><input id="ms-afb" type="number" placeholder="0.00"></div>'+
       '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Depreciación acumulada</div><input id="ms-dac" type="number" placeholder="0.00"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Pago provisional ISR</div><input id="ms-pp" type="number" placeholder="0.00"></div>'+
     '</div>'+
     '<input type="hidden" id="ms-proy-id" value="'+proyId+'">'+
     '<input type="hidden" id="ms-mes" value="'+mes+'">'+
@@ -2824,8 +2837,8 @@ function abrirCapturaMes(proyId,mes,mesId){
   if(mesId){
     sbGet('pf_meses','?id=eq.'+mesId+'&select=*').then(data=>{
       const m=data?.[0];if(!m)return;
-      ['ing','cv','go','oi','og','afb','dac'].forEach((f,i)=>{
-        const campos=['ingresos','costo_ventas','gastos_operacion','otros_ingresos','otros_gastos','activo_fijo_bruto','depreciacion_acumulada_contable'];
+      ['ing','cv','go','oi','og','afb','dac','pp'].forEach((f,i)=>{
+        const campos=['ingresos','costo_ventas','gastos_operacion','otros_ingresos','otros_gastos','activo_fijo_bruto','depreciacion_acumulada_contable','pago_provisional'];
         const el=document.getElementById('ms-'+f);if(el) el.value=m[campos[i]]||'';
       });
     });
@@ -2844,17 +2857,18 @@ async function guardarMes(){
   const otros_gastos=parseFloat(document.getElementById('ms-og').value)||0;
   const activo_fijo_bruto=parseFloat(document.getElementById('ms-afb').value)||0;
   const depreciacion_acumulada_contable=parseFloat(document.getElementById('ms-dac').value)||0;
+  const pago_provisional=parseFloat(document.getElementById('ms-pp')?.value)||0;
   const utilidad_bruta=ingresos-costo_ventas;
   const utilidad_operacion=utilidad_bruta-gastos_operacion;
   const utilidad_neta_contable=utilidad_operacion+otros_ingresos-otros_gastos;
-  const payload={proyeccion_id:proyId,mes,ingresos,costo_ventas,utilidad_bruta,gastos_operacion,utilidad_operacion,otros_ingresos,otros_gastos,utilidad_neta_contable,activo_fijo_bruto,depreciacion_acumulada_contable,fuente:'manual'};
+  const payload={proyeccion_id:proyId,mes,ingresos,costo_ventas,utilidad_bruta,gastos_operacion,utilidad_operacion,otros_ingresos,otros_gastos,utilidad_neta_contable,activo_fijo_bruto,depreciacion_acumulada_contable,pago_provisional,fuente:'manual'};
   document.getElementById('modal-mes').remove();
   if(mesId) await sbPatch('pf_meses','?id=eq.'+mesId,payload);
   else await sbPost('pf_meses',payload,'return=minimal');
   renderDetalleProyeccion(proyId);
 }
 
-function agregarAjusteFiscal(proyId){
+function agregarAjusteFiscal(proyId,tipoDefault){
   const overlay=document.createElement('div');
   overlay.className='modal-overlay';
   overlay.id='modal-ajuste';
@@ -2871,7 +2885,7 @@ function agregarAjusteFiscal(proyId){
       '<input id="aj-concepto-custom" type="text" placeholder="Describe el ajuste"></div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
       '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Tipo</div>'+
-        '<select id="aj-tipo" style="width:100%"><option value="suma">Acumulable (suma)</option><option value="resta">Deducible (resta)</option></select></div>'+
+        '<select id="aj-tipo" style="width:100%"><option value="suma"'+(tipoDefault==="suma"?' selected':'')+'>Acumulable (suma)</option><option value="resta"'+(tipoDefault==="resta"?' selected':'')+'>Deducible (resta)</option></select></div>'+
       '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Importe</div>'+
         '<input id="aj-importe" type="number" placeholder="0.00"></div>'+
       '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
@@ -3000,6 +3014,8 @@ async function reporteProyeccionPDF(id){
   }
 
   const totalIngresos=proyectados.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
+  const totalPP2=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
+  const cuPDF=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
   const totalCosto=proyectados.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
   const totalGastosOp=proyectados.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
   const totalOtrosIng=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
@@ -3022,7 +3038,8 @@ async function reporteProyeccionPDF(id){
 
   // SVG Gráfica 1 — Ingresos vs Egresos
   const gW=680,gH=180,gX=60,gY=20,gBW=gW-80,gBH=gH-50;
-  const barW=Math.floor(gBW/12)-4;
+  const barPair=Math.floor(gBW/12);
+  const barW=Math.floor(barPair/2)-2;
   let svg1='<svg width="100%" viewBox="0 0 '+gW+' '+gH+'" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif">';
   // Grid lines
   for(let i=0;i<=4;i++){
@@ -3033,14 +3050,14 @@ async function reporteProyeccionPDF(id){
   }
   // Barras
   proyectados.forEach((m,i)=>{
-    const x=gX+i*(barW*2+6);
+    const x=gX+i*barPair;
     const hI=Math.max(1,Math.round((dataIngresos[i]/maxVal)*gBH));
     const hE=Math.max(1,Math.round((dataEgresos[i]/maxVal)*gBH));
     const yI=gY+gBH-hI;const yE=gY+gBH-hE;
     const op=m.real?1:0.55;
     svg1+='<rect x="'+x+'" y="'+yI+'" width="'+barW+'" height="'+hI+'" fill="#3B4BC8" opacity="'+op+'" rx="2"/>';
     svg1+='<rect x="'+(x+barW+2)+'" y="'+yE+'" width="'+barW+'" height="'+hE+'" fill="#dc2626" opacity="'+op+'" rx="2"/>';
-    svg1+='<text x="'+(x+barW)+'" y="'+(gY+gBH+12)+'" text-anchor="middle" font-size="7.5" fill="#888">'+labelsM[i]+'</text>';
+    svg1+='<text x="'+(x+barPair/2)+'" y="'+(gY+gBH+12)+'" text-anchor="middle" font-size="7.5" fill="#888">'+labelsM[i]+'</text>';
   });
   // Leyenda
   svg1+='<rect x="'+gX+'" y="'+(gY+gBH+22)+'" width="10" height="8" fill="#3B4BC8" rx="2"/>';
@@ -3064,14 +3081,14 @@ async function reporteProyeccionPDF(id){
   // Línea de utilidad mensual
   let polyPoints='';
   proyectados.forEach((m,i)=>{
-    const cx=gX+i*(barW*2+6)+barW;
+    const cx=gX+i*barPair+barPair/2;
     const val=parseFloat(m.utilidad_neta_contable)||0;
     const cy=midY-((val/maxU)*(gBH/2));
     polyPoints+=cx+','+cy+' ';
   });
   svg2+='<polyline points="'+polyPoints.trim()+'" fill="none" stroke="#3B4BC8" stroke-width="2" stroke-linejoin="round"/>';
   proyectados.forEach((m,i)=>{
-    const cx=gX+i*(barW*2+6)+barW;
+    const cx=gX+i*barPair+barPair/2;
     const val=parseFloat(m.utilidad_neta_contable)||0;
     const cy=midY-((val/maxU)*(gBH/2));
     svg2+='<circle cx="'+cx+'" cy="'+cy+'" r="3" fill="'+(val>=0?'#3B4BC8':'#dc2626')+'" stroke="#fff" stroke-width="1.5"/>';
@@ -3101,7 +3118,8 @@ async function reporteProyeccionPDF(id){
   '</tr>').join('');
 
   // Tabla conciliación
-  const concilRows=ajustesData.map(a=>'<tr>'+
+  const ajustesSortedPDF=[...ajustesData].sort((a,b)=>a.tipo===b.tipo?0:a.tipo==='suma'?-1:1);
+  const concilRows=ajustesSortedPDF.map(a=>'<tr>'+
     '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #f0f0ec">'+escH(a.concepto)+'</td>'+
     '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #f0f0ec;color:'+(a.tipo==='suma'?'#5a8a1a':'#dc2626')+'">'+(a.tipo==='suma'?'Acumulable':'Deducible')+'</td>'+
     '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;font-weight:600">'+fmtMXN(a.importe)+'</td>'+
