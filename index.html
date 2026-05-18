@@ -196,7 +196,7 @@ function renderTopNav(active){
     {id:'clientes',label:'Clientes',roles:['admin','manager','assistant']},
     {id:'historial',label:'Historial',roles:['admin','manager','assistant']},
     {id:'devoluciones',label:'Devoluciones IVA',roles:['admin','manager','assistant']},
-    {id:'proyeccion',label:'Proyección Fiscal',roles:['admin']},
+    {id:'proyeccion',label:'Proyección Fiscal',roles:['admin','manager']},
     {id:'admin',label:'Usuarios',roles:['admin']}
   ];
   return `<div class="nav">
@@ -2697,8 +2697,8 @@ async function renderDetalleProyeccion(id){
     <div style="font-size:15px;font-weight:600;flex:1">${escH(proy.cliente_nombre)} — ${proy.ejercicio}</div>
     <button class="btn btn-sm btn-purple" onclick="renderNuevaProyeccion('${id}')">✏️ Editar</button>
     <button class="btn btn-sm btn-purple" onclick="reporteProyeccionPDF('${id}')">⎙ Reporte PDF</button>
-    <button class="btn btn-sm" style="background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" onclick="guardarSnapshotProyeccion('${id}')">💾 Guardar snapshot</button>
-    <button class="btn btn-sm" style="background:#f5f5f3;color:#555" onclick="verComparativosProyeccion('${id}')">📊 Comparativos</button>
+    <button class="btn btn-sm" style="background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" onclick="guardarEscenarioProyeccion('${id}')">💾 Guardar escenario</button>
+    <button class="btn btn-sm" style="background:#f5f5f3;color:#555" onclick="verEscenariosProyeccion('${id}')">📊 Escenarios anteriores</button>
     <button class="btn btn-sm btn-danger" onclick="deleteProyeccion('${id}')">🗑 Eliminar</button>
   </div>
   <div class="loading" id="pf-detl"><span class="spinner"></span>Cargando...</div>
@@ -3325,7 +3325,7 @@ async function reporteProyeccionPDF(id){
   <div class="section">
     <div class="section-title">Evolución mensual — Ingresos vs Egresos</div>
     <div class="graf-box">
-      <div class="graf-title">Comparativo mensual (cifras en MXN)</div>
+      <div class="graf-title">Escenario mensual (cifras en MXN)</div>
       ${svg1}
     </div>
   </div>
@@ -3456,7 +3456,7 @@ async function reporteProyeccionPDF(id){
 
 
 /* ===== SNAPSHOTS Y COMPARATIVOS DE PROYECCIÓN ===== */
-async function guardarSnapshotProyeccion(id){
+async function guardarEscenarioProyeccion(id){
   const proy=pfCache.find(p=>p.id===id);if(!proy)return;
 
   const [meses,ajustes]=await Promise.all([
@@ -3500,13 +3500,13 @@ async function guardarSnapshotProyeccion(id){
   const margenBruto=totalIngresos>0?((totalIngresos-totalCosto)/totalIngresos*100):0;
   const margenNeto=totalIngresos>0?(utilidadContable/totalIngresos*100):0;
 
-  // Modal para capturar notas del snapshot
+  // Modal para capturar notas del escenario
   const overlay=document.createElement('div');
   overlay.className='modal-overlay';
-  overlay.id='modal-snapshot';
+  overlay.id='modal-escenario';
   overlay.innerHTML='<div class="modal-box">'+
-    '<div class="modal-title">Guardar snapshot de proyección</div>'+
-    '<div class="modal-sub">Se guardará el estado actual de la proyección para comparación futura</div>'+
+    '<div class="modal-title">Guardar escenario de proyección</div>'+
+    '<div class="modal-sub">Se guardará el estado actual como escenario para comparación futura</div>'+
     '<div style="background:#f5f5f3;border-radius:8px;padding:12px;margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px">'+
       '<div style="font-size:11px"><span style="color:#888">Fecha de corte:</span> <strong>'+todayKey()+'</strong></div>'+
       '<div style="font-size:11px"><span style="color:#888">Meses reales:</span> <strong>'+nMeses+' de 12</strong></div>'+
@@ -3516,21 +3516,21 @@ async function guardarSnapshotProyeccion(id){
       '<div style="font-size:11px"><span style="color:#888">CU:</span> <strong>'+cu.toFixed(2)+'%</strong></div>'+
     '</div>'+
     '<div style="margin-bottom:12px">'+
-      '<div style="font-size:12px;color:#888;margin-bottom:4px">Notas del snapshot (opcional)</div>'+
+      '<div style="font-size:12px;color:#888;margin-bottom:4px">Notas del escenario (opcional)</div>'+
       '<textarea id="snap-notas" rows="3" placeholder="Ej: Proyección al mes de marzo, pendiente capturar abril..." style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea>'+
     '</div>'+
     '<div style="display:flex;gap:8px">'+
-      '<button class="btn btn-full" onclick="document.getElementById(\'modal-snapshot\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="confirmarSnapshot(\''+id+'\','+totalIngresos+','+totalCosto+','+totalGastosOp+','+utilidadContable+','+totalSumas+','+totalRestas+','+utilidadFiscal+','+isrEstimado+','+totalPP+','+isrACargo+','+cu+','+margenBruto+','+margenNeto+','+nMeses+')" style="flex:1;margin-top:0">💾 Guardar</button>'+
+      '<button class="btn btn-full" onclick="document.getElementById(\'modal-escenario\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="confirmarEscenario(\''+id+'\','+totalIngresos+','+totalCosto+','+totalGastosOp+','+utilidadContable+','+totalSumas+','+totalRestas+','+utilidadFiscal+','+isrEstimado+','+totalPP+','+isrACargo+','+cu+','+margenBruto+','+margenNeto+','+nMeses+')" style="flex:1;margin-top:0">💾 Guardar</button>'+
     '</div>'+
   '</div>';
   document.body.appendChild(overlay);
 }
 
-async function confirmarSnapshot(proyId,ti,tc,tgo,uc,ts,tr,uf,isr,pp,isrC,cu,mb,mn,nM){
+async function confirmarEscenario(proyId,ti,tc,tgo,uc,ts,tr,uf,isr,pp,isrC,cu,mb,mn,nM){
   const proy=pfCache.find(p=>p.id===proyId);if(!proy)return;
   const notas=document.getElementById('snap-notas')?.value.trim()||null;
-  document.getElementById('modal-snapshot')?.remove();
+  document.getElementById('modal-escenario')?.remove();
 
   await sbPost('pf_reportes',{
     proyeccion_id:proyId,
@@ -3556,112 +3556,79 @@ async function confirmarSnapshot(proyId,ti,tc,tgo,uc,ts,tr,uf,isr,pp,isrC,cu,mb,
 
   const msg=document.createElement('div');
   msg.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:10px 20px;border-radius:8px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
-  msg.textContent='✅ Snapshot guardado — '+todayKey();
+  msg.textContent='✅ Escenario guardado — '+todayKey();
   document.body.appendChild(msg);
   setTimeout(()=>msg.remove(),3000);
 }
 
-async function verComparativosProyeccion(id){
+async function verEscenariosProyeccion(id){
   const proy=pfCache.find(p=>p.id===id);if(!proy)return;
+  document.getElementById('modal-escenarios')?.remove();
   const reportes=await sbGet('pf_reportes','?proyeccion_id=eq.'+id+'&select=*&order=fecha_corte.asc');
   const data=reportes||[];
 
   if(!data.length){
-    alert('No hay snapshots guardados para esta proyección. Usa "💾 Guardar snapshot" para crear el primero.');
+    alert('No hay escenarios guardados. Usa "💾 Guardar escenario" para crear el primero.');
     return;
   }
 
-  // Construir tabla comparativa
-  const cols=['Fecha corte','Meses reales','Ingresos','Util. contable','Util. fiscal','ISR estimado','PP acumulado','ISR a cargo','CU','Mg. bruto','Mg. neto','Notas'];
-  const rows=data.map(r=>[
-    r.fecha_corte,
-    r.meses_reales+'/12',
-    fmtMXN(r.total_ingresos),
-    fmtMXN(r.utilidad_contable),
-    fmtMXN(r.utilidad_fiscal),
-    fmtMXN(r.isr_estimado),
-    fmtMXN(r.total_pp),
-    fmtMXN(r.isr_a_cargo),
-    parseFloat(r.cu).toFixed(2)+'%',
-    parseFloat(r.margen_bruto).toFixed(2)+'%',
-    parseFloat(r.margen_neto).toFixed(2)+'%',
-    r.notas||'—'
-  ]);
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-escenarios';
 
-  // Detectar tendencias entre el primero y el último
-  const primero=data[0];const ultimo=data[data.length-1];
-  const tendencias=[];
-  if(data.length>1){
-    const difIng=parseFloat(ultimo.total_ingresos)-parseFloat(primero.total_ingresos);
-    const difFiscal=parseFloat(ultimo.utilidad_fiscal)-parseFloat(primero.utilidad_fiscal);
-    const difISR=parseFloat(ultimo.isr_a_cargo)-parseFloat(primero.isr_a_cargo);
-    if(Math.abs(difIng)>0) tendencias.push((difIng>0?'📈':'📉')+' Ingresos: '+(difIng>0?'+':'')+fmtMXN(difIng)+' vs primera proyección');
-    if(Math.abs(difFiscal)>0) tendencias.push((difFiscal>0?'📈':'📉')+' Utilidad fiscal: '+(difFiscal>0?'+':'')+fmtMXN(difFiscal)+' vs primera proyección');
-    if(Math.abs(difISR)>0) tendencias.push((difISR>0?'⚠️':'✅')+' ISR a cargo: '+(difISR>0?'+':'')+fmtMXN(difISR)+' vs primera proyección');
+  const escRows=data.map((r,i)=>'<div style="border:0.5px solid #e5e5e0;border-radius:8px;padding:12px;margin-bottom:8px">'+
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
+      '<div style="flex:1">'+
+        '<div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#3B4BC8">Escenario '+(i+1)+' — '+r.fecha_corte+'</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:6px">'+
+          '<div style="font-size:11px;color:#888">Meses reales: <strong>'+r.meses_reales+'/12</strong></div>'+
+          '<div style="font-size:11px;color:#888">Ingresos: <strong>'+fmtMXN(r.total_ingresos)+'</strong></div>'+
+          '<div style="font-size:11px;color:#888">Util. contable: <strong>'+fmtMXN(r.utilidad_contable)+'</strong></div>'+
+          '<div style="font-size:11px;color:#888">Util. fiscal: <strong>'+fmtMXN(r.utilidad_fiscal)+'</strong></div>'+
+          '<div style="font-size:11px;color:#888">ISR estimado: <strong>'+fmtMXN(r.isr_estimado)+'</strong></div>'+
+          '<div style="font-size:11px;color:#888">ISR a cargo: <strong style="color:'+(parseFloat(r.isr_a_cargo)>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(r.isr_a_cargo)+'</strong></div>'+
+          '<div style="font-size:11px;color:#888">PP acumulado: <strong>'+fmtMXN(r.total_pp)+'</strong></div>'+
+          '<div style="font-size:11px;color:#888">CU: <strong>'+parseFloat(r.cu).toFixed(2)+'%</strong></div>'+
+          '<div style="font-size:11px;color:#888">Mg. neto: <strong>'+parseFloat(r.margen_neto).toFixed(2)+'%</strong></div>'+
+        '</div>'+
+        (r.notas?'<div style="font-size:11px;color:#888;font-style:italic;background:#f5f5f3;padding:6px 8px;border-radius:6px">'+escH(r.notas)+'</div>':'')+
+      '</div>'+
+      (session.role==='admin'?
+        '<button class="btn btn-sm btn-danger" style="font-size:10px;flex-shrink:0" id="del-esc-'+r.id+'" data-esc="'+r.id+'" data-proy="'+id+'">🗑</button>':'')+
+    '</div>'+
+  '</div>').join('');
+
+  overlay.innerHTML='<div class="modal-box" style="max-width:620px;max-height:80vh;overflow-y:auto">'+
+    '<div class="modal-title">📊 Escenarios anteriores</div>'+
+    '<div class="modal-sub">'+escH(proy.cliente_nombre)+' — Ejercicio '+proy.ejercicio+' · '+data.length+' escenario'+(data.length!==1?'s':'')+' guardado'+(data.length!==1?'s':'')+'</div>'+
+    '<div style="margin:12px 0">'+escRows+'</div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-full" onclick="document.getElementById('modal-escenarios').remove()" style="flex:1;margin-top:0">Cerrar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="document.getElementById('modal-escenarios').remove();generarComparativoPDF(''+id+'')" style="flex:1;margin-top:0">⎙ Reporte PDF comparativo</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(overlay);
+
+  // Event listeners para borrar (solo admin)
+  if(session.role==='admin'){
+    setTimeout(()=>{
+      data.forEach(r=>{
+        const btn=document.getElementById('del-esc-'+r.id);
+        if(btn) btn.addEventListener('click',()=>borrarEscenario(r.id,id));
+      });
+    },50);
   }
-
-  const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
-  const win=window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html lang="es"><head>
-<meta charset="UTF-8">
-<title>Comparativo de proyecciones — ${proy.cliente_nombre} ${proy.ejercicio}</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
-  .page{max-width:1100px;margin:0 auto;padding:24px 32px}
-  @page{size:A4 landscape;margin:15mm}
-  .header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #3B4BC8;margin-bottom:18px}
-  .logo{font-size:18px;font-weight:700;color:#3B4BC8}.logo span{color:#8DC63F}
-  h1{font-size:14px;font-weight:700;margin-bottom:3px}
-  table{width:100%;border-collapse:collapse;font-size:10px}
-  th{background:#3B4BC8;color:#fff;padding:6px 8px;text-align:left;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
-  th.right{text-align:right}
-  td{padding:6px 8px;border-bottom:1px solid #f0f0ec;vertical-align:top}
-  td.right{text-align:right}
-  tr:nth-child(even){background:#fafafa}
-  tr:last-child td{border-bottom:none;background:#f0f4ff;font-weight:700}
-  .tend{background:#f5f5f3;border-radius:8px;padding:12px;margin-bottom:16px}
-  .tend-title{font-size:11px;font-weight:700;color:#3B4BC8;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
-  .tend-item{font-size:11px;color:#444;padding:4px 0;border-bottom:1px solid #eee}
-  .tend-item:last-child{border-bottom:none}
-  .footer{margin-top:20px;padding-top:10px;border-top:1px solid #e5e5e0;font-size:9px;color:#bbb;text-align:center}
-  @media print{body{padding:0}.page{padding:12px 20px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-</style>
-</head><body><div class="page">
-  <div class="header">
-    <div>
-      <div class="logo">MSST <span>Consulting</span> SC</div>
-      <div style="font-size:10px;color:#888;margin-top:2px">Asesoría Fiscal y Legal · Tijuana, B.C.</div>
-    </div>
-    <div style="text-align:right">
-      <h1>Comparativo de proyecciones fiscales</h1>
-      <div style="color:#888">${proy.cliente_nombre} · Ejercicio ${proy.ejercicio}</div>
-      <div style="color:#888;margin-top:2px">${data.length} snapshots · Generado: ${hoy}</div>
-    </div>
-  </div>
-
-  ${tendencias.length?`<div class="tend">
-    <div class="tend-title">Tendencias vs primera proyección</div>
-    ${tendencias.map(t=>'<div class="tend-item">'+t+'</div>').join('')}
-  </div>`:''}
-
-  <table>
-    <thead><tr>
-      ${cols.map((c,i)=>'<th'+(i>1&&i<12?' class="right"':'')+'>'+c+'</th>').join('')}
-    </tr></thead>
-    <tbody>
-      ${rows.map((r,ri)=>'<tr>'+r.map((c,ci)=>'<td'+(ci>1&&ci<12?' class="right"':'')+'>'+c+'</td>').join('')+'</tr>').join('')}
-    </tbody>
-  </table>
-
-  <div class="footer">Comparativo generado por TaxIA día a día · MSST Consulting SC · Confidencial · ${hoy}</div>
-</div></body></html>`);
-  win.document.close();
-  setTimeout(()=>win.print(),600);
 }
 
+async function borrarEscenario(escId,proyId){
+  if(!confirm('¿Eliminar este escenario? No se puede deshacer.'))return;
+  await sbDelete('pf_reportes','?id=eq.'+escId);
+  document.getElementById('modal-escenarios')?.remove();
+  verEscenariosProyeccion(proyId);
+}
 
-renderLogin();
-</script>
-</body>
-</html>
+async function generarComparativoPDF(id){
+  const proy=pfCache.find(p=>p.id===id);if(!proy)return;
+  const reportes=await sbGet('pf_reportes','?proyeccion_id=eq.'+id+'&select=*&order=fecha_corte.asc');
+  const data=reportes||[];if(!data.length)return;
+
