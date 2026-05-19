@@ -452,7 +452,8 @@ async function doLogin(){
     startInactivityWatcher();
     await mostrarAvisoBienvenida();
   }catch(e){
-    document.getElementById('lerr').textContent='Error de conexión.';document.getElementById('lerr').style.display='block';btn.innerHTML='Entrar';btn.disabled=false;
+    console.error('doLogin error:',e.message,e.stack);
+    document.getElementById('lerr').textContent='Error: '+e.message;document.getElementById('lerr').style.display='block';btn.innerHTML='Entrar';btn.disabled=false;
   }
 }
 
