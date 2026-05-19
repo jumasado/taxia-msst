@@ -3713,7 +3713,13 @@ async function mostrarAvisoBienvenida(){
 
   // Sesión anterior (la penúltima — la última es la actual)
   const sesAnterior=(sesiones||[])[1]||(sesiones||[])[0]||null;
-  const fechaAnterior=sesAnterior?new Date(sesAnterior.login_at).toLocaleString('es-MX',{timeZone:'America/Tijuana',weekday:'short',day:'numeric',month:'short',timeStyle:'short'}):null;
+  const fechaAnterior=(()=>{
+    if(!sesAnterior)return null;
+    const d=new Date(sesAnterior.login_at);
+    const fecha=d.toLocaleDateString('es-MX',{timeZone:'America/Tijuana',weekday:'short',day:'numeric',month:'short'});
+    const hora=d.toLocaleTimeString('es-MX',{timeZone:'America/Tijuana',hour:'2-digit',minute:'2-digit'});
+    return fecha+' · '+hora;
+  })();
   const durAnterior=sesAnterior&&sesAnterior.duracion_min?(sesAnterior.duracion_min>=60?Math.floor(sesAnterior.duracion_min/60)+'h '+(sesAnterior.duracion_min%60)+'min':sesAnterior.duracion_min+' min'):null;
 
   // Clasificar tareas
