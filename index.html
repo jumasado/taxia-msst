@@ -2842,43 +2842,6 @@ async function renderDetalleProyeccion(id){
     if(btnResta) btnResta.addEventListener('click',()=>agregarAjusteFiscal(btnResta.dataset.proy,'resta'));
   },50);
 }
-
-function abrirCapturaMes(proyId,mes,mesId){
-  const overlay=document.createElement('div');
-  overlay.className='modal-overlay';
-  overlay.id='modal-mes';
-  overlay.innerHTML='<div class="modal-box" style="max-width:480px">'+
-    '<div class="modal-title">'+MESES_NOMBRES[mes-1]+' — Captura de datos</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Ingresos</div><input id="ms-ing" type="number" placeholder="0.00"></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Costo de ventas</div><input id="ms-cv" type="number" placeholder="0.00"></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Gastos de operación</div><input id="ms-go" type="number" placeholder="0.00"></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Otros ingresos</div><input id="ms-oi" type="number" placeholder="0.00"></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Otros gastos</div><input id="ms-og" type="number" placeholder="0.00"></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Activo fijo bruto</div><input id="ms-afb" type="number" placeholder="0.00"></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Depreciación acumulada</div><input id="ms-dac" type="number" placeholder="0.00"></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Pago provisional ISR</div><input id="ms-pp" type="number" placeholder="0.00"></div>'+
-    '</div>'+
-    '<input type="hidden" id="ms-proy-id" value="'+proyId+'">'+
-    '<input type="hidden" id="ms-mes" value="'+mes+'">'+
-    '<input type="hidden" id="ms-id" value="'+(mesId||'')+'">'+
-    '<div style="display:flex;gap:8px">'+
-      '<button class="btn btn-full" onclick="document.getElementById(\'modal-mes\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="guardarMes()" style="flex:1;margin-top:0">Guardar</button>'+
-    '</div>'+
-  '</div>';
-  if(mesId){
-    sbGet('pf_meses','?id=eq.'+mesId+'&select=*').then(data=>{
-      const m=data?.[0];if(!m)return;
-      ['ing','cv','go','oi','og','afb','dac','pp'].forEach((f,i)=>{
-        const campos=['ingresos','costo_ventas','gastos_operacion','otros_ingresos','otros_gastos','activo_fijo_bruto','depreciacion_acumulada_contable','pago_provisional'];
-        const el=document.getElementById('ms-'+f);if(el) el.value=m[campos[i]]||'';
-      });
-    });
-  }
-  document.body.appendChild(overlay);
-}
-
 async function guardarMes(){
   const proyId=document.getElementById('ms-proy-id').value;
   const mes=parseInt(document.getElementById('ms-mes').value);
@@ -2891,1443 +2854,186 @@ async function guardarMes(){
   const activo_fijo_bruto=parseFloat(document.getElementById('ms-afb').value)||0;
   const depreciacion_acumulada_contable=parseFloat(document.getElementById('ms-dac').value)||0;
   const pago_provisional=parseFloat(document.getElementById('ms-pp')?.value)||0;
+  const pdf_er=document.getElementById('ms-er-url')?.value||null;
+  const pdf_er_nombre=document.getElementById('ms-er-nombre')?.value||null;
+  const pdf_balance=document.getElementById('ms-bg-url')?.value||null;
+  const pdf_balance_nombre=document.getElementById('ms-bg-nombre')?.value||null;
+  const pdf_balanza=document.getElementById('ms-bc-url')?.value||null;
+  const pdf_balanza_nombre=document.getElementById('ms-bc-nombre')?.value||null;
   const utilidad_bruta=ingresos-costo_ventas;
   const utilidad_operacion=utilidad_bruta-gastos_operacion;
   const utilidad_neta_contable=utilidad_operacion+otros_ingresos-otros_gastos;
-  const payload={proyeccion_id:proyId,mes,ingresos,costo_ventas,utilidad_bruta,gastos_operacion,utilidad_operacion,otros_ingresos,otros_gastos,utilidad_neta_contable,activo_fijo_bruto,depreciacion_acumulada_contable,pago_provisional,fuente:'manual'};
-  document.getElementById('modal-mes').remove();
+  const payload={proyeccion_id:proyId,mes,ingresos,costo_ventas,utilidad_bruta,gastos_operacion,utilidad_operacion,otros_ingresos,otros_gastos,utilidad_neta_contable,activo_fijo_bruto,depreciacion_acumulada_contable,pago_provisional,pdf_er,pdf_er_nombre,pdf_balance,pdf_balance_nombre,pdf_balanza,pdf_balanza_nombre,fuente:'manual'};
+  document.getElementById('modal-mes')?.remove();
   if(mesId) await sbPatch('pf_meses','?id=eq.'+mesId,payload);
   else await sbPost('pf_meses',payload,'return=minimal');
   renderDetalleProyeccion(proyId);
 }
 
-function agregarAjusteFiscal(proyId,tipoDefault){
-  document.getElementById('modal-ajuste')?.remove();
+
+function abrirCapturaMes(proyId,mes,mesId){
+  document.getElementById('modal-mes')?.remove();
   const overlay=document.createElement('div');
   overlay.className='modal-overlay';
-  overlay.id='modal-ajuste';
-  const sugerencias=tipoDefault==='suma'?
-    ['Ingresos acumulables no contabilizados (LISR Art. 16)','Ajuste anual por inflación acumulable (LISR Art. 44-46)','Utilidad por enajenación de activos (LISR Art. 18)','Ganancia cambiaria (LISR Art. 20)','Otros ingresos acumulables']:
-    ['Depreciación fiscal adicional (LISR Art. 31-38)','Ajuste anual por inflación deducible (LISR Art. 44-46)','PTU pagada deducible (LISR Art. 25 Fr. III)','Pérdida por enajenación de activos (LISR Art. 25 Fr. IV)','Deducción inmediata (LISR Art. 220)','Gastos no deducibles a revertir','Otras deducciones autorizadas'];
-  const sugerOpts='<option value="">Elige sugerencia o escribe abajo...</option>'+sugerencias.map(s=>'<option value="'+escH(s)+'">'+escH(s)+'</option>').join('');
-  overlay.innerHTML='<div class="modal-box">'+
-    '<div class="modal-title">'+(tipoDefault==='suma'?'Agregar ingreso acumulable':'Agregar deducción adicional')+'</div>'+
-    '<div style="margin-bottom:8px"><div style="font-size:11px;color:#888;margin-bottom:3px">Sugerencias frecuentes</div>'+
-      '<select id="aj-suger" style="width:100%" onchange="pfFillSuger(this)">'+sugerOpts+'</select></div>'+
-    '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto (editable) *</div>'+
-      '<input id="aj-concepto" type="text" placeholder="Escribe o edita el concepto..." style="width:100%"></div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Tipo</div>'+
-        '<select id="aj-tipo" style="width:100%">'+
-          '<option value="suma"'+(tipoDefault==='suma'?' selected':'')+'>Acumulable (suma)</option>'+
-          '<option value="resta"'+(tipoDefault==='resta'?' selected':'')+'>Deducible (resta)</option>'+
-        '</select></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Importe</div>'+
-        '<input id="aj-importe" type="number" placeholder="0.00"></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
-        '<input id="aj-ref" type="text" placeholder="LISR Art. ..."></div>'+
+  overlay.id='modal-mes';
+  const html='<div class="modal-box" style="max-width:560px;max-height:90vh;overflow-y:auto">'+
+    '<div class="modal-title">'+MESES_NOMBRES[mes-1]+' — Captura de datos</div>'+
+    '<div style="display:flex;gap:0;border-bottom:0.5px solid #e5e5e0;margin-bottom:14px">'+
+      '<button id="tab-cifras" onclick="switchMesTab('cifras')" style="padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#3B4BC8;border-bottom:2px solid #3B4BC8;font-weight:600">Cifras</button>'+
+      '<button id="tab-docs" onclick="switchMesTab('docs')" style="padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent">Documentos PDF</button>'+
     '</div>'+
-    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas</div>'+
-      '<input id="aj-notas" type="text" placeholder="Notas adicionales"></div>'+
-    '<input type="hidden" id="aj-proy-id" value="'+proyId+'">'+
-    '<div style="display:flex;gap:8px">'+
-      '<button class="btn btn-full" onclick="document.getElementById(\'modal-ajuste\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="guardarAjuste()" style="flex:1;margin-top:0">Guardar</button>'+
-    '</div>'+
-  '</div>';
-  document.body.appendChild(overlay);
-}
-
-function pfFillSuger(sel){
-  const val=sel.value;if(!val)return;
-  const inp=document.getElementById('aj-concepto');
-  if(inp){inp.value=val;sel.value='';}
-}
-
-
-
-
-async function guardarAjuste(){
-  const concepto=document.getElementById('aj-concepto')?.value.trim();
-  const tipo=document.getElementById('aj-tipo').value;
-  const importe=parseFloat(document.getElementById('aj-importe').value)||0;
-  const referencia_legal=document.getElementById('aj-ref').value.trim()||null;
-  const notas=document.getElementById('aj-notas').value.trim()||null;
-  const proyId=document.getElementById('aj-proy-id').value;
-  if(!concepto){alert('El concepto es obligatorio.');return;}
-  document.getElementById('modal-ajuste').remove();
-  await sbPost('pf_ajustes',{proyeccion_id:proyId,concepto,tipo,importe,referencia_legal,notas},'return=minimal');
-  renderDetalleProyeccion(proyId);
-}
-
-async function editarAjuste(ajusteId,proyId){
-  const data=await sbGet('pf_ajustes','?id=eq.'+ajusteId+'&select=*');
-  const a=data?.[0];if(!a)return;
-  const overlay=document.createElement('div');
-  overlay.className='modal-overlay';
-  overlay.id='modal-edit-ajuste';
-  overlay.innerHTML='<div class="modal-box">'+
-    '<div class="modal-title">Editar ajuste fiscal</div>'+
-    '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto</div>'+
-      '<input id="eaj-concepto" type="text" value="'+escH(a.concepto||'')+'"></div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Tipo</div>'+
-        '<select id="eaj-tipo" style="width:100%"><option value="suma"'+(a.tipo==='suma'?' selected':'')+'>Acumulable</option><option value="resta"'+(a.tipo==='resta'?' selected':'')+'>Deducible</option></select></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Importe</div>'+
-        '<input id="eaj-importe" type="number" value="'+(a.importe||0)+'"></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
-        '<input id="eaj-ref" type="text" value="'+escH(a.referencia_legal||'')+'"></div>'+
-    '</div>'+
-    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas</div>'+
-      '<input id="eaj-notas" type="text" value="'+escH(a.notas||'')+'"></div>'+
-    '<input type="hidden" id="eaj-id" value="'+ajusteId+'">'+
-    '<input type="hidden" id="eaj-proy-id" value="'+proyId+'">'+
-    '<div style="display:flex;gap:8px">'+
-      '<button class="btn btn-sm btn-danger" onclick="eliminarAjuste(\''+ajusteId+'\',\''+proyId+'\')" style="margin-top:0">Eliminar</button>'+
-      '<div style="flex:1"></div>'+
-      '<button class="btn btn-full" onclick="document.getElementById(\'modal-edit-ajuste\').remove()" style="margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="actualizarAjuste()" style="margin-top:0">Guardar</button>'+
-    '</div>'+
-  '</div>';
-  document.body.appendChild(overlay);
-}
-
-async function actualizarAjuste(){
-  const id=document.getElementById('eaj-id').value;
-  const proyId=document.getElementById('eaj-proy-id').value;
-  const concepto=document.getElementById('eaj-concepto').value.trim();
-  const tipo=document.getElementById('eaj-tipo').value;
-  const importe=parseFloat(document.getElementById('eaj-importe').value)||0;
-  const referencia_legal=document.getElementById('eaj-ref').value.trim()||null;
-  const notas=document.getElementById('eaj-notas').value.trim()||null;
-  document.getElementById('modal-edit-ajuste').remove();
-  await sbPatch('pf_ajustes','?id=eq.'+id,{concepto,tipo,importe,referencia_legal,notas});
-  renderDetalleProyeccion(proyId);
-}
-
-async function eliminarAjuste(ajusteId,proyId){
-  if(!confirm('¿Eliminar este ajuste?'))return;
-  document.getElementById('modal-edit-ajuste')?.remove();
-  await sbDelete('pf_ajustes','?id=eq.'+ajusteId);
-  renderDetalleProyeccion(proyId);
-}
-
-async function deleteProyeccion(id){
-  const p=pfCache.find(x=>x.id===id);
-  if(!confirm('¿Eliminar la proyección de '+(p?.cliente_nombre||'este cliente')+' '+(p?.ejercicio||'')+'? Esta acción no se puede deshacer.'))return;
-  await sbDelete('pf_meses','?proyeccion_id=eq.'+id);
-  await sbDelete('pf_ajustes','?proyeccion_id=eq.'+id);
-  await sbDelete('pf_proyecciones','?id=eq.'+id);
-  pfCache=pfCache.filter(x=>x.id!==id);
-  renderProyeccion();
-}
-
-
-
-async function reporteProyeccionPDF(id){
-  const proy=pfCache.find(p=>p.id===id);if(!proy)return;
-
-  const [meses,ajustes,cierresHist]=await Promise.all([
-    sbGet('pf_meses','?proyeccion_id=eq.'+id+'&select=*&order=mes.asc'),
-    sbGet('pf_ajustes','?proyeccion_id=eq.'+id+'&select=*&order=created_at.asc'),
-    proy.cliente_id?sbGet('pf_cierres','?cliente_id=eq.'+proy.cliente_id+'&select=*&order=ejercicio.asc'):Promise.resolve([])
-  ]);
-
-  const mesesData=meses||[];
-  const mesesConDatos=mesesData.filter(m=>m.ingresos!==null);
-  const nMeses=mesesConDatos.length;
-  const avg=campo=>nMeses?mesesConDatos.reduce((s,m)=>s+(parseFloat(m[campo])||0),0)/nMeses:0;
-
-  const proyectados=[];
-  for(let m=1;m<=12;m++){
-    const real=mesesData.find(md=>md.mes===m);
-    if(real&&real.ingresos!==null) proyectados.push({mes:m,real:true,...real});
-    else{
-      const ing=avg('ingresos'),cv=avg('costo_ventas'),go=avg('gastos_operacion'),oi=avg('otros_ingresos'),og=avg('otros_gastos'),pp=avg('pago_provisional');
-      proyectados.push({mes:m,real:false,ingresos:ing,costo_ventas:cv,utilidad_bruta:ing-cv,gastos_operacion:go,utilidad_operacion:ing-cv-go,otros_ingresos:oi,otros_gastos:og,utilidad_neta_contable:ing-cv-go+oi-og,pago_provisional:pp});
-    }
-  }
-
-  const totalIngresos=proyectados.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
-  const totalCosto=proyectados.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
-  const totalGastosOp=proyectados.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
-  const totalOtrosIng=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
-  const totalOtrosGas=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_gastos)||0),0);
-  const utilidadContable=totalIngresos-totalCosto-totalGastosOp+totalOtrosIng-totalOtrosGas;
-  const ajustesData=ajustes||[];
-  const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
-  const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
-  const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
-  const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
-  const totalPP2=proyectados.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
-  const isrACargoP=Math.max(0,isrEstimado-totalPP2);
-  const saldoFavorP=Math.max(0,totalPP2-isrEstimado);
-  const cuPDF=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
-  const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
-
-  // Datos para gráficas
-  const labelsM=MESES_NOMBRES.map(m=>m.slice(0,3));
-  const dataIngresos=proyectados.map(m=>parseFloat(m.ingresos)||0);
-  const dataEgresos=proyectados.map(m=>(parseFloat(m.costo_ventas)||0)+(parseFloat(m.gastos_operacion)||0)+(parseFloat(m.otros_gastos)||0));
-  const dataUtilidad=proyectados.map(m=>parseFloat(m.utilidad_neta_contable)||0);
-  const maxVal=Math.max(...dataIngresos,...dataEgresos)*1.1||1;
-  const maxU=Math.max(Math.abs(Math.min(...dataUtilidad)),Math.max(...dataUtilidad))*1.2||1;
-
-  // SVG Gráfica 1 — Ingresos vs Egresos
-  const gW=920,gH=180,gX=60,gY=20,gBW=gW-80,gBH=gH-50;
-  const barPair=Math.floor(gBW/12);
-  const barW=Math.floor(barPair/2)-2;
-  let svg1='<svg width="100%" viewBox="0 0 '+gW+' '+gH+'" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif">';
-  // Grid lines
-  for(let i=0;i<=4;i++){
-    const y=gY+gBH-(i/4)*gBH;
-    svg1+='<line x1="'+gX+'" y1="'+y+'" x2="'+(gX+gBW)+'" y2="'+y+'" stroke="#e5e5e0" stroke-width="0.5"/>';
-    const val=((maxVal/1.1)*(i/4)/1000000);
-    svg1+='<text x="'+(gX-5)+'" y="'+(y+4)+'" text-anchor="end" font-size="8" fill="#999">$'+val.toFixed(1)+'M</text>';
-  }
-  // Barras
-  proyectados.forEach((m,i)=>{
-    const x=gX+i*barPair;
-    const hI=Math.max(1,Math.round((dataIngresos[i]/maxVal)*gBH));
-    const hE=Math.max(1,Math.round((dataEgresos[i]/maxVal)*gBH));
-    const yI=gY+gBH-hI;const yE=gY+gBH-hE;
-    const op=m.real?1:0.55;
-    svg1+='<rect x="'+x+'" y="'+yI+'" width="'+barW+'" height="'+hI+'" fill="#3B4BC8" opacity="'+op+'" rx="2"/>';
-    svg1+='<rect x="'+(x+barW+2)+'" y="'+yE+'" width="'+barW+'" height="'+hE+'" fill="#dc2626" opacity="'+op+'" rx="2"/>';
-    svg1+='<text x="'+(x+barPair/2)+'" y="'+(gY+gBH+12)+'" text-anchor="middle" font-size="7.5" fill="#888">'+labelsM[i]+'</text>';
-  });
-  // Leyenda
-  svg1+='<rect x="'+gX+'" y="'+(gY+gBH+22)+'" width="10" height="8" fill="#3B4BC8" rx="2"/>';
-  svg1+='<text x="'+(gX+13)+'" y="'+(gY+gBH+30)+'" font-size="8" fill="#555">Ingresos</text>';
-  svg1+='<rect x="'+(gX+80)+'" y="'+(gY+gBH+22)+'" width="10" height="8" fill="#dc2626" rx="2"/>';
-  svg1+='<text x="'+(gX+93)+'" y="'+(gY+gBH+30)+'" font-size="8" fill="#555">Egresos</text>';
-  svg1+='<rect x="'+(gX+160)+'" y="'+(gY+gBH+22)+'" width="10" height="8" fill="#3B4BC8" opacity="0.55" rx="2"/>';
-  svg1+='<text x="'+(gX+173)+'" y="'+(gY+gBH+30)+'" font-size="8" fill="#888">Proyectado (promedio)</text>';
-  svg1+='</svg>';
-
-  // SVG Gráfica 2 — Resultado contable vs fiscal
-  let svg2='<svg width="100%" viewBox="0 0 '+gW+' '+gH+'" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif">';
-  const midY=gY+gBH/2;
-  for(let i=0;i<=4;i++){
-    const y=gY+gBH-(i/4)*gBH;
-    svg2+='<line x1="'+gX+'" y1="'+y+'" x2="'+(gX+gBW)+'" y2="'+y+'" stroke="#e5e5e0" stroke-width="0.5"/>';
-  }
-  // Línea cero
-  svg2+='<line x1="'+gX+'" y1="'+midY+'" x2="'+(gX+gBW)+'" y2="'+midY+'" stroke="#999" stroke-width="1" stroke-dasharray="3,2"/>';
-  svg2+='<text x="'+(gX-5)+'" y="'+(midY+4)+'" text-anchor="end" font-size="8" fill="#999">$0</text>';
-  // Línea de utilidad mensual
-  let polyPoints='';
-  proyectados.forEach((m,i)=>{
-    const cx=gX+i*barPair+barPair/2;
-    const val=parseFloat(m.utilidad_neta_contable)||0;
-    const cy=midY-((val/maxU)*(gBH/2));
-    polyPoints+=cx+','+cy+' ';
-  });
-  svg2+='<polyline points="'+polyPoints.trim()+'" fill="none" stroke="#3B4BC8" stroke-width="2" stroke-linejoin="round"/>';
-  proyectados.forEach((m,i)=>{
-    const cx=gX+i*barPair+barPair/2;
-    const val=parseFloat(m.utilidad_neta_contable)||0;
-    const cy=midY-((val/maxU)*(gBH/2));
-    svg2+='<circle cx="'+cx+'" cy="'+cy+'" r="3" fill="'+(val>=0?'#3B4BC8':'#dc2626')+'" stroke="#fff" stroke-width="1.5"/>';
-    svg2+='<text x="'+cx+'" y="'+(gY+gBH+12)+'" text-anchor="middle" font-size="7.5" fill="#888">'+labelsM[i]+'</text>';
-  });
-  // Punto fiscal total
-  const fiscalX=gX+gBW-20;
-  const fiscalY=midY-((utilidadFiscal/maxU)*(gBH/2));
-  svg2+='<circle cx="'+fiscalX+'" cy="'+fiscalY+'" r="6" fill="'+(utilidadFiscal>=0?'#8DC63F':'#dc2626')+'" stroke="#fff" stroke-width="2"/>';
-  svg2+='<text x="'+fiscalX+'" y="'+(fiscalY-10)+'" text-anchor="middle" font-size="8" fill="'+(utilidadFiscal>=0?'#5a8a1a':'#dc2626')+'" font-weight="700">Fiscal</text>';
-  // Leyenda
-  svg2+='<line x1="'+gX+'" y1="'+(gY+gBH+26)+'" x2="'+(gX+20)+'" y2="'+(gY+gBH+26)+'" stroke="#3B4BC8" stroke-width="2"/>';
-  svg2+='<text x="'+(gX+23)+'" y="'+(gY+gBH+30)+'" font-size="8" fill="#555">Resultado contable mensual</text>';
-  svg2+='<circle cx="'+(gX+175)+'" cy="'+(gY+gBH+26)+'" r="4" fill="#8DC63F"/>';
-  svg2+='<text x="'+(gX+181)+'" y="'+(gY+gBH+30)+'" font-size="8" fill="#555">Resultado fiscal estimado anual</text>';
-  svg2+='</svg>';
-
-  // Tabla mensual
-  const mesRowsHTML=proyectados.map(m=>'<tr style="background:'+(m.real?'#fff':'#f8fff8')+'">'+
-    '<td style="padding:5px 8px;font-size:11px;font-weight:500;border-bottom:1px solid #f0f0ec">'+MESES_NOMBRES[m.mes-1]+(m.real?'':' <span style="font-size:8px;color:#8DC63F;font-weight:700">PROY</span>')+'</td>'+
-    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.ingresos)+'</td>'+
-    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.costo_ventas)+'</td>'+
-    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.gastos_operacion)+'</td>'+
-    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.otros_ingresos)+'</td>'+
-    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.otros_gastos)+'</td>'+
-    '<td style="padding:5px 8px;font-size:11px;text-align:right;font-weight:700;border-bottom:1px solid #f0f0ec;color:'+(parseFloat(m.utilidad_neta_contable||0)>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(m.utilidad_neta_contable)+'</td>'+
-    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;color:#888">'+(m.pago_provisional?fmtMXN(m.pago_provisional)+(m.real?'':' <span style="font-size:8px;color:#8DC63F">p</span>'):'—')+'</td>'+
-  '</tr>').join('');
-
-  // Tabla conciliación
-  const ajustesSortedPDF=[...ajustesData].sort((a,b)=>a.tipo===b.tipo?0:a.tipo==='suma'?-1:1);
-  const concilRows=ajustesSortedPDF.map(a=>'<tr>'+
-    '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #f0f0ec;color:'+( a.tipo==='suma'?'#5a8a1a':'#dc2626')+'">'+( a.tipo==='suma'?'Acumulable':'Deducible')+'</td>'+
-    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;font-weight:600">'+fmtMXN(a.importe)+'</td>'+
-    '<td style="padding:5px 8px;font-size:10px;color:#888;border-bottom:1px solid #f0f0ec">'+escH(a.referencia_legal||'')+'</td>'+
-    '<td style="padding:5px 8px;font-size:10px;color:#888;font-style:italic;border-bottom:1px solid #f0f0ec">'+escH(a.notas||'')+'</td>'+
-  '</tr>').join('');
-
-  // ===== NOTAS, RAZONES FINANCIERAS Y RECOMENDACIONES =====
-  const margenBruto=totalIngresos>0?((totalIngresos-totalCosto)/totalIngresos*100):0;
-  const margenNeto=totalIngresos>0?(utilidadContable/totalIngresos*100):0;
-  const margenOperacion=totalIngresos>0?((totalIngresos-totalCosto-totalGastosOp)/totalIngresos*100):0;
-  const rotacionGastos=totalIngresos>0?(totalGastosOp/totalIngresos*100):0;
-  const pesoCosto=totalIngresos>0?(totalCosto/totalIngresos*100):0;
-  const difFiscalContable=utilidadFiscal-utilidadContable;
-  const relacionPP=isrEstimado>0?(totalPP2/isrEstimado*100):0;
-
-  // Sección 1 — Bases de la proyección
-  const notasBase=[];
-  notasBase.push('La proyección se basa en '+nMeses+' mes'+(nMeses!==1?'es':'')+(nMeses<12?' real'+(nMeses!==1?'es':'')+' y '+(12-nMeses)+' meses estimados por promedio aritmético. Los meses proyectados asumen condiciones operativas similares a los meses capturados.':' reales, cubriendo el ejercicio completo.'));
-  if(nMeses<6) notasBase.push('Advertencia: con solo '+nMeses+' mes'+(nMeses!==1?'es':'')+' real'+(nMeses!==1?'es':'')+' de información, la proyección tiene un margen de variabilidad elevado. Se recomienda actualizar los datos conforme avance el ejercicio para mejorar la precisión de la estimación.');
-
-  // Sección 2 — Razones financieras del Estado de Resultados
-  const notasRazones=[];
-  // Margen bruto
-  notasRazones.push('Margen bruto: '+margenBruto.toFixed(2)+'% — Indica que por cada peso de ingreso, se generan '+margenBruto.toFixed(2)+' centavos de utilidad bruta después del costo de ventas. '+(margenBruto<20?'Este nivel es bajo para servicios profesionales; se recomienda revisar la estructura de costos directos.':margenBruto<40?'Este nivel es aceptable; sin embargo, existe oportunidad de mejora en la gestión de costos.':'Este nivel es saludable, reflejando una adecuada gestión del costo de ventas.'));
-  // Margen operativo
-  notasRazones.push('Margen de operación: '+margenOperacion.toFixed(2)+'% — Refleja la eficiencia operativa antes de otros ingresos y gastos. '+(margenOperacion<10?'Un margen operativo bajo sugiere que los gastos de operación están absorbiendo una parte significativa de la utilidad bruta. Se recomienda analizar la estructura de gastos fijos vs. variables.':margenOperacion<20?'El margen operativo es moderado, con oportunidad de optimización en gastos de operación.':'El margen operativo es robusto, indicando eficiencia en la gestión de los gastos de operación.'));
-  // Peso del costo de ventas
-  notasRazones.push('Costo de ventas / Ingresos: '+pesoCosto.toFixed(2)+'% — El costo de ventas representa el '+pesoCosto.toFixed(2)+'% de los ingresos totales. '+(pesoCosto>70?'Este nivel es elevado; se recomienda revisar proveedores, procesos y posibles economías de escala.':pesoCosto>50?'El nivel del costo de ventas es manejable; sin embargo, cualquier incremento en costos podría impactar significativamente el margen.':'El costo de ventas está bien controlado en relación a los ingresos.'));
-  // Gastos de operación
-  notasRazones.push('Gastos de operación / Ingresos: '+rotacionGastos.toFixed(2)+'% — Los gastos de operación representan el '+rotacionGastos.toFixed(2)+'% de los ingresos. '+(rotacionGastos>30?'Esta proporción es elevada para una firma de servicios; se recomienda un análisis detallado de los gastos administrativos y de ventas.':rotacionGastos>20?'La carga de gastos operativos es moderada; se debe vigilar su comportamiento conforme crecen los ingresos.':'Los gastos de operación están bien alineados con el nivel de ingresos.'));
-  // Margen neto
-  notasRazones.push('Margen neto contable: '+margenNeto.toFixed(2)+'% — Por cada $100 de ingreso, la empresa genera '+margenNeto.toFixed(2)+' pesos de utilidad neta contable. '+(margenNeto<0?'La proyección muestra una pérdida neta contable. Se deben analizar las causas y tomar medidas correctivas inmediatas.':margenNeto<5?'El margen neto es muy reducido, lo que implica una alta sensibilidad ante variaciones en costos o ingresos.':margenNeto<15?'El margen neto es aceptable; con optimizaciones en costos y gastos podría mejorarse.':'El margen neto es sólido, reflejando una operación financieramente rentable.'));
-  // Otros ingresos/gastos si son significativos
-  if(totalOtrosIng>0&&totalIngresos>0){
-    const pOtros=(totalOtrosIng/totalIngresos*100);
-    if(pOtros>5) notasRazones.push('Otros ingresos representan el '+pOtros.toFixed(2)+'% de los ingresos totales. Se recomienda analizar si estos ingresos son recurrentes o extraordinarios, ya que impactan la proyección de manera significativa.');
-  }
-  if(totalOtrosGas>0&&totalIngresos>0){
-    const pOtrosG=(totalOtrosGas/totalIngresos*100);
-    if(pOtrosG>5) notasRazones.push('Otros gastos representan el '+pOtrosG.toFixed(2)+'% de los ingresos. Se sugiere identificar su naturaleza (financieros, extraordinarios) para evaluar su deducibilidad fiscal y posibles acciones de reducción.');
-  }
-
-  // Sección 3 — Análisis fiscal
-  const notasFiscales=[];
-  if(utilidadFiscal<0) notasFiscales.push('La proyección fiscal arroja una pérdida fiscal estimada de '+fmtMXN(Math.abs(utilidadFiscal))+'. Conforme al Art. 57 LISR, esta pérdida podrá aplicarse contra utilidades de ejercicios posteriores dentro de los 10 años siguientes, actualizada con el factor inflacionario correspondiente.');
-  if(utilidadFiscal>0&&utilidadFiscal>utilidadContable) notasFiscales.push('La utilidad fiscal estimada ('+fmtMXN(utilidadFiscal)+') es mayor a la utilidad contable ('+fmtMXN(utilidadContable)+'), generando una diferencia temporal de '+fmtMXN(difFiscalContable)+'. Esto implica que los ajustes fiscales incrementan la base gravable; se recomienda revisar la aplicación correcta de los conceptos acumulables.');
-  if(utilidadFiscal>0&&utilidadFiscal<utilidadContable) notasFiscales.push('Los ajustes fiscales reducen la base gravable en '+fmtMXN(Math.abs(difFiscalContable))+' respecto a la utilidad contable, reflejando una gestión fiscal eficiente. La diferencia temporal de '+fmtMXN(Math.abs(difFiscalContable))+' deberá controlarse en la conciliación fiscal definitiva.');
-  if(isrEstimado>0){
-    notasFiscales.push('ISR estimado del ejercicio: '+fmtMXN(isrEstimado)+' (tasa '+proy.tasa_isr+'%). Pagos provisionales acumulados: '+fmtMXN(totalPP2)+'. '+(isrACargoP>0?'ISR a cargo estimado al cierre: '+fmtMXN(isrACargoP)+'. Se recomienda evaluar la conveniencia de incrementar los pagos provisionales de los meses restantes para evitar recargos.':'Saldo a favor estimado: '+fmtMXN(saldoFavorP)+'. Se podrá solicitar su devolución o compensación conforme al Art. 22 CFF.'));
-    if(totalPP2>0) notasFiscales.push('Cobertura de pagos provisionales: '+relacionPP.toFixed(1)+'% del ISR estimado ha sido cubierta mediante pagos provisionales. '+(relacionPP<70?'La cobertura es baja; se recomienda revisar el coeficiente de utilidad aplicado y considerar ajustes en los pagos pendientes.':relacionPP>100?'Los pagos provisionales superan el ISR estimado; se anticipa un saldo a favor al cierre del ejercicio.':'La cobertura de pagos provisionales es adecuada.'));
-  }
-  notasFiscales.push('Coeficiente de Utilidad (CU) determinado: '+cuPDF.toFixed(2)+'%. Este coeficiente será aplicable para la determinación de los pagos provisionales del ejercicio '+( proy.ejercicio+1)+', multiplicando los ingresos nominales de cada mes por el CU conforme al Art. 14 LISR.');
-  notasFiscales.push('Las cifras presentadas son estimadas y están sujetas a los ajustes que resulten de la revisión definitiva de la información financiera y fiscal al cierre del ejercicio '+proy.ejercicio+'. MSST Consulting SC no asume responsabilidad por variaciones derivadas de cambios en las condiciones operativas o en la normativa fiscal aplicable.');
-
-  // Construir HTML de notas organizado por secciones
-  function seccionNotas(titulo,color,items){
-    if(!items.length)return'';
-    return '<div style="margin-bottom:14px">'+
-      '<div style="font-size:11px;font-weight:700;color:'+color+';text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #e5e5e0">'+titulo+'</div>'+
-      items.map((n,i)=>'<div style="display:flex;gap:10px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid #f5f5f3">'+
-        '<div style="width:18px;height:18px;border-radius:50%;background:'+color+';color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">'+(i+1)+'</div>'+
-        '<div style="font-size:11px;color:#444;line-height:1.6">'+n+'</div>'+
-      '</div>').join('')+
-    '</div>';
-  }
-
-  const notasHTML=
-    seccionNotas('I. Bases y alcance de la proyección','#888',notasBase)+
-    seccionNotas('II. Análisis de razones financieras','#3B4BC8',notasRazones)+
-    seccionNotas('III. Consideraciones fiscales y recomendaciones','#8DC63F',notasFiscales);
-
-
-  const win=window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html lang="es"><head>
-<meta charset="UTF-8">
-<title>Proyección Fiscal ${proy.ejercicio} — ${proy.cliente_nombre}</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
-  .page{max-width:1050px;margin:0 auto;padding:24px 32px}
-  @page{size:A4 landscape;margin:15mm}
-  .header{display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:20px;border-bottom:3px solid #3B4BC8;margin-bottom:24px}
-  .logo-area{}
-  .logo-mark{font-size:22px;font-weight:700;color:#3B4BC8;letter-spacing:-0.5px}
-  .logo-mark span{color:#8DC63F}
-  .firma{font-size:11px;color:#888;margin-top:2px;font-weight:500}
-  .report-title{text-align:right}
-  .report-title h1{font-size:16px;font-weight:700;color:#1a1a1a;margin-bottom:4px}
-  .report-title p{font-size:11px;color:#888}
-  .section{margin-bottom:24px}
-  .section-title{font-size:11px;font-weight:700;color:#3B4BC8;text-transform:uppercase;letter-spacing:.08em;padding-bottom:6px;border-bottom:2px solid #3B4BC8;margin-bottom:14px}
-  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
-  .kpi{background:#f8f9ff;border-radius:8px;padding:12px;border-left:3px solid #3B4BC8}
-  .kpi.verde{border-left-color:#8DC63F}
-  .kpi.rojo{border-left-color:#dc2626}
-  .kpi.naranja{border-left-color:#EF9F27}
-  .kpi-label{font-size:9px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
-  .kpi-val{font-size:16px;font-weight:700;color:#3B4BC8}
-  .kpi.verde .kpi-val{color:#5a8a1a}
-  .kpi.rojo .kpi-val{color:#dc2626}
-  .kpi.naranja .kpi-val{color:#92400E}
-  .kpi-sub{font-size:9px;color:#aaa;margin-top:2px}
-  table{width:100%;border-collapse:collapse}
-  th{padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:#fff;background:#3B4BC8}
-  th.right{text-align:right}
-  td{padding:5px 8px;font-size:11px;border-bottom:1px solid #f0f0ec;vertical-align:middle}
-  tr:last-child td{border-bottom:none}
-  .total-row td{background:#f0f4ff;font-weight:700;font-size:12px}
-  .fiscal-row td{background:#EEEDFE;font-weight:700;font-size:12px;color:#3B4BC8}
-  .isr-row td{background:#fef2f2;font-weight:700;font-size:12px;color:#dc2626}
-  .isr-row.favor td{background:#f0f7d4;color:#5a8a1a}
-  .graf-box{background:#fafbff;border:1px solid #e5e5e0;border-radius:8px;padding:14px;margin-bottom:14px}
-  .graf-title{font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
-  .nota-item{display:flex;gap:10px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #f5f5f3}
-  .nota-num{width:20px;height:20px;border-radius:50%;background:#3B4BC8;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
-  .nota-txt{font-size:11px;color:#444;line-height:1.6}
-  .footer{border-top:1px solid #e5e5e0;padding-top:14px;margin-top:24px;display:flex;justify-content:space-between;align-items:flex-end}
-  .footer-left{font-size:9px;color:#bbb;line-height:1.8}
-  .footer-right{text-align:right}
-  .conf-badge{background:#3B4BC8;color:#fff;font-size:9px;font-weight:700;padding:3px 10px;border-radius:4px;letter-spacing:.05em}
-  .disclaimer{font-size:9px;color:#bbb;margin-top:4px;text-align:right}
-  @media print{body{padding:0}.page{padding:12px 20px;max-width:100%}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-</style>
-</head><body>
-<div class="page">
-
-  <!-- ENCABEZADO -->
-  <div class="header">
-    <div class="logo-area">
-      <div class="logo-mark">MSST <span>Consulting</span> SC</div>
-      <div class="firma">Asesoría Fiscal y Legal · Tijuana, B.C.</div>
-    </div>
-    <div class="report-title">
-      <h1>Proyección de Resultado Fiscal</h1>
-      <p>Ejercicio ${proy.ejercicio} · ${escH(proy.cliente_nombre)}</p>
-      <p style="margin-top:3px">Tasa ISR: ${proy.tasa_isr}% · Generado: ${hoy}</p>
-      <p style="margin-top:3px;color:#EF9F27;font-weight:600">INFORMACIÓN CONFIDENCIAL Y PRIVILEGIADA</p>
-    </div>
-  </div>
-
-  <!-- KPIs -->
-  <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr)">
-    <div class="kpi">
-      <div class="kpi-label">Ingresos proyectados</div>
-      <div class="kpi-val">${fmtMXN(totalIngresos)}</div>
-      <div class="kpi-sub">${nMeses} meses reales · ${12-nMeses} proyectados</div>
-    </div>
-    <div class="kpi naranja">
-      <div class="kpi-label">Utilidad contable</div>
-      <div class="kpi-val" style="color:${utilidadContable>=0?'#92400E':'#dc2626'}">${fmtMXN(utilidadContable)}</div>
-      <div class="kpi-sub">Margen ${(totalIngresos>0?(utilidadContable/totalIngresos*100):0).toFixed(1)}%</div>
-    </div>
-    <div class="kpi ${utilidadFiscal>=0?'verde':'rojo'}">
-      <div class="kpi-label">Utilidad fiscal estimada</div>
-      <div class="kpi-val">${fmtMXN(utilidadFiscal)}</div>
-      <div class="kpi-sub">Ajustes: ${fmtMXN(totalSumas-totalRestas)}</div>
-    </div>
-    <div class="kpi ${isrEstimado>0?'rojo':'verde'}">
-      <div class="kpi-label">ISR estimado (${proy.tasa_isr}%)</div>
-      <div class="kpi-val">${fmtMXN(isrEstimado)}</div>
-      <div class="kpi-sub">${isrEstimado>0?'A cargo':'Sin ISR estimado'}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Coeficiente de utilidad</div>
-      <div class="kpi-val">${cuPDF.toFixed(2)}%</div>
-      <div class="kpi-sub">Art. 14 LISR</div>
-    </div>
-  </div>
-
-  <!-- GRÁFICA 1 -->
-  <div class="section">
-    <div class="section-title">Evolución mensual — Ingresos vs Egresos</div>
-    <div class="graf-box">
-      <div class="graf-title">Escenario mensual (cifras en MXN)</div>
-      ${svg1}
-    </div>
-  </div>
-
-  <!-- GRÁFICA 2 -->
-  <div class="section">
-    <div class="section-title">Resultado contable mensual y fiscal estimado</div>
-    <div class="graf-box">
-      <div class="graf-title">Resultado neto mensual vs resultado fiscal anual estimado</div>
-      ${svg2}
-    </div>
-  </div>
-
-  <!-- ESTADO DE RESULTADOS -->
-  <div class="section">
-    <div class="section-title">Estado de Resultados proyectado — Ejercicio ${proy.ejercicio}</div>
-    <table>
-      <thead><tr>
-        <th>Mes</th>
-        <th class="right">Ingresos</th>
-        <th class="right">Costo venta</th>
-        <th class="right">Gastos op.</th>
-        <th class="right">Otros ing.</th>
-        <th class="right">Otros gas.</th>
-        <th class="right">Util. neta</th>
-        <th class="right">Pago prov.</th>
-      </tr></thead>
-      <tbody>${mesRowsHTML}
-      <tr class="total-row">
-        <td>TOTAL ANUAL</td>
-        <td style="text-align:right">${fmtMXN(totalIngresos)}</td>
-        <td style="text-align:right">${fmtMXN(totalCosto)}</td>
-        <td style="text-align:right">${fmtMXN(totalGastosOp)}</td>
-        <td style="text-align:right">${fmtMXN(totalOtrosIng)}</td>
-        <td style="text-align:right">${fmtMXN(totalOtrosGas)}</td>
-        <td style="text-align:right;color:${utilidadContable>=0?'#3B4BC8':'#dc2626'}">${fmtMXN(utilidadContable)}</td>
-      <td class="right" style="color:#888">${fmtMXN(totalPP2)}</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- CONCILIACIÓN FISCAL -->
-  <div class="section">
-    <div class="section-title">Conciliación contable-fiscal — Art. 9 LISR</div>
-    <table>
-      <thead><tr>
-        <th>Concepto</th><th>Tipo</th><th class="right">Importe</th><th>Ref. Legal</th><th>Notas / Identificación</th>
-      </tr></thead>
-      <tbody>
-        <tr style="background:#f8f9ff">
-          <td style="font-weight:700">Utilidad contable base</td>
-          <td>—</td>
-          <td style="text-align:right;font-weight:700">${fmtMXN(utilidadContable)}</td>
-          <td>—</td>
-        </tr>
-        ${concilRows}
-        <tr style="background:#e8f5e9">
-          <td style="color:#5a8a1a">+ Total ajustes acumulables</td>
-          <td></td>
-          <td style="text-align:right;color:#5a8a1a;font-weight:700">${fmtMXN(totalSumas)}</td>
-          <td></td>
-        </tr>
-        <tr style="background:#fef2f2">
-          <td style="color:#dc2626">- Total ajustes deducibles</td>
-          <td></td>
-          <td style="text-align:right;color:#dc2626;font-weight:700">(${fmtMXN(totalRestas)})</td>
-          <td></td>
-        </tr>
-      </tbody>
-      <tfoot>
-        <tr class="fiscal-row">
-          <td colspan="2">= Utilidad fiscal estimada al cierre</td>
-          <td style="text-align:right;color:${utilidadFiscal>=0?'#3B4BC8':'#dc2626'}">${fmtMXN(utilidadFiscal)}</td>
-          <td></td>
-        </tr>
-        <tr class="${isrEstimado>0?'isr-row':'isr-row favor'}">
-          <td colspan="2">ISR estimado del ejercicio (${proy.tasa_isr}%)</td>
-          <td style="text-align:right">${fmtMXN(isrEstimado)}</td>
-          <td></td>
-        </tr>
-        <tr style="background:#f5f5f3">
-          <td colspan="2" style="color:#888;font-size:10px">- Pagos provisionales (reales + proyectados)</td>
-          <td style="text-align:right;color:#888;font-weight:600">(${fmtMXN(totalPP2)})</td>
-          <td style="font-size:10px;color:#bbb">Acumulado del ejercicio</td>
-        </tr>
-        <tr style="background:${isrACargoP>0?'#fef2f2':'#f0f7d4'}">
-          <td colspan="2" style="font-weight:700;font-size:13px;color:${isrACargoP>0?'#dc2626':'#5a8a1a'}">${isrACargoP>0?'ISR a cargo del ejercicio':'Saldo a favor del contribuyente'}</td>
-          <td style="text-align:right;font-weight:700;font-size:13px;color:${isrACargoP>0?'#dc2626':'#5a8a1a'}">${isrACargoP>0?fmtMXN(isrACargoP):fmtMXN(saldoFavorP)}</td>
-          <td></td>
-        </tr>
-        <tr style="background:#f0f4ff">
-          <td colspan="3" style="font-size:10px;color:#3B4BC8;padding:8px">
-            <strong>Coeficiente de Utilidad (CU) — Art. 14 LISR:</strong>
-            CU = Utilidad Fiscal (${fmtMXN(utilidadFiscal)}) ÷ Ingresos Nominales (${fmtMXN(totalIngresos)}) = <strong>${cuPDF.toFixed(2)}%</strong>
-            &nbsp;·&nbsp; Aplicable para pagos provisionales del ejercicio siguiente.
-          </td>
-          <td style="text-align:right;font-size:16px;font-weight:700;color:#3B4BC8">${cuPDF.toFixed(2)}%</td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
-
-  <!-- NOTAS -->
-  <div class="section">
-    <div class="section-title">Notas, observaciones y recomendaciones</div>
-    ${notasHTML}
-  </div>
-
-  <!-- HISTORIAL DE CIERRES ANTERIORES -->
-  ${(()=>{
-    const hist=(cierresHist||[]).filter(c=>c.ejercicio<proy.ejercicio&&c.ingresos_acumulables!=null);
-    if(!hist.length)return'';
-    const filas=hist.map(c=>{
-      const isr_cargo=parseFloat(c.isr_a_cargo||0);
-      const sf=parseFloat(c.saldo_favor||0);
-      return '<tr>'+
-        '<td style="padding:5px 8px;font-size:11px;font-weight:600;border-bottom:1px solid #f0f0ec">'+c.ejercicio+'</td>'+
-        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(c.ingresos_acumulables)+'</td>'+
-        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(c.utilidad_contable)+'</td>'+
-        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;color:'+(parseFloat(c.utilidad_fiscal||0)>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(c.utilidad_fiscal)+'</td>'+
-        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(c.isr_causado)+'</td>'+
-        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(c.pagos_provisionales)+'</td>'+
-        '<td style="padding:5px 8px;font-size:11px;text-align:right;font-weight:600;border-bottom:1px solid #f0f0ec;color:'+(isr_cargo>0?'#dc2626':'#5a8a1a')+'">'+(isr_cargo>0?fmtMXN(isr_cargo):'('+fmtMXN(sf)+')')+'</td>'+
-        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;color:#3B4BC8">'+parseFloat(c.cu||0).toFixed(2)+'%</td>'+
-      '</tr>';
-    }).join('');
-    return '<div class="section">'+
-      '<div class="section-title">Historial fiscal de cierres anteriores — '+escH(proy.cliente_nombre)+'</div>'+
-      '<table>'+
-        '<thead><tr>'+
-          '<th>Ejercicio</th>'+
-          '<th class="right">Ingresos acumulables</th>'+
-          '<th class="right">Util. contable</th>'+
-          '<th class="right">Util. fiscal</th>'+
-          '<th class="right">ISR causado</th>'+
-          '<th class="right">PP pagados</th>'+
-          '<th class="right">ISR a cargo / (Saldo a favor)</th>'+
-          '<th class="right">CU</th>'+
-        '</tr></thead>'+
-        '<tbody>'+filas+'</tbody>'+
-        '<tfoot>'+
-          '<tr style="background:#f0f4ff">'+
-            '<td style="padding:6px 8px;font-size:11px;font-weight:700;color:#3B4BC8" colspan="3">Proyección ejercicio '+proy.ejercicio+' (estimado)</td>'+
-            '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#3B4BC8">'+fmtMXN(utilidadFiscal)+'</td>'+
-            '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#dc2626">'+fmtMXN(isrEstimado)+'</td>'+
-            '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#3B4BC8">'+fmtMXN(totalPP2)+'</td>'+
-            '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:'+(isrACargoP>0?'#dc2626':'#5a8a1a')+'">'+(isrACargoP>0?fmtMXN(isrACargoP):'('+fmtMXN(saldoFavorP)+')')+'</td>'+
-            '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#3B4BC8">'+cuPDF.toFixed(2)+'%</td>'+
-          '</tr>'+
-        '</tfoot>'+
-      '</table>'+
-    '</div>';
-  })()}
-
-  <!-- PIE DE PÁGINA -->
-  <div class="footer">
-    <div class="footer-left">
-      <div><strong>MSST Consulting SC</strong></div>
-      <div>Asesoría Fiscal y Legal · Tijuana, Baja California</div>
-      <div>Generado con TaxIA día a día · ${hoy}</div>
-    </div>
-    <div class="footer-right">
-      <div class="conf-badge">CONFIDENCIAL</div>
-      <div class="disclaimer">Este reporte es de carácter estimativo.<br>Las cifras están sujetas a revisión al cierre del ejercicio.</div>
-    </div>
-  </div>
-
-</div>
-</body></html>`);
-  win.document.close();
-  setTimeout(()=>win.print(),800);
-}
-
-
-
-/* ===== SNAPSHOTS Y COMPARATIVOS DE PROYECCIÓN ===== */
-async function guardarEscenarioProyeccion(id){
-  const proy=pfCache.find(p=>p.id===id);if(!proy)return;
-
-  const [meses,ajustes]=await Promise.all([
-    sbGet('pf_meses','?proyeccion_id=eq.'+id+'&select=*&order=mes.asc'),
-    sbGet('pf_ajustes','?proyeccion_id=eq.'+id+'&select=*')
-  ]);
-
-  const mesesData=meses||[];
-  const mesesConDatos=mesesData.filter(m=>m.ingresos!==null);
-  const nMeses=mesesConDatos.length;
-  if(!nMeses){alert('No hay datos capturados para guardar.');return;}
-
-  const avg=campo=>nMeses?mesesConDatos.reduce((s,m)=>s+(parseFloat(m[campo])||0),0)/nMeses:0;
-  const proyectados=[];
-  for(let m=1;m<=12;m++){
-    const real=mesesData.find(md=>md.mes===m);
-    if(real&&real.ingresos!==null) proyectados.push({...real,real:true});
-    else{
-      const ing=avg('ingresos'),cv=avg('costo_ventas'),go=avg('gastos_operacion'),
-            oi=avg('otros_ingresos'),og=avg('otros_gastos'),pp=avg('pago_provisional');
-      proyectados.push({mes:m,real:false,ingresos:ing,costo_ventas:cv,gastos_operacion:go,
-        otros_ingresos:oi,otros_gastos:og,pago_provisional:pp,
-        utilidad_neta_contable:ing-cv-go+oi-og});
-    }
-  }
-
-  const totalIngresos=proyectados.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
-  const totalCosto=proyectados.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
-  const totalGastosOp=proyectados.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
-  const totalOtrosIng=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
-  const totalOtrosGas=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_gastos)||0),0);
-  const utilidadContable=totalIngresos-totalCosto-totalGastosOp+totalOtrosIng-totalOtrosGas;
-  const ajustesData=ajustes||[];
-  const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
-  const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
-  const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
-  const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
-  const totalPP=proyectados.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
-  const isrACargo=Math.max(0,isrEstimado-totalPP);
-  const cu=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
-  const margenBruto=totalIngresos>0?((totalIngresos-totalCosto)/totalIngresos*100):0;
-  const margenNeto=totalIngresos>0?(utilidadContable/totalIngresos*100):0;
-
-  // Modal para capturar notas del escenario
-  const overlay=document.createElement('div');
-  overlay.className='modal-overlay';
-  overlay.id='modal-escenario';
-  overlay.innerHTML='<div class="modal-box">'+
-    '<div class="modal-title">Guardar escenario de proyección</div>'+
-    '<div class="modal-sub">Se guardará el estado actual como escenario para comparación futura</div>'+
-    '<div style="background:#f5f5f3;border-radius:8px;padding:12px;margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px">'+
-      '<div style="font-size:11px"><span style="color:#888">Fecha de corte:</span> <strong>'+todayKey()+'</strong></div>'+
-      '<div style="font-size:11px"><span style="color:#888">Meses reales:</span> <strong>'+nMeses+' de 12</strong></div>'+
-      '<div style="font-size:11px"><span style="color:#888">Utilidad fiscal:</span> <strong>'+fmtMXN(utilidadFiscal)+'</strong></div>'+
-      '<div style="font-size:11px"><span style="color:#888">ISR estimado:</span> <strong>'+fmtMXN(isrEstimado)+'</strong></div>'+
-      '<div style="font-size:11px"><span style="color:#888">ISR a cargo:</span> <strong>'+fmtMXN(isrACargo)+'</strong></div>'+
-      '<div style="font-size:11px"><span style="color:#888">CU:</span> <strong>'+cu.toFixed(2)+'%</strong></div>'+
-    '</div>'+
-    '<div style="margin-bottom:12px">'+
-      '<div style="font-size:12px;color:#888;margin-bottom:4px">Notas del escenario (opcional)</div>'+
-      '<textarea id="snap-notas" rows="3" placeholder="Ej: Proyección al mes de marzo, pendiente capturar abril..." style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea>'+
-    '</div>'+
-    '<div style="display:flex;gap:8px">'+
-      '<button class="btn btn-full" onclick="document.getElementById(\'modal-escenario\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="confirmarEscenario(\''+id+'\','+totalIngresos+','+totalCosto+','+totalGastosOp+','+utilidadContable+','+totalSumas+','+totalRestas+','+utilidadFiscal+','+isrEstimado+','+totalPP+','+isrACargo+','+cu+','+margenBruto+','+margenNeto+','+nMeses+')" style="flex:1;margin-top:0">💾 Guardar</button>'+
-    '</div>'+
-  '</div>';
-  document.body.appendChild(overlay);
-}
-
-async function confirmarEscenario(proyId,ti,tc,tgo,uc,ts,tr,uf,isr,pp,isrC,cu,mb,mn,nM){
-  const proy=pfCache.find(p=>p.id===proyId);if(!proy)return;
-  const notas=document.getElementById('snap-notas')?.value.trim()||null;
-  document.getElementById('modal-escenario')?.remove();
-
-  await sbPost('pf_reportes',{
-    proyeccion_id:proyId,
-    cliente_nombre:proy.cliente_nombre,
-    ejercicio:proy.ejercicio,
-    fecha_corte:todayKey(),
-    meses_reales:nM,
-    total_ingresos:ti,
-    total_costo:tc,
-    total_gastos_op:tgo,
-    utilidad_contable:uc,
-    total_sumas:ts,
-    total_restas:tr,
-    utilidad_fiscal:uf,
-    isr_estimado:isr,
-    total_pp:pp,
-    isr_a_cargo:isrC,
-    cu:cu,
-    margen_bruto:mb,
-    margen_neto:mn,
-    notas
-  },'return=minimal');
-
-  const msg=document.createElement('div');
-  msg.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:10px 20px;border-radius:8px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
-  msg.textContent='✅ Escenario guardado — '+todayKey();
-  document.body.appendChild(msg);
-  setTimeout(()=>msg.remove(),3000);
-}
-
-async function verEscenariosProyeccion(id){
-  const proy=pfCache.find(p=>p.id===id);if(!proy)return;
-  document.getElementById('modal-escenarios')?.remove();
-  const reportes=await sbGet('pf_reportes','?proyeccion_id=eq.'+id+'&select=*&order=fecha_corte.asc');
-  const data=reportes||[];
-
-  if(!data.length){
-    alert('No hay escenarios guardados. Usa "💾 Guardar escenario" para crear el primero.');
-    return;
-  }
-
-  const overlay=document.createElement('div');
-  overlay.className='modal-overlay';
-  overlay.id='modal-escenarios';
-
-  const escRows=data.map((r,i)=>'<div style="border:0.5px solid #e5e5e0;border-radius:8px;padding:12px;margin-bottom:8px">'+
-    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
-      '<div style="flex:1">'+
-        '<div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#3B4BC8">Escenario '+(i+1)+' — '+r.fecha_corte+'</div>'+
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:6px">'+
-          '<div style="font-size:11px;color:#888">Meses reales: <strong>'+r.meses_reales+'/12</strong></div>'+
-          '<div style="font-size:11px;color:#888">Ingresos: <strong>'+fmtMXN(r.total_ingresos)+'</strong></div>'+
-          '<div style="font-size:11px;color:#888">Util. contable: <strong>'+fmtMXN(r.utilidad_contable)+'</strong></div>'+
-          '<div style="font-size:11px;color:#888">Util. fiscal: <strong>'+fmtMXN(r.utilidad_fiscal)+'</strong></div>'+
-          '<div style="font-size:11px;color:#888">ISR estimado: <strong>'+fmtMXN(r.isr_estimado)+'</strong></div>'+
-          '<div style="font-size:11px;color:#888">ISR a cargo: <strong style="color:'+(parseFloat(r.isr_a_cargo)>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(r.isr_a_cargo)+'</strong></div>'+
-          '<div style="font-size:11px;color:#888">PP acumulado: <strong>'+fmtMXN(r.total_pp)+'</strong></div>'+
-          '<div style="font-size:11px;color:#888">CU: <strong>'+parseFloat(r.cu).toFixed(2)+'%</strong></div>'+
-          '<div style="font-size:11px;color:#888">Mg. neto: <strong>'+parseFloat(r.margen_neto).toFixed(2)+'%</strong></div>'+
-        '</div>'+
-        (r.notas?'<div style="font-size:11px;color:#888;font-style:italic;background:#f5f5f3;padding:6px 8px;border-radius:6px">'+escH(r.notas)+'</div>':'')+
+    '<div id="panel-cifras">'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Ingresos</div><input id="ms-ing" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Costo de ventas</div><input id="ms-cv" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Gastos de operación</div><input id="ms-go" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Otros ingresos</div><input id="ms-oi" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Otros gastos</div><input id="ms-og" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Activo fijo bruto</div><input id="ms-afb" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Depreciación acumulada</div><input id="ms-dac" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Pago provisional ISR</div><input id="ms-pp" type="number" placeholder="0.00"></div>'+
       '</div>'+
-      (session.role==='admin'?
-        '<button class="btn btn-sm btn-danger" style="font-size:10px;flex-shrink:0" id="del-esc-'+r.id+'" data-esc="'+r.id+'" data-proy="'+id+'">🗑</button>':'')+
     '</div>'+
-  '</div>').join('');
-
-  overlay.innerHTML='<div class="modal-box" style="max-width:620px;max-height:80vh;overflow-y:auto">'+
-    '<div class="modal-title">📊 Escenarios anteriores</div>'+
-    '<div class="modal-sub">'+escH(proy.cliente_nombre)+' — Ejercicio '+proy.ejercicio+' · '+data.length+' escenario'+(data.length!==1?'s':'')+' guardado'+(data.length!==1?'s':'')+'</div>'+
-    '<div style="margin:12px 0">'+escRows+'</div>'+
-    '<div style="display:flex;gap:8px">'+
-      '<button class="btn btn-full" onclick="document.getElementById(\'modal-escenarios\').remove()" style="flex:1;margin-top:0">Cerrar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="document.getElementById(\'modal-escenarios\').remove();generarComparativoPDF(\''+id+'\')" style="flex:1;margin-top:0">⎙ Reporte PDF comparativo</button>'+
+    '<div id="panel-docs" style="display:none">'+
+      '<div style="font-size:12px;color:#888;margin-bottom:10px">Sube los estados financieros. Claude extraerá las cifras automáticamente.</div>'+
+      msPDFBox("er","Estado de Resultados")+
+      msPDFBox("bg","Balance General")+
+      msPDFBox("bc","Balanza de Comprobación")+
+      '<div id="ms-extract-status" style="font-size:12px;display:none;padding:8px;border-radius:6px;margin-bottom:8px"></div>'+
+    '</div>'+
+    '<input type="hidden" id="ms-proy-id" value="'+proyId+'">'+
+    '<input type="hidden" id="ms-mes" value="'+mes+'">'+
+    '<input type="hidden" id="ms-id" value="'+(mesId||'')+'">'+
+    '<input type="hidden" id="ms-er-url" value=""><input type="hidden" id="ms-er-nombre" value="">'+
+    '<input type="hidden" id="ms-bg-url" value=""><input type="hidden" id="ms-bg-nombre" value="">'+
+    '<input type="hidden" id="ms-bc-url" value=""><input type="hidden" id="ms-bc-nombre" value="">'+
+    '<div style="display:flex;gap:8px;margin-top:8px">'+
+      '<button class="btn btn-full" id="btn-cancel-mes" style="flex:1;margin-top:0">Cancelar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="guardarMes()" style="flex:1;margin-top:0">Guardar</button>'+
     '</div>'+
   '</div>';
+  overlay.innerHTML=html;
   document.body.appendChild(overlay);
-
-  // Event listeners para borrar (solo admin)
-  if(session.role==='admin'){
-    setTimeout(()=>{
-      data.forEach(r=>{
-        const btn=document.getElementById('del-esc-'+r.id);
-        if(btn) btn.addEventListener('click',()=>borrarEscenario(r.id,id));
+  document.getElementById('btn-cancel-mes').addEventListener('click',()=>overlay.remove());
+  if(mesId){
+    sbGet('pf_meses','?id=eq.'+mesId+'&select=*').then(data=>{
+      const m=data?.[0];if(!m)return;
+      ['ing','cv','go','oi','og','afb','dac','pp'].forEach((f,i)=>{
+        const campos=['ingresos','costo_ventas','gastos_operacion','otros_ingresos','otros_gastos','activo_fijo_bruto','depreciacion_acumulada_contable','pago_provisional'];
+        const el=document.getElementById('ms-'+f);if(el) el.value=m[campos[i]]||'';
       });
-    },50);
-  }
-}
-
-async function borrarEscenario(escId,proyId){
-  if(!confirm('¿Eliminar este escenario? No se puede deshacer.'))return;
-  await sbDelete('pf_reportes','?id=eq.'+escId);
-  document.getElementById('modal-escenarios')?.remove();
-  verEscenariosProyeccion(proyId);
-}
-
-async function generarComparativoPDF(id){
-  const proy=pfCache.find(p=>p.id===id);if(!proy)return;
-  const reportes=await sbGet('pf_reportes','?proyeccion_id=eq.'+id+'&select=*&order=fecha_corte.asc');
-  const data=reportes||[];if(!data.length)return;
-  const cols=['Fecha corte','Meses reales','Ingresos','Util. contable','Util. fiscal','ISR estimado','PP acumulado','ISR a cargo','CU','Mg. bruto','Mg. neto','Notas'];
-  const rows=data.map(r=>[
-    r.fecha_corte, r.meses_reales+'/12', fmtMXN(r.total_ingresos), fmtMXN(r.utilidad_contable),
-    fmtMXN(r.utilidad_fiscal), fmtMXN(r.isr_estimado), fmtMXN(r.total_pp), fmtMXN(r.isr_a_cargo),
-    parseFloat(r.cu).toFixed(2)+'%', parseFloat(r.margen_bruto).toFixed(2)+'%',
-    parseFloat(r.margen_neto).toFixed(2)+'%', r.notas||'—'
-  ]);
-
-  const primero=data[0];const ultimo=data[data.length-1];
-  const tendencias=[];
-  if(data.length>1){
-    const difIng=parseFloat(ultimo.total_ingresos)-parseFloat(primero.total_ingresos);
-    const difFiscal=parseFloat(ultimo.utilidad_fiscal)-parseFloat(primero.utilidad_fiscal);
-    const difISR=parseFloat(ultimo.isr_a_cargo)-parseFloat(primero.isr_a_cargo);
-    if(Math.abs(difIng)>0) tendencias.push((difIng>0?'📈':'📉')+' Ingresos: '+(difIng>0?'+':'')+fmtMXN(difIng)+' vs primer escenario');
-    if(Math.abs(difFiscal)>0) tendencias.push((difFiscal>0?'📈':'📉')+' Utilidad fiscal: '+(difFiscal>0?'+':'')+fmtMXN(difFiscal)+' vs primer escenario');
-    if(Math.abs(difISR)>0) tendencias.push((difISR>0?'⚠️':'✅')+' ISR a cargo: '+(difISR>0?'+':'')+fmtMXN(difISR)+' vs primer escenario');
-  }
-
-  const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
-  const win=window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html lang="es"><head>
-<meta charset="UTF-8">
-<title>Escenarios anteriores — ${proy.cliente_nombre} ${proy.ejercicio}</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
-  .page{max-width:1100px;margin:0 auto;padding:24px 32px}
-  @page{size:A4 landscape;margin:15mm}
-  .header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #3B4BC8;margin-bottom:18px}
-  .logo{font-size:18px;font-weight:700;color:#3B4BC8}.logo span{color:#8DC63F}
-  table{width:100%;border-collapse:collapse;font-size:10px}
-  th{background:#3B4BC8;color:#fff;padding:6px 8px;text-align:left;font-size:9px;font-weight:600;text-transform:uppercase;white-space:nowrap}
-  th.right{text-align:right}
-  td{padding:6px 8px;border-bottom:1px solid #f0f0ec;vertical-align:top}
-  td.right{text-align:right}
-  tr:nth-child(even){background:#fafafa}
-  tr:last-child td{background:#f0f4ff;font-weight:700}
-  .tend{background:#f5f5f3;border-radius:8px;padding:12px;margin-bottom:16px}
-  .tend-title{font-size:11px;font-weight:700;color:#3B4BC8;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
-  .tend-item{font-size:11px;color:#444;padding:4px 0;border-bottom:1px solid #eee}
-  .footer{margin-top:20px;padding-top:10px;border-top:1px solid #e5e5e0;font-size:9px;color:#bbb;text-align:center}
-  @media print{body{padding:0}.page{padding:12px 20px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-</style>
-</head><body><div class="page">
-  <div class="header">
-    <div>
-      <div class="logo">MSST <span>Consulting</span> SC</div>
-      <div style="font-size:10px;color:#888;margin-top:2px">Asesoría Fiscal y Legal · Tijuana, B.C.</div>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:14px;font-weight:700">Escenarios anteriores — Proyección Fiscal</div>
-      <div style="color:#888">${proy.cliente_nombre} · Ejercicio ${proy.ejercicio}</div>
-      <div style="color:#888;margin-top:2px">${data.length} escenarios · Generado: ${hoy}</div>
-      <div style="color:#EF9F27;font-weight:600;font-size:10px;margin-top:2px">INFORMACIÓN CONFIDENCIAL Y PRIVILEGIADA</div>
-    </div>
-  </div>
-  ${tendencias.length?`<div class="tend"><div class="tend-title">Tendencias vs primer escenario</div>${tendencias.map(t=>'<div class="tend-item">'+t+'</div>').join('')}</div>`:''}
-  <table>
-    <thead><tr>${cols.map((c,i)=>'<th'+(i>1&&i<12?' class="right"':'')+'>'+c+'</th>').join('')}</tr></thead>
-    <tbody>${rows.map(r=>'<tr>'+r.map((c,ci)=>'<td'+(ci>1&&ci<12?' class="right"':'')+'>'+c+'</td>').join('')+'</tr>').join('')}</tbody>
-  </table>
-  <div class="footer">Escenarios anteriores generados por TaxIA día a día · MSST Consulting SC · Confidencial · ${hoy}</div>
-</div></body></html>`);
-  win.document.close();
-  setTimeout(()=>win.print(),600);
-}
-
-
-/* ===== AVISO DE BIENVENIDA ===== */
-async function mostrarAvisoBienvenida(){
-  const today=todayKey();
-  const email=session.email;
-
-  // Cargar tareas del usuario y sesión anterior en paralelo
-  const [tareas,sesiones]=await Promise.all([
-    sbGet('tareas','?email=eq.'+encodeURIComponent(email)+'&status=in.(pendiente,standby)&select=*&order=created_at.asc'),
-    sbGet('sesiones','?email=eq.'+encodeURIComponent(email)+'&logout_at=not.is.null&order=login_at.desc&limit=2&select=*')
-  ]);
-
-  // Sesión anterior (la penúltima — la última es la actual)
-  const sesAnterior=(sesiones||[])[1]||(sesiones||[])[0]||null;
-  const fechaAnterior=(()=>{
-    if(!sesAnterior)return null;
-    const d=new Date(sesAnterior.login_at);
-    const fecha=d.toLocaleDateString('es-MX',{timeZone:'America/Tijuana',weekday:'short',day:'numeric',month:'short'});
-    const hora=d.toLocaleTimeString('es-MX',{timeZone:'America/Tijuana',hour:'2-digit',minute:'2-digit'});
-    return fecha+' · '+hora;
-  })();
-  const durAnterior=sesAnterior&&sesAnterior.duracion_min?(sesAnterior.duracion_min>=60?Math.floor(sesAnterior.duracion_min/60)+'h '+(sesAnterior.duracion_min%60)+'min':sesAnterior.duracion_min+' min'):null;
-
-  // Clasificar tareas
-  const tareasData=tareas||[];
-  const vencidas=tareasData.filter(t=>{
-    if(t.status!=='pendiente')return false;
-    const fc=t.fecha_creacion||t.created_at?.slice(0,10);
-    return fc&&fc<today;
-  });
-  const hoy=tareasData.filter(t=>{
-    const fc=t.fecha_creacion||t.created_at?.slice(0,10);
-    return fc&&fc===today&&t.status==='pendiente';
-  });
-  const standby=tareasData.filter(t=>t.status==='standby').slice(0,2);
-
-  // Tareas prioritarias para mostrar (vencidas primero, luego hoy, luego standby)
-  const prioritarias=[...vencidas,...hoy,...standby].slice(0,5);
-
-  if(!prioritarias.length&&!sesAnterior){
-    // Sin tareas ni sesión anterior — ir directo
-    if(session.role==='assistant') renderMisPlan();
-    else renderDashboard(today);
-    return;
-  }
-
-  // Renderizar la pantalla de fondo primero
-  if(session.role==='assistant') renderMisPlan();
-  else renderDashboard(today);
-
-  // Crear el overlay del aviso
-  const overlay=document.createElement('div');
-  overlay.id='aviso-bienvenida';
-  overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:8000;display:flex;align-items:center;justify-content:center;padding:1rem;animation:fadeInAviso .25s ease';
-
-  const hora=new Date().getHours();
-  const saludo=hora<12?'Buenos días':hora<19?'Buenas tardes':'Buenas noches';
-  const u=usersCache[email]||session;
-
-  // Filas de tareas
-  const taskRows=prioritarias.map(t=>{
-    const fc=t.fecha_creacion||t.created_at?.slice(0,10)||'';
-    const esVencida=t.status==='pendiente'&&fc&&fc<today;
-    const esHoy=fc===today;
-    const esSB=t.status==='standby';
-    const dotColor=esVencida?'#E24B4A':esHoy?'#EF9F27':'#378ADD';
-    const badgeStyle=esVencida?'background:#FCEBEB;color:#A32D2D':esHoy?'background:#FAEEDA;color:#854F0B':'background:#E6F1FB;color:#185FA5';
-    const badgeLabel=esVencida?'Vencida':esHoy?'Hoy':'Stand By';
-    const diasVenc=esVencida&&fc?Math.round((new Date(today)-new Date(fc))/(86400000)):0;
-    const meta=esVencida?'Vencida hace '+diasVenc+' día'+(diasVenc!==1?'s':''):esSB?'Stand By pendiente':'Vence hoy';
-    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:0.5px solid #e5e5e0">'+
-      '<div style="width:7px;height:7px;border-radius:50%;background:'+dotColor+';flex-shrink:0;margin-top:5px"></div>'+
-      '<div style="flex:1;min-width:0">'+
-        '<div style="font-size:13px;color:#1a1a1a;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escH(t.descripcion)+'</div>'+
-        '<div style="font-size:11px;color:#888;margin-top:2px">'+meta+(t.client_name?' · '+escH(t.client_name):'')+'</div>'+
-      '</div>'+
-      '<span style="'+badgeStyle+';padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;flex-shrink:0">'+badgeLabel+'</span>'+
-    '</div>';
-  }).join('');
-
-  const pillsHtml=
-    (vencidas.length?'<span style="background:#FCEBEB;color:#A32D2D;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600">'+vencidas.length+' vencida'+(vencidas.length!==1?'s':'')+'</span>':'')+
-    (hoy.length?'<span style="background:#FAEEDA;color:#854F0B;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;margin-left:4px">'+hoy.length+' para hoy</span>':'')+
-    (standby.length?'<span style="background:#E6F1FB;color:#185FA5;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;margin-left:4px">'+standby.length+' en stand by</span>':'');
-
-  overlay.innerHTML=
-    '<div style="background:#fff;border-radius:12px;width:100%;max-width:480px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.18)">'+
-      '<div style="background:#3B4BC8;padding:16px 20px;display:flex;align-items:flex-start;justify-content:space-between">'+
-        '<div>'+
-          '<div style="font-size:12px;color:rgba(255,255,255,.75);margin-bottom:2px">'+saludo+' — '+new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',weekday:'long',day:'numeric',month:'long'})+'</div>'+
-          '<div style="font-size:17px;font-weight:600;color:#fff">'+escH(u.name||email)+'</div>'+
-        '</div>'+
-        '<button onclick="cerrarAviso()" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.15);border:none;cursor:pointer;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center">✕</button>'+
-      '</div>'+
-      (sesAnterior?
-        '<div style="background:#2d3db0;padding:8px 20px;display:flex;gap:20px;flex-wrap:wrap">'+
-          '<div style="font-size:11px;color:rgba(255,255,255,.85);display:flex;align-items:center;gap:5px">'+
-            '<div style="width:6px;height:6px;border-radius:50%;background:#8DC63F"></div>'+
-            'Última sesión: '+fechaAnterior+
-          '</div>'+
-          (durAnterior?'<div style="font-size:11px;color:rgba(255,255,255,.85)">⏱ Duración: '+durAnterior+'</div>':'')+
-        '</div>':'')+
-      '<div style="padding:16px 20px">'+
-        (pillsHtml?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">'+pillsHtml+'</div>':'')+
-        (prioritarias.length?
-          '<div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Tareas que requieren atención</div>'+
-          '<div>'+taskRows+'</div>':
-          '<div style="text-align:center;padding:12px 0;color:#888;font-size:13px">Sin tareas pendientes. ¡Buen trabajo!</div>')+
-      '</div>'+
-      '<div style="padding:12px 20px;border-top:0.5px solid #e5e5e0;display:flex;justify-content:space-between;align-items:center">'+
-        '<span id="aviso-countdown" style="font-size:11px;color:#888">Se cierra en 15 seg</span>'+
-        '<button onclick="cerrarAviso()" style="background:#3B4BC8;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer">Entrar al dashboard</button>'+
-      '</div>'+
-    '</div>';
-
-  // Agregar CSS de animación
-  const style=document.createElement('style');
-  style.textContent='@keyframes fadeInAviso{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}';
-  document.head.appendChild(style);
-  document.body.appendChild(overlay);
-
-  // Countdown de 15 segundos
-  let secs=15;
-  const countdown=setInterval(()=>{
-    secs--;
-    const el=document.getElementById('aviso-countdown');
-    if(el) el.textContent='Se cierra en '+secs+' seg';
-    if(secs<=0){clearInterval(countdown);cerrarAviso();}
-  },1000);
-  overlay._countdown=countdown;
-}
-
-function cerrarAviso(){
-  const overlay=document.getElementById('aviso-bienvenida');
-  if(overlay){
-    if(overlay._countdown) clearInterval(overlay._countdown);
-    overlay.style.animation='fadeOutAviso .2s ease forwards';
-    const style=document.createElement('style');
-    style.textContent='@keyframes fadeOutAviso{to{opacity:0;transform:scale(.96)}}';
-    document.head.appendChild(style);
-    setTimeout(()=>overlay.remove(),200);
-  }
-}
-
-
-
-/* ===== HISTORIAL DE CIERRE FISCAL ===== */
-let cierresCache=[];
-
-async function renderCierres(){
-  app.innerHTML=renderTopNav('proyeccion')+`
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
-    <div style="display:flex;gap:4px;border-bottom:0.5px solid #e5e5e0;padding-bottom:0;margin-bottom:0">
-      <button onclick="renderProyeccion()" style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-1px">Proyecciones</button>
-      <button onclick="renderCierres()" style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;color:#3B4BC8;border-bottom:2px solid #3B4BC8;font-weight:600;margin-bottom:-1px">Historial de cierre</button>
-    </div>
-    <button class="btn btn-primary btn-sm" onclick="renderNuevoCierre()">+ Nuevo cierre</button>
-  </div>
-  <div class="loading" id="cfl"><span class="spinner"></span>Cargando...</div>
-  <div id="cf-body"></div>`;
-
-  const data=await sbGet('pf_cierres','?select=*&order=ejercicio.desc,cliente_nombre.asc');
-  cierresCache=data||[];
-  document.getElementById('cfl').style.display='none';
-  renderCierresList();
-}
-
-function renderCierresList(){
-  const el=document.getElementById('cf-body');if(!el)return;
-  if(!cierresCache.length){
-    el.innerHTML='<div class="card"><div style="font-size:14px;color:#888;text-align:center;padding:1rem">Sin cierres registrados. Crea el primero con "+ Nuevo cierre".</div></div>';
-    return;
-  }
-
-  // Agrupar por cliente
-  const porCliente={};
-  cierresCache.forEach(c=>{
-    if(!porCliente[c.cliente_nombre])porCliente[c.cliente_nombre]=[];
-    porCliente[c.cliente_nombre].push(c);
-  });
-
-  let html='';
-  Object.entries(porCliente).sort((a,b)=>a[0].localeCompare(b[0],'es')).forEach(([cli,cierres])=>{
-    html+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">'+escH(cli)+'</div>';
-    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:1rem">';
-    cierres.sort((a,b)=>b.ejercicio-a.ejercicio).forEach(c=>{
-      const tieneData=c.ingresos_acumulables!==null;
-      const badgeBg=tieneData?'#EAF3DE':'#F1EFE8';
-      const badgeColor=tieneData?'#3B6D11':'#5F5E5A';
-      const badgeLabel=tieneData?'Completo':'Sin datos';
-      html+='<div style="background:var(--color-background-secondary);border-radius:8px;padding:12px;cursor:pointer;border:0.5px solid var(--color-border-tertiary)" onclick="renderDetalleCierre(\''+c.id+'\')">'+
-        '<div style="font-size:18px;font-weight:600;color:var(--color-text-primary);margin-bottom:2px">'+c.ejercicio+'</div>'+
-        '<div style="font-size:11px;color:#888;margin-bottom:6px">Ejercicio cerrado</div>'+
-        (tieneData?'<div style="font-size:12px;font-weight:500;color:#3B4BC8">'+fmtMXN(c.isr_a_cargo>0?c.isr_a_cargo:c.saldo_favor)+'</div>'+
-          '<div style="font-size:10px;color:#888">'+(c.isr_a_cargo>0?'ISR a cargo':'Saldo a favor')+'</div>':'')+
-        '<div style="display:inline-block;font-size:9px;padding:2px 7px;border-radius:999px;font-weight:500;margin-top:6px;background:'+badgeBg+';color:'+badgeColor+'">'+badgeLabel+'</div>'+
-      '</div>';
+      if(m.pdf_er){document.getElementById('ms-er-url').value=m.pdf_er;document.getElementById('ms-er-nombre').value=m.pdf_er_nombre||'';msUpdateStatus('er',m.pdf_er_nombre||'ER.pdf');}
+      if(m.pdf_balance){document.getElementById('ms-bg-url').value=m.pdf_balance;document.getElementById('ms-bg-nombre').value=m.pdf_balance_nombre||'';msUpdateStatus('bg',m.pdf_balance_nombre||'Balance.pdf');}
+      if(m.pdf_balanza){document.getElementById('ms-bc-url').value=m.pdf_balanza;document.getElementById('ms-bc-nombre').value=m.pdf_balanza_nombre||'';msUpdateStatus('bc',m.pdf_balanza_nombre||'Balanza.pdf');}
     });
-    html+='</div>';
-  });
-  el.innerHTML=html;
-}
-
-async function renderNuevoCierre(id){
-  const editing=id?cierresCache.find(c=>c.id===id):null;
-  const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+'</option>').join('');
-  const anioActual=new Date().getFullYear();
-  const anios=[anioActual-4,anioActual-3,anioActual-2,anioActual-1,anioActual];
-  const anioOpts=anios.map(y=>'<option value="'+y+'"'+(editing?editing.ejercicio===y?' selected':'':y===anioActual-1?' selected':'')+'>'+y+'</option>').join('');
-
-  app.innerHTML=renderTopNav('proyeccion')+`
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
-    <button class="btn btn-sm" onclick="renderCierres()">← Cierres</button>
-    <div style="font-size:15px;font-weight:600">${editing?'Editar cierre fiscal':'Nuevo cierre fiscal'}</div>
-  </div>
-  <div class="card">
-    <div class="sec-label" style="margin-bottom:12px">Datos generales</div>
-    <div class="grid2" style="margin-bottom:12px">
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Cliente *</div>
-        <select id="cf-cliente" style="width:100%" onchange="cfSetCliente(this)">${cliOpts}</select>
-        <input type="hidden" id="cf-cli-nombre" value="${escH(editing?.cliente_nombre||'')}">
-      </div>
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Ejercicio *</div>
-        <select id="cf-ejercicio" style="width:100%">${anioOpts}</select></div>
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Tasa ISR (%)</div>
-        <input id="cf-tasa" type="number" value="${editing?.tasa_isr||30}" min="0" max="100" step="0.01"></div>
-    </div>
-
-    <div class="sec-label" style="margin-bottom:10px">Estado de Resultados — Cifras anuales</div>
-    <div class="grid2" style="margin-bottom:12px">
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Ingresos acumulables</div>
-        <input id="cf-ing" type="number" placeholder="0.00" value="${editing?.ingresos_acumulables||''}"></div>
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Costo de ventas</div>
-        <input id="cf-cv" type="number" placeholder="0.00" value="${editing?.costo_ventas||''}"></div>
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Gastos de operación</div>
-        <input id="cf-go" type="number" placeholder="0.00" value="${editing?.gastos_operacion||''}"></div>
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Otros ingresos</div>
-        <input id="cf-oi" type="number" placeholder="0.00" value="${editing?.otros_ingresos||''}"></div>
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Otros gastos</div>
-        <input id="cf-og" type="number" placeholder="0.00" value="${editing?.otros_gastos||''}"></div>
-    </div>
-
-    <div class="sec-label" style="margin-bottom:10px">Pagos provisionales</div>
-    <div style="margin-bottom:12px">
-      <div style="font-size:12px;color:#888;margin-bottom:4px">Total pagos provisionales realizados en el ejercicio</div>
-      <input id="cf-pp" type="number" placeholder="0.00" value="${editing?.pagos_provisionales||''}">
-    </div>
-
-    <div style="margin-bottom:12px">
-      <div style="font-size:12px;color:#888;margin-bottom:4px">Notas</div>
-      <input id="cf-notas" type="text" placeholder="Observaciones del cierre..." value="${escH(editing?.notas||'')}">
-    </div>
-
-    <input type="hidden" id="cf-editing" value="${editing?.id||''}">
-    <div class="err-msg" id="cf-err"></div>
-    <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="saveCierre()">${editing?'Actualizar cierre':'Guardar cierre'}</button>
-  </div>`;
-}
-
-function cfSetCliente(sel){
-  const opt=sel.options[sel.selectedIndex];
-  const nombre=opt?.dataset?.nombre||opt?.text||'';
-  const el=document.getElementById('cf-cli-nombre');
-  if(el) el.value=nombre;
-}
-
-async function saveCierre(){
-  const cliSel=document.getElementById('cf-cliente');
-  const cliente_id=cliSel.value||null;
-  const cliente_nombre=document.getElementById('cf-cli-nombre').value||(cliSel.selectedIndex>0?cliSel.options[cliSel.selectedIndex]?.dataset?.nombre||cliSel.options[cliSel.selectedIndex]?.text||'':'');
-  const ejercicio=parseInt(document.getElementById('cf-ejercicio').value);
-  const tasa_isr=parseFloat(document.getElementById('cf-tasa').value)||30;
-  const ingresos_acumulables=parseFloat(document.getElementById('cf-ing').value)||0;
-  const costo_ventas=parseFloat(document.getElementById('cf-cv').value)||0;
-  const gastos_operacion=parseFloat(document.getElementById('cf-go').value)||0;
-  const otros_ingresos=parseFloat(document.getElementById('cf-oi').value)||0;
-  const otros_gastos=parseFloat(document.getElementById('cf-og').value)||0;
-  const pagos_provisionales=parseFloat(document.getElementById('cf-pp').value)||0;
-  const notas=document.getElementById('cf-notas').value.trim()||null;
-  const editing=document.getElementById('cf-editing').value;
-  const err=document.getElementById('cf-err');err.style.display='none';
-
-  if(!cliente_nombre||!ejercicio){err.textContent='Cliente y ejercicio son obligatorios.';err.style.display='block';return;}
-
-  // Calcular automáticamente
-  const utilidad_contable=ingresos_acumulables-costo_ventas-gastos_operacion+otros_ingresos-otros_gastos;
-
-  // Obtener ajustes si existe el cierre
-  let total_sumas=0,total_restas=0;
-  if(editing){
-    const ajustes=await sbGet('pf_cierres_ajustes','?cierre_id=eq.'+editing+'&select=*');
-    total_sumas=(ajustes||[]).filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
-    total_restas=(ajustes||[]).filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   }
+}
 
-  const utilidad_fiscal=utilidad_contable+total_sumas-total_restas;
-  const isr_causado=utilidad_fiscal>0?utilidad_fiscal*(tasa_isr/100):0;
-  const isr_a_cargo=Math.max(0,isr_causado-pagos_provisionales);
-  const saldo_favor=Math.max(0,pagos_provisionales-isr_causado);
-  const cu=ingresos_acumulables>0?(utilidad_fiscal/ingresos_acumulables*100):0;
+function msPDFBox(tipo,label){
+  return '<div style="background:#f5f5f3;border-radius:8px;padding:10px;margin-bottom:8px">'+
+    '<div style="font-size:12px;font-weight:600;margin-bottom:5px">&#128196; '+label+'</div>'+
+    '<div id="ms-'+tipo+'-status" style="font-size:11px;color:#888;margin-bottom:5px">Sin documento</div>'+
+    '<div style="display:flex;gap:6px">'+
+      '<input type="file" id="ms-'+tipo+'-file" accept=".pdf" style="display:none">'+
+      '<button class="btn btn-sm btn-primary" id="ms-'+tipo+'-btn" style="flex:1">&#128206; Subir PDF</button>'+
+      '<button id="ms-'+tipo+'-extract" class="btn btn-sm" style="background:#f0f7d4;color:#5a8a1a;border-color:#c5e0a0;display:none">&#10024; Extraer cifras</button>'+
+    '</div>'+
+  '</div>';
+}
 
-  const payload={cliente_id,cliente_nombre,ejercicio,tasa_isr,ingresos_acumulables,costo_ventas,gastos_operacion,otros_ingresos,otros_gastos,utilidad_contable,total_sumas,total_restas,utilidad_fiscal,isr_causado,pagos_provisionales,isr_a_cargo,saldo_favor,cu,notas,updated_at:nowISO()};
+function msUpdateStatus(tipo,nombre){
+  const s=document.getElementById('ms-'+tipo+'-status');
+  const e=document.getElementById('ms-'+tipo+'-extract');
+  if(s) s.innerHTML='<span style="color:#5a8a1a">&#10003; '+escH(nombre)+'</span>';
+  if(e){e.style.display='inline-flex';e.onclick=()=>extraerCifrasPDF(tipo);}
+}
 
-  if(editing){
-    await sbPatch('pf_cierres','?id=eq.'+editing,payload);
-  } else {
-    await sbPost('pf_cierres',payload,'return=minimal');
+document.addEventListener('click',function(e){
+  const btn=e.target.closest('[id^="ms-"][id$="-btn"]');
+  if(btn){
+    const tipo=btn.id.replace('ms-','').replace('-btn','');
+    const fileInput=document.getElementById('ms-'+tipo+'-file');
+    if(fileInput){fileInput.onchange=function(){handlePDFUpload(this,tipo);};fileInput.click();}
   }
+});
 
-  const updated=await sbGet('pf_cierres','?select=*&order=ejercicio.desc,cliente_nombre.asc');
-  cierresCache=updated||[];
-  renderCierres();
+function switchMesTab(tab){
+  const cifras=document.getElementById('panel-cifras');
+  const docs=document.getElementById('panel-docs');
+  const tCifras=document.getElementById('tab-cifras');
+  const tDocs=document.getElementById('tab-docs');
+  if(!cifras||!docs)return;
+  if(tab==='cifras'){
+    cifras.style.display='';docs.style.display='none';
+    tCifras.style.cssText='padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#3B4BC8;border-bottom:2px solid #3B4BC8;font-weight:600';
+    tDocs.style.cssText='padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent';
+  }else{
+    cifras.style.display='none';docs.style.display='';
+    tDocs.style.cssText='padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#3B4BC8;border-bottom:2px solid #3B4BC8;font-weight:600';
+    tCifras.style.cssText='padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent';
+  }
 }
 
-async function renderDetalleCierre(id){
-  const cierre=cierresCache.find(c=>c.id===id);if(!cierre)return;
-
-  app.innerHTML=renderTopNav('proyeccion')+`
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
-    <button class="btn btn-sm" onclick="renderCierres()">← Cierres</button>
-    <div style="font-size:15px;font-weight:600;flex:1">${escH(cierre.cliente_nombre)} — Ejercicio ${cierre.ejercicio}</div>
-    <button class="btn btn-sm btn-purple" onclick="renderNuevoCierre('${id}')">✏️ Editar</button>
-    <button class="btn btn-sm btn-purple" onclick="agregarAjusteCierre('${id}','suma')" style="background:#f0f7d4;color:#5a8a1a;border-color:#c5e0a0">+ Ingreso acumulable</button>
-    <button class="btn btn-sm btn-danger" onclick="agregarAjusteCierre('${id}','resta')" style="font-size:11px">+ Deducción</button>
-    <button class="btn btn-sm btn-danger" onclick="deleteCierre('${id}')">🗑</button>
-  </div>
-  <div class="loading" id="cfd-l"><span class="spinner"></span>Cargando...</div>
-  <div id="cfd-body"></div>`;
-
-  const ajustes=await sbGet('pf_cierres_ajustes','?cierre_id=eq.'+id+'&select=*&order=tipo.asc,id.asc');
-  document.getElementById('cfd-l').style.display='none';
-
-  const aj=ajustes||[];
-  const total_sumas=aj.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
-  const total_restas=aj.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
-  const utilidad_contable=parseFloat(cierre.ingresos_acumulables||0)-parseFloat(cierre.costo_ventas||0)-parseFloat(cierre.gastos_operacion||0)+parseFloat(cierre.otros_ingresos||0)-parseFloat(cierre.otros_gastos||0);
-  const utilidad_fiscal=utilidad_contable+total_sumas-total_restas;
-  const isr_causado=utilidad_fiscal>0?utilidad_fiscal*(cierre.tasa_isr/100):0;
-  const pp=parseFloat(cierre.pagos_provisionales||0);
-  const isr_a_cargo=Math.max(0,isr_causado-pp);
-  const saldo_favor=Math.max(0,pp-isr_causado);
-  const cu=parseFloat(cierre.ingresos_acumulables||0)>0?(utilidad_fiscal/parseFloat(cierre.ingresos_acumulables)*100):0;
-  const cobertura=isr_causado>0?(pp/isr_causado*100):0;
-
-  // Ajustes rows
-  const ajRows=aj.length?aj.map(a=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:0.5px solid #f0f0ec">'+
-    '<span style="background:'+(a.tipo==='suma'?'#EAF3DE':'#FCEBEB')+';color:'+(a.tipo==='suma'?'#3B6D11':'#A32D2D')+';font-size:9px;padding:2px 7px;border-radius:999px;font-weight:600;flex-shrink:0">'+(a.tipo==='suma'?'Acumulable':'Deducible')+'</span>'+
-    '<div style="flex:1;font-size:12px;font-weight:500;color:var(--color-text-primary)">'+escH(a.concepto)+'</div>'+
-    '<div style="font-size:10px;color:#888">'+escH(a.referencia_legal||'')+'</div>'+
-    (a.notas?'<div style="font-size:10px;color:#888;font-style:italic">'+escH(a.notas)+'</div>':'')+
-    '<div style="font-size:12px;font-weight:600;color:'+(a.tipo==='suma'?'#3B6D11':'#A32D2D')+';min-width:80px;text-align:right">'+fmtMXN(a.importe)+'</div>'+
-    '<button class="btn btn-sm" style="font-size:10px;padding:2px 6px" onclick="editarAjusteCierre(\''+a.id+'\',\''+id+'\')">✏️</button>'+
-  '</div>').join(''):'<div style="font-size:13px;color:#bbb;padding:8px 0">Sin ajustes registrados.</div>';
-
-  // Barra comparativa PP vs ISR
-  const pctPP=isr_causado>0?Math.min(100,(pp/isr_causado*100)):0;
-  const barPP='<div style="background:var(--color-background-secondary);border-radius:8px;padding:12px;margin-bottom:12px">'+
-    '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Pagos provisionales vs ISR causado</div>'+
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">'+
-      '<div style="font-size:11px;color:#888;width:80px;text-align:right;flex-shrink:0">ISR causado</div>'+
-      '<div style="flex:1;background:#f0f0ec;border-radius:3px;height:14px;overflow:hidden"><div style="width:100%;height:100%;background:#E24B4A;border-radius:3px"></div></div>'+
-      '<div style="font-size:11px;font-weight:600;color:#A32D2D;min-width:80px;text-align:right">'+fmtMXN(isr_causado)+'</div>'+
-    '</div>'+
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'+
-      '<div style="font-size:11px;color:#888;width:80px;text-align:right;flex-shrink:0">PP pagados</div>'+
-      '<div style="flex:1;background:#f0f0ec;border-radius:3px;height:14px;overflow:hidden"><div style="width:'+pctPP.toFixed(0)+'%;height:100%;background:#3B4BC8;border-radius:3px"></div></div>'+
-      '<div style="font-size:11px;font-weight:600;color:#3B4BC8;min-width:80px;text-align:right">'+fmtMXN(pp)+'</div>'+
-    '</div>'+
-    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'+
-      '<div style="font-size:11px;color:#888">Cobertura: <strong style="color:#3B4BC8">'+cobertura.toFixed(1)+'%</strong></div>'+
-      '<div style="background:'+(isr_a_cargo>0?'#FCEBEB':'#EAF3DE')+';color:'+(isr_a_cargo>0?'#A32D2D':'#3B6D11')+';padding:6px 14px;border-radius:999px;font-size:12px;font-weight:600">'+
-        (isr_a_cargo>0?'ISR a cargo: '+fmtMXN(isr_a_cargo):'Saldo a favor: '+fmtMXN(saldo_favor))+
-      '</div>'+
-    '</div>'+
-  '</div>';
-
-  document.getElementById('cfd-body').innerHTML=
-  // KPIs
-  '<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:1rem">'+
-    '<div class="metric" style="border-left:3px solid #3B4BC8"><div class="metric-label">Ingresos acumulables</div><div class="metric-val" style="font-size:13px;color:#3B4BC8">'+fmtMXN(cierre.ingresos_acumulables)+'</div></div>'+
-    '<div class="metric" style="border-left:3px solid #EF9F27"><div class="metric-label">Utilidad contable</div><div class="metric-val" style="font-size:13px;color:#92400E">'+fmtMXN(utilidad_contable)+'</div></div>'+
-    '<div class="metric" style="border-left:3px solid #8DC63F"><div class="metric-label">Utilidad fiscal</div><div class="metric-val" style="font-size:13px;color:'+(utilidad_fiscal>=0?'#5a8a1a':'#dc2626')+'">'+fmtMXN(utilidad_fiscal)+'</div></div>'+
-    '<div class="metric" style="border-left:3px solid #dc2626"><div class="metric-label">ISR causado ('+cierre.tasa_isr+'%)</div><div class="metric-val" style="font-size:13px;color:#dc2626">'+fmtMXN(isr_causado)+'</div></div>'+
-    '<div class="metric" style="border-left:3px solid '+(isr_a_cargo>0?'#dc2626':'#8DC63F')+'"><div class="metric-label">'+(isr_a_cargo>0?'ISR a cargo':'Saldo a favor')+'</div><div class="metric-val" style="font-size:13px;color:'+(isr_a_cargo>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isr_a_cargo>0?isr_a_cargo:saldo_favor)+'</div></div>'+
-  '</div>'+
-  // ER
-  '<div class="card" style="margin-bottom:1rem">'+
-    '<div class="sec-label" style="margin-bottom:10px">Estado de Resultados — Ejercicio '+cierre.ejercicio+'</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
-      '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Ingresos acumulables</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.ingresos_acumulables)+'</div></div>'+
-      '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Costo de ventas</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.costo_ventas)+'</div></div>'+
-      '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Gastos de operación</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.gastos_operacion)+'</div></div>'+
-      '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Otros ingresos</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.otros_ingresos)+'</div></div>'+
-      '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Otros gastos</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.otros_gastos)+'</div></div>'+
-      '<div style="background:#EEEDFE;border-radius:6px;padding:8px"><div style="font-size:11px;color:#3B4BC8">Utilidad neta contable</div><div style="font-size:14px;font-weight:600;color:#3B4BC8">'+fmtMXN(utilidad_contable)+'</div></div>'+
-    '</div>'+
-  '</div>'+
-  // Conciliación
-  '<div class="card" style="margin-bottom:1rem">'+
-    '<div class="sec-label" style="margin-bottom:10px">Conciliación contable-fiscal — Art. 9 LISR</div>'+
-    ajRows+
-    '<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid #e5e5e0">'+
-      '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px"><span style="color:#888">Utilidad contable base</span><span style="font-weight:600">'+fmtMXN(utilidad_contable)+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px"><span style="color:#5a8a1a">+ Ajustes acumulables</span><span style="font-weight:600;color:#5a8a1a">'+fmtMXN(total_sumas)+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px"><span style="color:#dc2626">- Ajustes deducibles</span><span style="font-weight:600;color:#dc2626">('+fmtMXN(total_restas)+')</span></div>'+
-      '<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;font-weight:700;border-top:0.5px solid #e5e5e0;margin-top:4px"><span style="color:#3B4BC8">= Utilidad fiscal del ejercicio</span><span style="color:'+(utilidad_fiscal>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidad_fiscal)+'</span></div>'+
-    '</div>'+
-  '</div>'+
-  // PP vs ISR
-  '<div class="card" style="margin-bottom:1rem">'+
-    '<div class="sec-label" style="margin-bottom:10px">Pagos provisionales vs ISR causado</div>'+
-    barPP+
-    '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px">'+
-      '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:3px">ISR causado</div><div style="font-size:14px;font-weight:600;color:#dc2626">'+fmtMXN(isr_causado)+'</div></div>'+
-      '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:3px">PP realizados</div><div style="font-size:14px;font-weight:600;color:#3B4BC8">'+fmtMXN(pp)+'</div></div>'+
-      '<div style="background:'+(isr_a_cargo>0?'#fef2f2':'#f0f7d4')+';border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:3px">'+(isr_a_cargo>0?'ISR a cargo':'Saldo a favor')+'</div><div style="font-size:14px;font-weight:600;color:'+(isr_a_cargo>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isr_a_cargo>0?isr_a_cargo:saldo_favor)+'</div></div>'+
-    '</div>'+
-  '</div>'+
-  // CU
-  '<div class="card">'+
-    '<div class="sec-label" style="margin-bottom:10px">Coeficiente de utilidad — Art. 14 LISR</div>'+
-    '<div style="background:#EEEDFE;border-radius:8px;padding:14px">'+
-      '<div style="font-size:12px;color:#3B4BC8;line-height:1.8">'+
-        '<strong>Procedimiento:</strong><br>'+
-        '1. Utilidad fiscal del ejercicio '+cierre.ejercicio+': '+fmtMXN(utilidad_fiscal)+'<br>'+
-        '2. Ingresos nominales del ejercicio '+cierre.ejercicio+': '+fmtMXN(cierre.ingresos_acumulables)+'<br>'+
-        '3. CU = '+fmtMXN(utilidad_fiscal)+' ÷ '+fmtMXN(cierre.ingresos_acumulables)+' = <strong>'+cu.toFixed(2)+'%</strong><br>'+
-        '<span style="font-size:11px;color:#3B4BC8;opacity:.8">Aplicable para pagos provisionales del ejercicio '+(cierre.ejercicio+1)+'</span>'+
-      '</div>'+
-      '<div style="font-size:28px;font-weight:700;color:#3B4BC8;margin-top:8px">'+cu.toFixed(2)+'%</div>'+
-    '</div>'+
-  '</div>';
+async function handlePDFUpload(input,tipo){
+  const file=input.files[0];if(!file)return;
+  const proyId=document.getElementById('ms-proy-id').value;
+  const mes=document.getElementById('ms-mes').value;
+  const statusEl=document.getElementById('ms-'+tipo+'-status');
+  statusEl.innerHTML='<span style="color:#3B4BC8">Subiendo...</span>';
+  try{
+    const path=proyId+'/mes-'+mes+'/'+tipo+'-'+Date.now()+'.pdf';
+    const res=await fetch(SB_URL+'/storage/v1/object/financieros/'+path,{
+      method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/pdf','x-upsert':'true'},body:file
+    });
+    if(!res.ok) throw new Error('Error '+res.status);
+    const url=SB_URL+'/storage/v1/object/public/financieros/'+path;
+    document.getElementById('ms-'+tipo+'-url').value=url;
+    document.getElementById('ms-'+tipo+'-nombre').value=file.name;
+    msUpdateStatus(tipo,file.name);
+  }catch(e){statusEl.innerHTML='<span style="color:#dc2626">Error: '+e.message+'</span>';}
 }
 
-async function agregarAjusteCierre(cierreId,tipoDefault){
-  document.getElementById('modal-ajuste-cierre')?.remove();
-  const sugerencias=tipoDefault==='suma'?
-    ['Ingresos acumulables no contabilizados (LISR Art. 16)','Ajuste anual por inflación acumulable (LISR Art. 44-46)','Utilidad por enajenación de activos (LISR Art. 18)','Ganancia cambiaria (LISR Art. 20)','Otros ingresos acumulables']:
-    ['Depreciación fiscal adicional (LISR Art. 31-38)','Ajuste anual por inflación deducible (LISR Art. 44-46)','PTU pagada deducible (LISR Art. 25 Fr. III)','Pérdida por enajenación de activos (LISR Art. 25 Fr. IV)','Deducción inmediata (LISR Art. 220)','Gastos no deducibles a revertir','Otras deducciones autorizadas'];
-  const sugerOpts='<option value="">Elige sugerencia o escribe abajo...</option>'+sugerencias.map(s=>'<option value="'+escH(s)+'">'+escH(s)+'</option>').join('');
-
-  const overlay=document.createElement('div');
-  overlay.className='modal-overlay';
-  overlay.id='modal-ajuste-cierre';
-  overlay.innerHTML='<div class="modal-box">'+
-    '<div class="modal-title">'+(tipoDefault==='suma'?'Agregar ingreso acumulable':'Agregar deducción')+'</div>'+
-    '<div style="margin-bottom:8px"><div style="font-size:11px;color:#888;margin-bottom:3px">Sugerencias frecuentes</div>'+
-      '<select id="ajc-suger" style="width:100%" onchange="cfFillSuger(this)">'+sugerOpts+'</select></div>'+
-    '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto (editable) *</div>'+
-      '<input id="ajc-concepto" type="text" placeholder="Escribe o edita el concepto..." style="width:100%"></div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Tipo</div>'+
-        '<select id="ajc-tipo" style="width:100%">'+
-          '<option value="suma"'+(tipoDefault==='suma'?' selected':'')+'>Acumulable</option>'+
-          '<option value="resta"'+(tipoDefault==='resta'?' selected':'')+'>Deducible</option>'+
-        '</select></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Importe</div>'+
-        '<input id="ajc-importe" type="number" placeholder="0.00"></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
-        '<input id="ajc-ref" type="text" placeholder="LISR Art. ..."></div>'+
-    '</div>'+
-    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas</div>'+
-      '<input id="ajc-notas" type="text" placeholder="Notas adicionales"></div>'+
-    '<input type="hidden" id="ajc-cierre-id" value="'+cierreId+'">'+
-    '<div style="display:flex;gap:8px">'+
-      '<button class="btn btn-full" onclick="document.getElementById(\'modal-ajuste-cierre\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="guardarAjusteCierre()" style="flex:1;margin-top:0">Guardar</button>'+
-    '</div>'+
-  '</div>';
-  document.body.appendChild(overlay);
+async function extraerCifrasPDF(tipo){
+  const url=document.getElementById('ms-'+tipo+'-url').value;
+  if(!url)return;
+  const statusEl=document.getElementById('ms-extract-status');
+  statusEl.style.display='block';statusEl.style.background='#EEEDFE';statusEl.style.color='#3B4BC8';
+  statusEl.textContent='Analizando PDF con Claude...';
+  try{
+    const res=await fetch(url);
+    const blob=await res.blob();
+    const base64=await new Promise(resolve=>{
+      const reader=new FileReader();
+      reader.onloadend=()=>resolve(reader.result.split(',')[1]);
+      reader.readAsDataURL(blob);
+    });
+    const prompt=tipo==='er'?
+      'Del Estado de Resultados extrae las cifras en MXN. Responde SOLO con JSON sin markdown: {"ingresos":0,"costo_ventas":0,"gastos_operacion":0,"otros_ingresos":0,"otros_gastos":0}':
+      tipo==='bg'?
+      'Del Balance General extrae el activo fijo en MXN. Responde SOLO con JSON sin markdown: {"activo_fijo_bruto":0,"depreciacion_acumulada":0}':
+      'De la Balanza de Comprobacion extrae en MXN. Responde SOLO con JSON sin markdown: {"ingresos":0,"costo_ventas":0,"gastos_operacion":0,"otros_ingresos":0,"otros_gastos":0,"activo_fijo_bruto":0,"depreciacion_acumulada":0}';
+    const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+    const apiRes=await fetch(SB_URL+'/functions/v1/claude-analysis',{
+      method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},
+      body:JSON.stringify({prompt,pdf_base64:base64,pdf_media_type:'application/pdf'})
+    });
+    const data=await apiRes.json();
+    const raw=(data.text||'').replace(/```json|```/g,'').trim();
+    const cifras=JSON.parse(raw);
+    if(cifras.ingresos!==undefined){
+      const flds=[['ms-ing','ingresos'],['ms-cv','costo_ventas'],['ms-go','gastos_operacion'],['ms-oi','otros_ingresos'],['ms-og','otros_gastos']];
+      flds.forEach(([id,key])=>{const el=document.getElementById(id);if(el) el.value=cifras[key]||0;});
+    }
+    if(cifras.activo_fijo_bruto!==undefined){
+      if(document.getElementById('ms-afb')) document.getElementById('ms-afb').value=cifras.activo_fijo_bruto||0;
+      if(document.getElementById('ms-dac')) document.getElementById('ms-dac').value=cifras.depreciacion_acumulada||0;
+    }
+    statusEl.style.background='#f0f7d4';statusEl.style.color='#5a8a1a';
+    statusEl.textContent='Cifras extraidas. Revisa y ajusta si es necesario.';
+    switchMesTab('cifras');
+  }catch(e){
+    statusEl.style.background='#fef2f2';statusEl.style.color='#dc2626';
+    statusEl.textContent='Error: '+e.message+'. Captura manualmente.';
+  }
 }
 
-function cfFillSuger(sel){
-  const val=sel.value;if(!val)return;
-  const inp=document.getElementById('ajc-concepto');
-  if(inp){inp.value=val;sel.value='';}
-}
-
-async function guardarAjusteCierre(){
-  const concepto=document.getElementById('ajc-concepto')?.value.trim();
-  const tipo=document.getElementById('ajc-tipo').value;
-  const importe=parseFloat(document.getElementById('ajc-importe').value)||0;
-  const referencia_legal=document.getElementById('ajc-ref').value.trim()||null;
-  const notas=document.getElementById('ajc-notas').value.trim()||null;
-  const cierreId=document.getElementById('ajc-cierre-id').value;
-  if(!concepto){alert('El concepto es obligatorio.');return;}
-  document.getElementById('modal-ajuste-cierre')?.remove();
-  await sbPost('pf_cierres_ajustes',{cierre_id:cierreId,concepto,tipo,importe,referencia_legal,notas},'return=minimal');
-  // Recalcular y actualizar el cierre
-  await recalcularCierre(cierreId);
-  renderDetalleCierre(cierreId);
-}
-
-async function editarAjusteCierre(ajusteId,cierreId){
-  const data=await sbGet('pf_cierres_ajustes','?id=eq.'+ajusteId+'&select=*');
-  const a=data?.[0];if(!a)return;
-  document.getElementById('modal-ajuste-cierre')?.remove();
-  const overlay=document.createElement('div');
-  overlay.className='modal-overlay';
-  overlay.id='modal-ajuste-cierre';
-  overlay.innerHTML='<div class="modal-box">'+
-    '<div class="modal-title">Editar ajuste</div>'+
-    '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto</div>'+
-      '<input id="ajce-concepto" type="text" value="'+escH(a.concepto||'')+'"></div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Tipo</div>'+
-        '<select id="ajce-tipo" style="width:100%"><option value="suma"'+(a.tipo==='suma'?' selected':'')+'>Acumulable</option><option value="resta"'+(a.tipo==='resta'?' selected':'')+'>Deducible</option></select></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Importe</div>'+
-        '<input id="ajce-importe" type="number" value="'+(a.importe||0)+'"></div>'+
-      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
-        '<input id="ajce-ref" type="text" value="'+escH(a.referencia_legal||'')+'"></div>'+
-    '</div>'+
-    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas</div>'+
-      '<input id="ajce-notas" type="text" value="'+escH(a.notas||'')+'"></div>'+
-    '<input type="hidden" id="ajce-id" value="'+ajusteId+'">'+
-    '<input type="hidden" id="ajce-cierre-id" value="'+cierreId+'">'+
-    '<div style="display:flex;gap:8px">'+
-      '<button class="btn btn-sm btn-danger" onclick="eliminarAjusteCierre(\''+ajusteId+'\',\''+cierreId+'\')" style="margin-top:0">Eliminar</button>'+
-      '<div style="flex:1"></div>'+
-      '<button class="btn btn-full" onclick="document.getElementById(\'modal-ajuste-cierre\').remove()" style="margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="actualizarAjusteCierre()" style="margin-top:0">Guardar</button>'+
-    '</div>'+
-  '</div>';
-  document.body.appendChild(overlay);
-}
-
-async function actualizarAjusteCierre(){
-  const id=document.getElementById('ajce-id').value;
-  const cierreId=document.getElementById('ajce-cierre-id').value;
-  const concepto=document.getElementById('ajce-concepto').value.trim();
-  const tipo=document.getElementById('ajce-tipo').value;
-  const importe=parseFloat(document.getElementById('ajce-importe').value)||0;
-  const referencia_legal=document.getElementById('ajce-ref').value.trim()||null;
-  const notas=document.getElementById('ajce-notas').value.trim()||null;
-  document.getElementById('modal-ajuste-cierre')?.remove();
-  await sbPatch('pf_cierres_ajustes','?id=eq.'+id,{concepto,tipo,importe,referencia_legal,notas});
-  await recalcularCierre(cierreId);
-  renderDetalleCierre(cierreId);
-}
-
-async function eliminarAjusteCierre(ajusteId,cierreId){
-  if(!confirm('¿Eliminar este ajuste?'))return;
-  document.getElementById('modal-ajuste-cierre')?.remove();
-  await sbDelete('pf_cierres_ajustes','?id=eq.'+ajusteId);
-  await recalcularCierre(cierreId);
-  renderDetalleCierre(cierreId);
-}
-
-async function recalcularCierre(cierreId){
-  const cierre=cierresCache.find(c=>c.id===cierreId);if(!cierre)return;
-  const ajustes=await sbGet('pf_cierres_ajustes','?cierre_id=eq.'+cierreId+'&select=*');
-  const aj=ajustes||[];
-  const total_sumas=aj.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
-  const total_restas=aj.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
-  const uc=parseFloat(cierre.ingresos_acumulables||0)-parseFloat(cierre.costo_ventas||0)-parseFloat(cierre.gastos_operacion||0)+parseFloat(cierre.otros_ingresos||0)-parseFloat(cierre.otros_gastos||0);
-  const uf=uc+total_sumas-total_restas;
-  const isr=uf>0?uf*(cierre.tasa_isr/100):0;
-  const pp=parseFloat(cierre.pagos_provisionales||0);
-  const isr_a_cargo=Math.max(0,isr-pp);
-  const saldo_favor=Math.max(0,pp-isr);
-  const cu=parseFloat(cierre.ingresos_acumulables||0)>0?(uf/parseFloat(cierre.ingresos_acumulables)*100):0;
-  await sbPatch('pf_cierres','?id=eq.'+cierreId,{total_sumas,total_restas,utilidad_fiscal:uf,isr_causado:isr,isr_a_cargo,saldo_favor,cu,updated_at:nowISO()});
-  const idx=cierresCache.findIndex(c=>c.id===cierreId);
-  if(idx>=0) cierresCache[idx]={...cierresCache[idx],total_sumas,total_restas,utilidad_fiscal:uf,isr_causado:isr,isr_a_cargo,saldo_favor,cu};
-}
-
-async function deleteCierre(id){
-  const c=cierresCache.find(x=>x.id===id);
-  if(!confirm('¿Eliminar el cierre de '+(c?.cliente_nombre||'este cliente')+' '+( c?.ejercicio||'')+'? No se puede deshacer.'))return;
-  await sbDelete('pf_cierres_ajustes','?cierre_id=eq.'+id);
-  await sbDelete('pf_cierres','?id=eq.'+id);
-  cierresCache=cierresCache.filter(x=>x.id!==id);
-  renderCierres();
-}
-
-
-renderLogin();
-</script>
-</body>
-</html>
