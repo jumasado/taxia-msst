@@ -2879,8 +2879,8 @@ function abrirCapturaMes(proyId,mes,mesId){
   const html='<div class="modal-box" style="max-width:560px;max-height:90vh;overflow-y:auto">'+
     '<div class="modal-title">'+MESES_NOMBRES[mes-1]+' — Captura de datos</div>'+
     '<div style="display:flex;gap:0;border-bottom:0.5px solid #e5e5e0;margin-bottom:14px">'+
-      '<button id="tab-cifras" onclick="switchMesTab('cifras')" style="padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#3B4BC8;border-bottom:2px solid #3B4BC8;font-weight:600">Cifras</button>'+
-      '<button id="tab-docs" onclick="switchMesTab('docs')" style="padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent">Documentos PDF</button>'+
+      '<button id="tab-cifras" onclick="switchMesTab(\'cifras\')" style="padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#3B4BC8;border-bottom:2px solid #3B4BC8;font-weight:600">Cifras</button>'+
+      '<button id="tab-docs" onclick="switchMesTab(\'docs\')" style="padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent">Documentos PDF</button>'+
     '</div>'+
     '<div id="panel-cifras">'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'+
@@ -3037,3 +3037,7 @@ async function extraerCifrasPDF(tipo){
   }
 }
 
+renderLogin();
+</script>
+</body>
+</html>
