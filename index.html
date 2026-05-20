@@ -2708,9 +2708,10 @@ async function renderDetalleProyeccion(id){
   <div class="loading" id="pf-detl"><span class="spinner"></span>Cargando...</div>
   <div id="pf-det-body"></div>`;
 
-  const [meses,ajustes]=await Promise.all([
+  const [meses,ajustes,cierresHist]=await Promise.all([
     sbGet('pf_meses','?proyeccion_id=eq.'+id+'&select=*&order=mes.asc'),
-    sbGet('pf_ajustes','?proyeccion_id=eq.'+id+'&select=*&order=created_at.asc')
+    sbGet('pf_ajustes','?proyeccion_id=eq.'+id+'&select=*&order=created_at.asc'),
+    proy.cliente_id?sbGet('pf_cierres','?cliente_id=eq.'+proy.cliente_id+'&select=*&order=ejercicio.asc'):Promise.resolve([])
   ]);
   document.getElementById('pf-detl').style.display='none';
   // Guardar id para event listeners
@@ -3026,9 +3027,10 @@ async function deleteProyeccion(id){
 async function reporteProyeccionPDF(id){
   const proy=pfCache.find(p=>p.id===id);if(!proy)return;
 
-  const [meses,ajustes]=await Promise.all([
+  const [meses,ajustes,cierresHist]=await Promise.all([
     sbGet('pf_meses','?proyeccion_id=eq.'+id+'&select=*&order=mes.asc'),
-    sbGet('pf_ajustes','?proyeccion_id=eq.'+id+'&select=*&order=created_at.asc')
+    sbGet('pf_ajustes','?proyeccion_id=eq.'+id+'&select=*&order=created_at.asc'),
+    proy.cliente_id?sbGet('pf_cierres','?cliente_id=eq.'+proy.cliente_id+'&select=*&order=ejercicio.asc'):Promise.resolve([])
   ]);
 
   const mesesData=meses||[];
@@ -3437,6 +3439,52 @@ async function reporteProyeccionPDF(id){
     <div class="section-title">Notas, observaciones y recomendaciones</div>
     ${notasHTML}
   </div>
+
+  <!-- HISTORIAL DE CIERRES ANTERIORES -->
+  ${(()=>{
+    const hist=(cierresHist||[]).filter(c=>c.ejercicio<proy.ejercicio&&c.ingresos_acumulables!=null);
+    if(!hist.length)return'';
+    const filas=hist.map(c=>{
+      const isr_cargo=parseFloat(c.isr_a_cargo||0);
+      const sf=parseFloat(c.saldo_favor||0);
+      return '<tr>'+
+        '<td style="padding:5px 8px;font-size:11px;font-weight:600;border-bottom:1px solid #f0f0ec">'+c.ejercicio+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(c.ingresos_acumulables)+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(c.utilidad_contable)+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;color:'+(parseFloat(c.utilidad_fiscal||0)>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(c.utilidad_fiscal)+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(c.isr_causado)+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(c.pagos_provisionales)+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;font-weight:600;border-bottom:1px solid #f0f0ec;color:'+(isr_cargo>0?'#dc2626':'#5a8a1a')+'">'+(isr_cargo>0?fmtMXN(isr_cargo):'('+fmtMXN(sf)+')')+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;color:#3B4BC8">'+parseFloat(c.cu||0).toFixed(2)+'%</td>'+
+      '</tr>';
+    }).join('');
+    return '<div class="section">'+
+      '<div class="section-title">Historial fiscal de cierres anteriores — '+escH(proy.cliente_nombre)+'</div>'+
+      '<table>'+
+        '<thead><tr>'+
+          '<th>Ejercicio</th>'+
+          '<th class="right">Ingresos acumulables</th>'+
+          '<th class="right">Util. contable</th>'+
+          '<th class="right">Util. fiscal</th>'+
+          '<th class="right">ISR causado</th>'+
+          '<th class="right">PP pagados</th>'+
+          '<th class="right">ISR a cargo / (Saldo a favor)</th>'+
+          '<th class="right">CU</th>'+
+        '</tr></thead>'+
+        '<tbody>'+filas+'</tbody>'+
+        '<tfoot>'+
+          '<tr style="background:#f0f4ff">'+
+            '<td style="padding:6px 8px;font-size:11px;font-weight:700;color:#3B4BC8" colspan="3">Proyección ejercicio '+proy.ejercicio+' (estimado)</td>'+
+            '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#3B4BC8">'+fmtMXN(utilidadFiscal)+'</td>'+
+            '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#dc2626">'+fmtMXN(isrEstimado)+'</td>'+
+            '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#3B4BC8">'+fmtMXN(totalPP2)+'</td>'+
+            '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:'+(isrACargoP>0?'#dc2626':'#5a8a1a')+'">'+(isrACargoP>0?fmtMXN(isrACargoP):'('+fmtMXN(saldoFavorP)+')')+'</td>'+
+            '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#3B4BC8">'+cuPDF.toFixed(2)+'%</td>'+
+          '</tr>'+
+        '</tfoot>'+
+      '</table>'+
+    '</div>';
+  })()}
 
   <!-- PIE DE PÁGINA -->
   <div class="footer">
