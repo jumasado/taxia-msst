@@ -289,6 +289,7 @@ function nav(s){
   else if(s==='historial') renderHistory();
   else if(s==='devoluciones') renderDevoluciones();
   else if(s==='proyeccion') renderProyeccion();
+  else if(s==='cierres') renderCierres();
   else if(s==='admin') renderAdmin();
 }
 
@@ -2591,7 +2592,10 @@ let pfCache=[];
 async function renderProyeccion(){
   app.innerHTML=renderTopNav('proyeccion')+`
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
-    <div style="font-size:15px;font-weight:600">Proyección Fiscal Anual</div>
+    <div style="display:flex;gap:4px;border-bottom:0.5px solid #e5e5e0;padding-bottom:0;margin-bottom:0">
+      <button onclick="renderProyeccion()" style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;color:#3B4BC8;border-bottom:2px solid #3B4BC8;font-weight:600;margin-bottom:-1px">Proyecciones</button>
+      <button onclick="renderCierres()" style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-1px">Historial de cierre</button>
+    </div>
     <button class="btn btn-primary btn-sm" onclick="renderNuevaProyeccion()">+ Nueva proyección</button>
   </div>
   <div class="loading" id="pfl"><span class="spinner"></span>Cargando...</div>
@@ -3841,6 +3845,437 @@ function cerrarAviso(){
     document.head.appendChild(style);
     setTimeout(()=>overlay.remove(),200);
   }
+}
+
+
+
+/* ===== HISTORIAL DE CIERRE FISCAL ===== */
+let cierresCache=[];
+
+async function renderCierres(){
+  app.innerHTML=renderTopNav('proyeccion')+`
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;gap:4px;border-bottom:0.5px solid #e5e5e0;padding-bottom:0;margin-bottom:0">
+      <button onclick="renderProyeccion()" style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-1px">Proyecciones</button>
+      <button onclick="renderCierres()" style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;color:#3B4BC8;border-bottom:2px solid #3B4BC8;font-weight:600;margin-bottom:-1px">Historial de cierre</button>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="renderNuevoCierre()">+ Nuevo cierre</button>
+  </div>
+  <div class="loading" id="cfl"><span class="spinner"></span>Cargando...</div>
+  <div id="cf-body"></div>`;
+
+  const data=await sbGet('pf_cierres','?select=*&order=ejercicio.desc,cliente_nombre.asc');
+  cierresCache=data||[];
+  document.getElementById('cfl').style.display='none';
+  renderCierresList();
+}
+
+function renderCierresList(){
+  const el=document.getElementById('cf-body');if(!el)return;
+  if(!cierresCache.length){
+    el.innerHTML='<div class="card"><div style="font-size:14px;color:#888;text-align:center;padding:1rem">Sin cierres registrados. Crea el primero con "+ Nuevo cierre".</div></div>';
+    return;
+  }
+
+  // Agrupar por cliente
+  const porCliente={};
+  cierresCache.forEach(c=>{
+    if(!porCliente[c.cliente_nombre])porCliente[c.cliente_nombre]=[];
+    porCliente[c.cliente_nombre].push(c);
+  });
+
+  let html='';
+  Object.entries(porCliente).sort((a,b)=>a[0].localeCompare(b[0],'es')).forEach(([cli,cierres])=>{
+    html+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">'+escH(cli)+'</div>';
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:1rem">';
+    cierres.sort((a,b)=>b.ejercicio-a.ejercicio).forEach(c=>{
+      const tieneData=c.ingresos_acumulables!==null;
+      const badgeBg=tieneData?'#EAF3DE':'#F1EFE8';
+      const badgeColor=tieneData?'#3B6D11':'#5F5E5A';
+      const badgeLabel=tieneData?'Completo':'Sin datos';
+      html+='<div style="background:var(--color-background-secondary);border-radius:8px;padding:12px;cursor:pointer;border:0.5px solid var(--color-border-tertiary)" onclick="renderDetalleCierre(\''+c.id+'\')">'+
+        '<div style="font-size:18px;font-weight:600;color:var(--color-text-primary);margin-bottom:2px">'+c.ejercicio+'</div>'+
+        '<div style="font-size:11px;color:#888;margin-bottom:6px">Ejercicio cerrado</div>'+
+        (tieneData?'<div style="font-size:12px;font-weight:500;color:#3B4BC8">'+fmtMXN(c.isr_a_cargo>0?c.isr_a_cargo:c.saldo_favor)+'</div>'+
+          '<div style="font-size:10px;color:#888">'+(c.isr_a_cargo>0?'ISR a cargo':'Saldo a favor')+'</div>':'')+
+        '<div style="display:inline-block;font-size:9px;padding:2px 7px;border-radius:999px;font-weight:500;margin-top:6px;background:'+badgeBg+';color:'+badgeColor+'">'+badgeLabel+'</div>'+
+      '</div>';
+    });
+    html+='</div>';
+  });
+  el.innerHTML=html;
+}
+
+async function renderNuevoCierre(id){
+  const editing=id?cierresCache.find(c=>c.id===id):null;
+  const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+'</option>').join('');
+  const anioActual=new Date().getFullYear();
+  const anios=[anioActual-4,anioActual-3,anioActual-2,anioActual-1,anioActual];
+  const anioOpts=anios.map(y=>'<option value="'+y+'"'+(editing?editing.ejercicio===y?' selected':'':y===anioActual-1?' selected':'')+'>'+y+'</option>').join('');
+
+  app.innerHTML=renderTopNav('proyeccion')+`
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
+    <button class="btn btn-sm" onclick="renderCierres()">← Cierres</button>
+    <div style="font-size:15px;font-weight:600">${editing?'Editar cierre fiscal':'Nuevo cierre fiscal'}</div>
+  </div>
+  <div class="card">
+    <div class="sec-label" style="margin-bottom:12px">Datos generales</div>
+    <div class="grid2" style="margin-bottom:12px">
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Cliente *</div>
+        <select id="cf-cliente" style="width:100%" onchange="cfSetCliente(this)">${cliOpts}</select>
+        <input type="hidden" id="cf-cli-nombre" value="${escH(editing?.cliente_nombre||'')}">
+      </div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Ejercicio *</div>
+        <select id="cf-ejercicio" style="width:100%">${anioOpts}</select></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Tasa ISR (%)</div>
+        <input id="cf-tasa" type="number" value="${editing?.tasa_isr||30}" min="0" max="100" step="0.01"></div>
+    </div>
+
+    <div class="sec-label" style="margin-bottom:10px">Estado de Resultados — Cifras anuales</div>
+    <div class="grid2" style="margin-bottom:12px">
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Ingresos acumulables</div>
+        <input id="cf-ing" type="number" placeholder="0.00" value="${editing?.ingresos_acumulables||''}"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Costo de ventas</div>
+        <input id="cf-cv" type="number" placeholder="0.00" value="${editing?.costo_ventas||''}"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Gastos de operación</div>
+        <input id="cf-go" type="number" placeholder="0.00" value="${editing?.gastos_operacion||''}"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Otros ingresos</div>
+        <input id="cf-oi" type="number" placeholder="0.00" value="${editing?.otros_ingresos||''}"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Otros gastos</div>
+        <input id="cf-og" type="number" placeholder="0.00" value="${editing?.otros_gastos||''}"></div>
+    </div>
+
+    <div class="sec-label" style="margin-bottom:10px">Pagos provisionales</div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:12px;color:#888;margin-bottom:4px">Total pagos provisionales realizados en el ejercicio</div>
+      <input id="cf-pp" type="number" placeholder="0.00" value="${editing?.pagos_provisionales||''}">
+    </div>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:12px;color:#888;margin-bottom:4px">Notas</div>
+      <input id="cf-notas" type="text" placeholder="Observaciones del cierre..." value="${escH(editing?.notas||'')}">
+    </div>
+
+    <input type="hidden" id="cf-editing" value="${editing?.id||''}">
+    <div class="err-msg" id="cf-err"></div>
+    <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="saveCierre()">${editing?'Actualizar cierre':'Guardar cierre'}</button>
+  </div>`;
+}
+
+function cfSetCliente(sel){
+  const opt=sel.options[sel.selectedIndex];
+  const nombre=opt?.dataset?.nombre||opt?.text||'';
+  const el=document.getElementById('cf-cli-nombre');
+  if(el) el.value=nombre;
+}
+
+async function saveCierre(){
+  const cliSel=document.getElementById('cf-cliente');
+  const cliente_id=cliSel.value||null;
+  const cliente_nombre=document.getElementById('cf-cli-nombre').value||(cliSel.selectedIndex>0?cliSel.options[cliSel.selectedIndex]?.dataset?.nombre||cliSel.options[cliSel.selectedIndex]?.text||'':'');
+  const ejercicio=parseInt(document.getElementById('cf-ejercicio').value);
+  const tasa_isr=parseFloat(document.getElementById('cf-tasa').value)||30;
+  const ingresos_acumulables=parseFloat(document.getElementById('cf-ing').value)||0;
+  const costo_ventas=parseFloat(document.getElementById('cf-cv').value)||0;
+  const gastos_operacion=parseFloat(document.getElementById('cf-go').value)||0;
+  const otros_ingresos=parseFloat(document.getElementById('cf-oi').value)||0;
+  const otros_gastos=parseFloat(document.getElementById('cf-og').value)||0;
+  const pagos_provisionales=parseFloat(document.getElementById('cf-pp').value)||0;
+  const notas=document.getElementById('cf-notas').value.trim()||null;
+  const editing=document.getElementById('cf-editing').value;
+  const err=document.getElementById('cf-err');err.style.display='none';
+
+  if(!cliente_nombre||!ejercicio){err.textContent='Cliente y ejercicio son obligatorios.';err.style.display='block';return;}
+
+  // Calcular automáticamente
+  const utilidad_contable=ingresos_acumulables-costo_ventas-gastos_operacion+otros_ingresos-otros_gastos;
+
+  // Obtener ajustes si existe el cierre
+  let total_sumas=0,total_restas=0;
+  if(editing){
+    const ajustes=await sbGet('pf_cierres_ajustes','?cierre_id=eq.'+editing+'&select=*');
+    total_sumas=(ajustes||[]).filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
+    total_restas=(ajustes||[]).filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
+  }
+
+  const utilidad_fiscal=utilidad_contable+total_sumas-total_restas;
+  const isr_causado=utilidad_fiscal>0?utilidad_fiscal*(tasa_isr/100):0;
+  const isr_a_cargo=Math.max(0,isr_causado-pagos_provisionales);
+  const saldo_favor=Math.max(0,pagos_provisionales-isr_causado);
+  const cu=ingresos_acumulables>0?(utilidad_fiscal/ingresos_acumulables*100):0;
+
+  const payload={cliente_id,cliente_nombre,ejercicio,tasa_isr,ingresos_acumulables,costo_ventas,gastos_operacion,otros_ingresos,otros_gastos,utilidad_contable,total_sumas,total_restas,utilidad_fiscal,isr_causado,pagos_provisionales,isr_a_cargo,saldo_favor,cu,notas,updated_at:nowISO()};
+
+  if(editing){
+    await sbPatch('pf_cierres','?id=eq.'+editing,payload);
+  } else {
+    await sbPost('pf_cierres',payload,'return=minimal');
+  }
+
+  const updated=await sbGet('pf_cierres','?select=*&order=ejercicio.desc,cliente_nombre.asc');
+  cierresCache=updated||[];
+  renderCierres();
+}
+
+async function renderDetalleCierre(id){
+  const cierre=cierresCache.find(c=>c.id===id);if(!cierre)return;
+
+  app.innerHTML=renderTopNav('proyeccion')+`
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
+    <button class="btn btn-sm" onclick="renderCierres()">← Cierres</button>
+    <div style="font-size:15px;font-weight:600;flex:1">${escH(cierre.cliente_nombre)} — Ejercicio ${cierre.ejercicio}</div>
+    <button class="btn btn-sm btn-purple" onclick="renderNuevoCierre('${id}')">✏️ Editar</button>
+    <button class="btn btn-sm btn-purple" onclick="agregarAjusteCierre('${id}','suma')" style="background:#f0f7d4;color:#5a8a1a;border-color:#c5e0a0">+ Ingreso acumulable</button>
+    <button class="btn btn-sm btn-danger" onclick="agregarAjusteCierre('${id}','resta')" style="font-size:11px">+ Deducción</button>
+    <button class="btn btn-sm btn-danger" onclick="deleteCierre('${id}')">🗑</button>
+  </div>
+  <div class="loading" id="cfd-l"><span class="spinner"></span>Cargando...</div>
+  <div id="cfd-body"></div>`;
+
+  const ajustes=await sbGet('pf_cierres_ajustes','?cierre_id=eq.'+id+'&select=*&order=tipo.asc,id.asc');
+  document.getElementById('cfd-l').style.display='none';
+
+  const aj=ajustes||[];
+  const total_sumas=aj.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
+  const total_restas=aj.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
+  const utilidad_contable=parseFloat(cierre.ingresos_acumulables||0)-parseFloat(cierre.costo_ventas||0)-parseFloat(cierre.gastos_operacion||0)+parseFloat(cierre.otros_ingresos||0)-parseFloat(cierre.otros_gastos||0);
+  const utilidad_fiscal=utilidad_contable+total_sumas-total_restas;
+  const isr_causado=utilidad_fiscal>0?utilidad_fiscal*(cierre.tasa_isr/100):0;
+  const pp=parseFloat(cierre.pagos_provisionales||0);
+  const isr_a_cargo=Math.max(0,isr_causado-pp);
+  const saldo_favor=Math.max(0,pp-isr_causado);
+  const cu=parseFloat(cierre.ingresos_acumulables||0)>0?(utilidad_fiscal/parseFloat(cierre.ingresos_acumulables)*100):0;
+  const cobertura=isr_causado>0?(pp/isr_causado*100):0;
+
+  // Ajustes rows
+  const ajRows=aj.length?aj.map(a=>'<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:0.5px solid #f0f0ec">'+
+    '<span style="background:'+(a.tipo==='suma'?'#EAF3DE':'#FCEBEB')+';color:'+(a.tipo==='suma'?'#3B6D11':'#A32D2D')+';font-size:9px;padding:2px 7px;border-radius:999px;font-weight:600;flex-shrink:0">'+(a.tipo==='suma'?'Acumulable':'Deducible')+'</span>'+
+    '<div style="flex:1;font-size:12px;font-weight:500;color:var(--color-text-primary)">'+escH(a.concepto)+'</div>'+
+    '<div style="font-size:10px;color:#888">'+escH(a.referencia_legal||'')+'</div>'+
+    (a.notas?'<div style="font-size:10px;color:#888;font-style:italic">'+escH(a.notas)+'</div>':'')+
+    '<div style="font-size:12px;font-weight:600;color:'+(a.tipo==='suma'?'#3B6D11':'#A32D2D')+';min-width:80px;text-align:right">'+fmtMXN(a.importe)+'</div>'+
+    '<button class="btn btn-sm" style="font-size:10px;padding:2px 6px" onclick="editarAjusteCierre(\''+a.id+'\',\''+id+'\')">✏️</button>'+
+  '</div>').join(''):'<div style="font-size:13px;color:#bbb;padding:8px 0">Sin ajustes registrados.</div>';
+
+  // Barra comparativa PP vs ISR
+  const pctPP=isr_causado>0?Math.min(100,(pp/isr_causado*100)):0;
+  const barPP='<div style="background:var(--color-background-secondary);border-radius:8px;padding:12px;margin-bottom:12px">'+
+    '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Pagos provisionales vs ISR causado</div>'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">'+
+      '<div style="font-size:11px;color:#888;width:80px;text-align:right;flex-shrink:0">ISR causado</div>'+
+      '<div style="flex:1;background:#f0f0ec;border-radius:3px;height:14px;overflow:hidden"><div style="width:100%;height:100%;background:#E24B4A;border-radius:3px"></div></div>'+
+      '<div style="font-size:11px;font-weight:600;color:#A32D2D;min-width:80px;text-align:right">'+fmtMXN(isr_causado)+'</div>'+
+    '</div>'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'+
+      '<div style="font-size:11px;color:#888;width:80px;text-align:right;flex-shrink:0">PP pagados</div>'+
+      '<div style="flex:1;background:#f0f0ec;border-radius:3px;height:14px;overflow:hidden"><div style="width:'+pctPP.toFixed(0)+'%;height:100%;background:#3B4BC8;border-radius:3px"></div></div>'+
+      '<div style="font-size:11px;font-weight:600;color:#3B4BC8;min-width:80px;text-align:right">'+fmtMXN(pp)+'</div>'+
+    '</div>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'+
+      '<div style="font-size:11px;color:#888">Cobertura: <strong style="color:#3B4BC8">'+cobertura.toFixed(1)+'%</strong></div>'+
+      '<div style="background:'+(isr_a_cargo>0?'#FCEBEB':'#EAF3DE')+';color:'+(isr_a_cargo>0?'#A32D2D':'#3B6D11')+';padding:6px 14px;border-radius:999px;font-size:12px;font-weight:600">'+
+        (isr_a_cargo>0?'ISR a cargo: '+fmtMXN(isr_a_cargo):'Saldo a favor: '+fmtMXN(saldo_favor))+
+      '</div>'+
+    '</div>'+
+  '</div>';
+
+  document.getElementById('cfd-body').innerHTML=
+  // KPIs
+  '<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:1rem">'+
+    '<div class="metric" style="border-left:3px solid #3B4BC8"><div class="metric-label">Ingresos acumulables</div><div class="metric-val" style="font-size:13px;color:#3B4BC8">'+fmtMXN(cierre.ingresos_acumulables)+'</div></div>'+
+    '<div class="metric" style="border-left:3px solid #EF9F27"><div class="metric-label">Utilidad contable</div><div class="metric-val" style="font-size:13px;color:#92400E">'+fmtMXN(utilidad_contable)+'</div></div>'+
+    '<div class="metric" style="border-left:3px solid #8DC63F"><div class="metric-label">Utilidad fiscal</div><div class="metric-val" style="font-size:13px;color:'+(utilidad_fiscal>=0?'#5a8a1a':'#dc2626')+'">'+fmtMXN(utilidad_fiscal)+'</div></div>'+
+    '<div class="metric" style="border-left:3px solid #dc2626"><div class="metric-label">ISR causado ('+cierre.tasa_isr+'%)</div><div class="metric-val" style="font-size:13px;color:#dc2626">'+fmtMXN(isr_causado)+'</div></div>'+
+    '<div class="metric" style="border-left:3px solid '+(isr_a_cargo>0?'#dc2626':'#8DC63F')+'"><div class="metric-label">'+(isr_a_cargo>0?'ISR a cargo':'Saldo a favor')+'</div><div class="metric-val" style="font-size:13px;color:'+(isr_a_cargo>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isr_a_cargo>0?isr_a_cargo:saldo_favor)+'</div></div>'+
+  '</div>'+
+  // ER
+  '<div class="card" style="margin-bottom:1rem">'+
+    '<div class="sec-label" style="margin-bottom:10px">Estado de Resultados — Ejercicio '+cierre.ejercicio+'</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+      '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Ingresos acumulables</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.ingresos_acumulables)+'</div></div>'+
+      '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Costo de ventas</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.costo_ventas)+'</div></div>'+
+      '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Gastos de operación</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.gastos_operacion)+'</div></div>'+
+      '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Otros ingresos</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.otros_ingresos)+'</div></div>'+
+      '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Otros gastos</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.otros_gastos)+'</div></div>'+
+      '<div style="background:#EEEDFE;border-radius:6px;padding:8px"><div style="font-size:11px;color:#3B4BC8">Utilidad neta contable</div><div style="font-size:14px;font-weight:600;color:#3B4BC8">'+fmtMXN(utilidad_contable)+'</div></div>'+
+    '</div>'+
+  '</div>'+
+  // Conciliación
+  '<div class="card" style="margin-bottom:1rem">'+
+    '<div class="sec-label" style="margin-bottom:10px">Conciliación contable-fiscal — Art. 9 LISR</div>'+
+    ajRows+
+    '<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid #e5e5e0">'+
+      '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px"><span style="color:#888">Utilidad contable base</span><span style="font-weight:600">'+fmtMXN(utilidad_contable)+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px"><span style="color:#5a8a1a">+ Ajustes acumulables</span><span style="font-weight:600;color:#5a8a1a">'+fmtMXN(total_sumas)+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px"><span style="color:#dc2626">- Ajustes deducibles</span><span style="font-weight:600;color:#dc2626">('+fmtMXN(total_restas)+')</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;font-weight:700;border-top:0.5px solid #e5e5e0;margin-top:4px"><span style="color:#3B4BC8">= Utilidad fiscal del ejercicio</span><span style="color:'+(utilidad_fiscal>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidad_fiscal)+'</span></div>'+
+    '</div>'+
+  '</div>'+
+  // PP vs ISR
+  '<div class="card" style="margin-bottom:1rem">'+
+    '<div class="sec-label" style="margin-bottom:10px">Pagos provisionales vs ISR causado</div>'+
+    barPP+
+    '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px">'+
+      '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:3px">ISR causado</div><div style="font-size:14px;font-weight:600;color:#dc2626">'+fmtMXN(isr_causado)+'</div></div>'+
+      '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:3px">PP realizados</div><div style="font-size:14px;font-weight:600;color:#3B4BC8">'+fmtMXN(pp)+'</div></div>'+
+      '<div style="background:'+(isr_a_cargo>0?'#fef2f2':'#f0f7d4')+';border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#888;margin-bottom:3px">'+(isr_a_cargo>0?'ISR a cargo':'Saldo a favor')+'</div><div style="font-size:14px;font-weight:600;color:'+(isr_a_cargo>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isr_a_cargo>0?isr_a_cargo:saldo_favor)+'</div></div>'+
+    '</div>'+
+  '</div>'+
+  // CU
+  '<div class="card">'+
+    '<div class="sec-label" style="margin-bottom:10px">Coeficiente de utilidad — Art. 14 LISR</div>'+
+    '<div style="background:#EEEDFE;border-radius:8px;padding:14px">'+
+      '<div style="font-size:12px;color:#3B4BC8;line-height:1.8">'+
+        '<strong>Procedimiento:</strong><br>'+
+        '1. Utilidad fiscal del ejercicio '+cierre.ejercicio+': '+fmtMXN(utilidad_fiscal)+'<br>'+
+        '2. Ingresos nominales del ejercicio '+cierre.ejercicio+': '+fmtMXN(cierre.ingresos_acumulables)+'<br>'+
+        '3. CU = '+fmtMXN(utilidad_fiscal)+' ÷ '+fmtMXN(cierre.ingresos_acumulables)+' = <strong>'+cu.toFixed(2)+'%</strong><br>'+
+        '<span style="font-size:11px;color:#3B4BC8;opacity:.8">Aplicable para pagos provisionales del ejercicio '+(cierre.ejercicio+1)+'</span>'+
+      '</div>'+
+      '<div style="font-size:28px;font-weight:700;color:#3B4BC8;margin-top:8px">'+cu.toFixed(2)+'%</div>'+
+    '</div>'+
+  '</div>';
+}
+
+async function agregarAjusteCierre(cierreId,tipoDefault){
+  document.getElementById('modal-ajuste-cierre')?.remove();
+  const sugerencias=tipoDefault==='suma'?
+    ['Ingresos acumulables no contabilizados (LISR Art. 16)','Ajuste anual por inflación acumulable (LISR Art. 44-46)','Utilidad por enajenación de activos (LISR Art. 18)','Ganancia cambiaria (LISR Art. 20)','Otros ingresos acumulables']:
+    ['Depreciación fiscal adicional (LISR Art. 31-38)','Ajuste anual por inflación deducible (LISR Art. 44-46)','PTU pagada deducible (LISR Art. 25 Fr. III)','Pérdida por enajenación de activos (LISR Art. 25 Fr. IV)','Deducción inmediata (LISR Art. 220)','Gastos no deducibles a revertir','Otras deducciones autorizadas'];
+  const sugerOpts='<option value="">Elige sugerencia o escribe abajo...</option>'+sugerencias.map(s=>'<option value="'+escH(s)+'">'+escH(s)+'</option>').join('');
+
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-ajuste-cierre';
+  overlay.innerHTML='<div class="modal-box">'+
+    '<div class="modal-title">'+(tipoDefault==='suma'?'Agregar ingreso acumulable':'Agregar deducción')+'</div>'+
+    '<div style="margin-bottom:8px"><div style="font-size:11px;color:#888;margin-bottom:3px">Sugerencias frecuentes</div>'+
+      '<select id="ajc-suger" style="width:100%" onchange="cfFillSuger(this)">'+sugerOpts+'</select></div>'+
+    '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto (editable) *</div>'+
+      '<input id="ajc-concepto" type="text" placeholder="Escribe o edita el concepto..." style="width:100%"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Tipo</div>'+
+        '<select id="ajc-tipo" style="width:100%">'+
+          '<option value="suma"'+(tipoDefault==='suma'?' selected':'')+'>Acumulable</option>'+
+          '<option value="resta"'+(tipoDefault==='resta'?' selected':'')+'>Deducible</option>'+
+        '</select></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Importe</div>'+
+        '<input id="ajc-importe" type="number" placeholder="0.00"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
+        '<input id="ajc-ref" type="text" placeholder="LISR Art. ..."></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas</div>'+
+      '<input id="ajc-notas" type="text" placeholder="Notas adicionales"></div>'+
+    '<input type="hidden" id="ajc-cierre-id" value="'+cierreId+'">'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-full" onclick="document.getElementById(\'modal-ajuste-cierre\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="guardarAjusteCierre()" style="flex:1;margin-top:0">Guardar</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(overlay);
+}
+
+function cfFillSuger(sel){
+  const val=sel.value;if(!val)return;
+  const inp=document.getElementById('ajc-concepto');
+  if(inp){inp.value=val;sel.value='';}
+}
+
+async function guardarAjusteCierre(){
+  const concepto=document.getElementById('ajc-concepto')?.value.trim();
+  const tipo=document.getElementById('ajc-tipo').value;
+  const importe=parseFloat(document.getElementById('ajc-importe').value)||0;
+  const referencia_legal=document.getElementById('ajc-ref').value.trim()||null;
+  const notas=document.getElementById('ajc-notas').value.trim()||null;
+  const cierreId=document.getElementById('ajc-cierre-id').value;
+  if(!concepto){alert('El concepto es obligatorio.');return;}
+  document.getElementById('modal-ajuste-cierre')?.remove();
+  await sbPost('pf_cierres_ajustes',{cierre_id:cierreId,concepto,tipo,importe,referencia_legal,notas},'return=minimal');
+  // Recalcular y actualizar el cierre
+  await recalcularCierre(cierreId);
+  renderDetalleCierre(cierreId);
+}
+
+async function editarAjusteCierre(ajusteId,cierreId){
+  const data=await sbGet('pf_cierres_ajustes','?id=eq.'+ajusteId+'&select=*');
+  const a=data?.[0];if(!a)return;
+  document.getElementById('modal-ajuste-cierre')?.remove();
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-ajuste-cierre';
+  overlay.innerHTML='<div class="modal-box">'+
+    '<div class="modal-title">Editar ajuste</div>'+
+    '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto</div>'+
+      '<input id="ajce-concepto" type="text" value="'+escH(a.concepto||'')+'"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Tipo</div>'+
+        '<select id="ajce-tipo" style="width:100%"><option value="suma"'+(a.tipo==='suma'?' selected':'')+'>Acumulable</option><option value="resta"'+(a.tipo==='resta'?' selected':'')+'>Deducible</option></select></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Importe</div>'+
+        '<input id="ajce-importe" type="number" value="'+(a.importe||0)+'"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
+        '<input id="ajce-ref" type="text" value="'+escH(a.referencia_legal||'')+'"></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas</div>'+
+      '<input id="ajce-notas" type="text" value="'+escH(a.notas||'')+'"></div>'+
+    '<input type="hidden" id="ajce-id" value="'+ajusteId+'">'+
+    '<input type="hidden" id="ajce-cierre-id" value="'+cierreId+'">'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-sm btn-danger" onclick="eliminarAjusteCierre(\''+ajusteId+'\',\''+cierreId+'\')" style="margin-top:0">Eliminar</button>'+
+      '<div style="flex:1"></div>'+
+      '<button class="btn btn-full" onclick="document.getElementById(\'modal-ajuste-cierre\').remove()" style="margin-top:0">Cancelar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="actualizarAjusteCierre()" style="margin-top:0">Guardar</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(overlay);
+}
+
+async function actualizarAjusteCierre(){
+  const id=document.getElementById('ajce-id').value;
+  const cierreId=document.getElementById('ajce-cierre-id').value;
+  const concepto=document.getElementById('ajce-concepto').value.trim();
+  const tipo=document.getElementById('ajce-tipo').value;
+  const importe=parseFloat(document.getElementById('ajce-importe').value)||0;
+  const referencia_legal=document.getElementById('ajce-ref').value.trim()||null;
+  const notas=document.getElementById('ajce-notas').value.trim()||null;
+  document.getElementById('modal-ajuste-cierre')?.remove();
+  await sbPatch('pf_cierres_ajustes','?id=eq.'+id,{concepto,tipo,importe,referencia_legal,notas});
+  await recalcularCierre(cierreId);
+  renderDetalleCierre(cierreId);
+}
+
+async function eliminarAjusteCierre(ajusteId,cierreId){
+  if(!confirm('¿Eliminar este ajuste?'))return;
+  document.getElementById('modal-ajuste-cierre')?.remove();
+  await sbDelete('pf_cierres_ajustes','?id=eq.'+ajusteId);
+  await recalcularCierre(cierreId);
+  renderDetalleCierre(cierreId);
+}
+
+async function recalcularCierre(cierreId){
+  const cierre=cierresCache.find(c=>c.id===cierreId);if(!cierre)return;
+  const ajustes=await sbGet('pf_cierres_ajustes','?cierre_id=eq.'+cierreId+'&select=*');
+  const aj=ajustes||[];
+  const total_sumas=aj.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
+  const total_restas=aj.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
+  const uc=parseFloat(cierre.ingresos_acumulables||0)-parseFloat(cierre.costo_ventas||0)-parseFloat(cierre.gastos_operacion||0)+parseFloat(cierre.otros_ingresos||0)-parseFloat(cierre.otros_gastos||0);
+  const uf=uc+total_sumas-total_restas;
+  const isr=uf>0?uf*(cierre.tasa_isr/100):0;
+  const pp=parseFloat(cierre.pagos_provisionales||0);
+  const isr_a_cargo=Math.max(0,isr-pp);
+  const saldo_favor=Math.max(0,pp-isr);
+  const cu=parseFloat(cierre.ingresos_acumulables||0)>0?(uf/parseFloat(cierre.ingresos_acumulables)*100):0;
+  await sbPatch('pf_cierres','?id=eq.'+cierreId,{total_sumas,total_restas,utilidad_fiscal:uf,isr_causado:isr,isr_a_cargo,saldo_favor,cu,updated_at:nowISO()});
+  const idx=cierresCache.findIndex(c=>c.id===cierreId);
+  if(idx>=0) cierresCache[idx]={...cierresCache[idx],total_sumas,total_restas,utilidad_fiscal:uf,isr_causado:isr,isr_a_cargo,saldo_favor,cu};
+}
+
+async function deleteCierre(id){
+  const c=cierresCache.find(x=>x.id===id);
+  if(!confirm('¿Eliminar el cierre de '+(c?.cliente_nombre||'este cliente')+' '+( c?.ejercicio||'')+'? No se puede deshacer.'))return;
+  await sbDelete('pf_cierres_ajustes','?cierre_id=eq.'+id);
+  await sbDelete('pf_cierres','?id=eq.'+id);
+  cierresCache=cierresCache.filter(x=>x.id!==id);
+  renderCierres();
 }
 
 
