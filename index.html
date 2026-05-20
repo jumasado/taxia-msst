@@ -3037,6 +3037,119 @@ async function extraerCifrasPDF(tipo){
   }
 }
 
+
+/* ===== AVISO DE BIENVENIDA ===== */
+async function mostrarAvisoBienvenida(){
+  const today=todayKey();
+  const email=session.email;
+  const [tareas,sesiones]=await Promise.all([
+    sbGet('tareas','?email=eq.'+encodeURIComponent(email)+'&status=in.(pendiente,standby)&select=*&order=created_at.asc'),
+    sbGet('sesiones','?email=eq.'+encodeURIComponent(email)+'&logout_at=not.is.null&order=login_at.desc&limit=2&select=*')
+  ]);
+  const sesAnterior=(sesiones||[])[1]||(sesiones||[])[0]||null;
+  const fechaAnterior=(()=>{
+    if(!sesAnterior)return null;
+    const d=new Date(sesAnterior.login_at);
+    const fecha=d.toLocaleDateString('es-MX',{timeZone:'America/Tijuana',weekday:'short',day:'numeric',month:'short'});
+    const hora=d.toLocaleTimeString('es-MX',{timeZone:'America/Tijuana',hour:'2-digit',minute:'2-digit'});
+    return fecha+' · '+hora;
+  })();
+  const durAnterior=sesAnterior&&sesAnterior.duracion_min?(sesAnterior.duracion_min>=60?Math.floor(sesAnterior.duracion_min/60)+'h '+(sesAnterior.duracion_min%60)+'min':sesAnterior.duracion_min+' min'):null;
+  const tareasData=tareas||[];
+  const vencidas=tareasData.filter(t=>{
+    if(t.status!=='pendiente')return false;
+    const fc=t.fecha_creacion||t.created_at?.slice(0,10);
+    return fc&&fc<today;
+  });
+  const hoy=tareasData.filter(t=>{
+    const fc=t.fecha_creacion||t.created_at?.slice(0,10);
+    return fc&&fc===today&&t.status==='pendiente';
+  });
+  const standby=tareasData.filter(t=>t.status==='standby').slice(0,2);
+  const prioritarias=[...vencidas,...hoy,...standby].slice(0,5);
+  if(!prioritarias.length&&!sesAnterior){
+    if(session.role==='assistant') renderMisPlan();
+    else renderDashboard(today);
+    return;
+  }
+  if(session.role==='assistant') renderMisPlan();
+  else renderDashboard(today);
+  const overlay=document.createElement('div');
+  overlay.id='aviso-bienvenida';
+  overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:8000;display:flex;align-items:center;justify-content:center;padding:1rem';
+  const hora=new Date().getHours();
+  const saludo=hora<12?'Buenos días':hora<19?'Buenas tardes':'Buenas noches';
+  const u=usersCache[email]||session;
+  const taskRows=prioritarias.map(t=>{
+    const fc=t.fecha_creacion||t.created_at?.slice(0,10)||'';
+    const esVencida=t.status==='pendiente'&&fc&&fc<today;
+    const esHoy=fc===today;
+    const dotColor=esVencida?'#E24B4A':esHoy?'#EF9F27':'#378ADD';
+    const badgeStyle=esVencida?'background:#FCEBEB;color:#A32D2D':esHoy?'background:#FAEEDA;color:#854F0B':'background:#E6F1FB;color:#185FA5';
+    const badgeLabel=esVencida?'Vencida':esHoy?'Hoy':'Stand By';
+    const diasVenc=esVencida&&fc?Math.round((new Date(today)-new Date(fc))/(86400000)):0;
+    const meta=esVencida?'Vencida hace '+diasVenc+' día'+(diasVenc!==1?'s':''):esHoy?'Vence hoy':'Stand By pendiente';
+    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:0.5px solid #e5e5e0">'+
+      '<div style="width:7px;height:7px;border-radius:50%;background:'+dotColor+';flex-shrink:0;margin-top:5px"></div>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="font-size:13px;color:#1a1a1a;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escH(t.descripcion)+'</div>'+
+        '<div style="font-size:11px;color:#888;margin-top:2px">'+meta+(t.client_name?' · '+escH(t.client_name):'')+'</div>'+
+      '</div>'+
+      '<span style="'+badgeStyle+';padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;flex-shrink:0">'+badgeLabel+'</span>'+
+    '</div>';
+  }).join('');
+  const pillsHtml=
+    (vencidas.length?'<span style="background:#FCEBEB;color:#A32D2D;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600">'+vencidas.length+' vencida'+(vencidas.length!==1?'s':'')+'</span>':'')+
+    (hoy.length?'<span style="background:#FAEEDA;color:#854F0B;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;margin-left:4px">'+hoy.length+' para hoy</span>':'')+
+    (standby.length?'<span style="background:#E6F1FB;color:#185FA5;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;margin-left:4px">'+standby.length+' en stand by</span>':'');
+  overlay.innerHTML=
+    '<div style="background:#fff;border-radius:12px;width:100%;max-width:480px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.18)">'+
+      '<div style="background:#3B4BC8;padding:16px 20px;display:flex;align-items:flex-start;justify-content:space-between">'+
+        '<div>'+
+          '<div style="font-size:12px;color:rgba(255,255,255,.75);margin-bottom:2px">'+saludo+' — '+new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',weekday:'long',day:'numeric',month:'long'})+'</div>'+
+          '<div style="font-size:17px;font-weight:600;color:#fff">'+escH(u.name||email)+'</div>'+
+        '</div>'+
+        '<button id="btn-cerrar-aviso" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.15);border:none;cursor:pointer;color:#fff;font-size:16px">✕</button>'+
+      '</div>'+
+      (sesAnterior?
+        '<div style="background:#2d3db0;padding:8px 20px;display:flex;gap:20px;flex-wrap:wrap">'+
+          '<div style="font-size:11px;color:rgba(255,255,255,.85)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#8DC63F;margin-right:5px"></span>Última sesión: '+fechaAnterior+'</div>'+
+          (durAnterior?'<div style="font-size:11px;color:rgba(255,255,255,.85)">&#9201; '+durAnterior+'</div>':'')+
+        '</div>':'')+
+      '<div style="padding:16px 20px">'+
+        (pillsHtml?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">'+pillsHtml+'</div>':'')+
+        (prioritarias.length?
+          '<div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Tareas que requieren atención</div>'+
+          '<div>'+taskRows+'</div>':
+          '<div style="text-align:center;padding:12px 0;color:#888;font-size:13px">Sin tareas pendientes.</div>')+
+      '</div>'+
+      '<div style="padding:12px 20px;border-top:0.5px solid #e5e5e0;display:flex;justify-content:space-between;align-items:center">'+
+        '<span id="aviso-countdown" style="font-size:11px;color:#888">Se cierra en 15 seg</span>'+
+        '<button id="btn-entrar-aviso" style="background:#3B4BC8;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer">Entrar al dashboard</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(overlay);
+  document.getElementById('btn-cerrar-aviso').onclick=cerrarAviso;
+  document.getElementById('btn-entrar-aviso').onclick=cerrarAviso;
+  let secs=15;
+  const countdown=setInterval(()=>{
+    secs--;
+    const el=document.getElementById('aviso-countdown');
+    if(el) el.textContent='Se cierra en '+secs+' seg';
+    if(secs<=0){clearInterval(countdown);cerrarAviso();}
+  },1000);
+  overlay._countdown=countdown;
+}
+
+function cerrarAviso(){
+  const overlay=document.getElementById('aviso-bienvenida');
+  if(overlay){
+    if(overlay._countdown) clearInterval(overlay._countdown);
+    overlay.remove();
+  }
+}
+
+
 renderLogin();
 </script>
 </body>
