@@ -3202,9 +3202,9 @@ function initReporteGerencial(){
       +'._mvt tr:last-child td{border:none;}'
       +'._mdb{display:inline-block;padding:2px 7px;border-radius:8px;font-weight:700;font-size:9px;}'
       +'._mde{background:#c0392b;color:#fff;}._mdh{background:#e67e22;color:#fff;}._mdm{background:#f39c12;color:#fff;}'
-      +'._mchts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}'
-      +'._mcc{background:#fff;border-radius:8px;padding:12px;box-shadow:0 2px 5px rgba(0,0,0,.06);}'
-      +'._mcc h3{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;margin:0 0 8px;padding-bottom:5px;border-bottom:1px solid #eee;}'
+      +''
+      +''
+      +''
       +'._mfoot{background:#2d4a8a;color:rgba(255,255,255,.65);text-align:center;padding:8px;font-size:10px;}'
       +'@media print{body *{visibility:hidden!important;}#_msspanel,#_msspanel *{visibility:visible!important;}#_msstor{position:static!important;display:block!important;background:none!important;padding:0!important;}#_msspanel{position:static!important;border-radius:0!important;max-width:100%!important;}._mflt,#_msstbtn,._mcl,._mpdf,._mub,._mver{display:none!important;}@page{size:landscape;margin:8mm;}}';
     document.head.appendChild(se);
@@ -3377,11 +3377,7 @@ function initReporteGerencial(){
           '<div class="_mkc r"><div class="_mkn r">'+venc.length+'</div><div class="_mkl">Tareas vencidas (+2 días)</div></div>'+
           '<div class="_mkc o"><div class="_mkn o">'+ta+'</div><div class="_mkl">Tareas registradas</div></div>'+
         '</div>'+
-        '<div class="_msec">📊 Gráficas de Avance</div>'+
-        '<div class="_mchts">'+
-          '<div class="_mcc"><h3>% Cumplimiento por Persona</h3><canvas id="_mc1" height="160"></canvas></div>'+
-          '<div class="_mcc"><h3>Distribución por Importancia</h3><canvas id="_mc3" height="160"></canvas></div>'+
-        '</div>'+
+
         '<div class="_msec">👥 Análisis por Colaborador</div>'+
         '<div class="_mug">'+uHtml+'</div>'+
         '<div class="_msec">⚠️ Tareas con más de 2 días de Vencimiento</div>'+
@@ -3393,25 +3389,7 @@ function initReporteGerencial(){
 
     ov.onclick=function(e){if(e.target===ov)ov.style.display='none';};
 
-    // Gráficas
-    setTimeout(function(){
-      if(!window.Chart)return;
-      var labs=data.map(function(u){return u.name.split(' ').slice(0,2).join(' ');});
-      var pcts=data.map(function(u){return u.alta?Math.round(u.concluidas/u.alta*100):0;});
-      new Chart(document.getElementById('_mc1'),{type:'bar',
-        data:{labels:labs,datasets:[{label:'% Cumplimiento',data:pcts,
-          backgroundColor:pcts.map(function(p){return p>=90?'rgba(46,125,82,.85)':'rgba(230,126,34,.85)';}),borderRadius:6}]},
-        options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
-          scales:{x:{min:0,max:100,ticks:{callback:function(v){return v+'%';}}},y:{ticks:{font:{size:10}}}}}
-      });
-      var tot=ic.c+ic.a+ic.m+ic.n;
-      new Chart(document.getElementById('_mc3'),{type:'doughnut',
-        data:{labels:['Crítica','Alta','Media','Normal'],datasets:[{data:tot?[ic.c,ic.a,ic.m,ic.n]:[0,0,0,1],
-          backgroundColor:['#c0392b','#e67e22','#f1c40f','#27ae60'],borderWidth:3,borderColor:'#fff'}]},
-        options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
-          plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10}}}}
-      });
-    },100);
+
   }
   window.renderG=renderG;
   window.refreshReporteG=function(){
