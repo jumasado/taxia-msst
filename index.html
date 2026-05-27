@@ -3212,12 +3212,21 @@ function initReporteGerencial(){
   const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
 
   // Usuarios del sistema
+  const AC_URL='https://app.msstconsulting.com';
+  // IDs en ActiveCollab: Manuel=2, Alberto=3, Yosded=136, Brenda=142
   const USERS=[
-    {name:'Yosded Hernandez',init:'YH',role:'Consultora Junior',color:'#f0a500',email:'yhernandez@msstconsulting.com'},
-    {name:'Brenda Lopez',init:'BL',role:'Consultora Junior',color:'#8e5ea2',email:'baudelo@msstconsulting.com'},
-    {name:'CP Alberto Smith',init:'CA',role:'Líder Fiscal',color:'#2e7d52',email:'asmith@msstconsulting.com'},
-    {name:'CPC Manuel Santana',init:'CM',role:'Director',color:'#2d4a8a',email:'msantana@msstconsulting.com'}
+    {name:'Yosded Hernandez',init:'YH',role:'Consultora Junior',color:'#f0a500',email:'yhernandez@msstconsulting.com',acId:136,acPrefijos:['YH','AS/YH','AS / YH','AS/PM/YH','AS / PM / YH']},
+    {name:'Brenda Lopez',init:'BL',role:'Consultora Junior',color:'#8e5ea2',email:'baudelo@msstconsulting.com',acId:142,acPrefijos:['BA','AS/BA','AS / PM / BA','AS / BA']},
+    {name:'CP Alberto Smith',init:'CA',role:'Líder Fiscal',color:'#2e7d52',email:'asmith@msstconsulting.com',acId:3,acPrefijos:['AS','AS/PM','AS / PM','1 / MS / PM']},
+    {name:'CPC Manuel Santana',init:'CM',role:'Director',color:'#2d4a8a',email:'msantana@msstconsulting.com',acId:2,acPrefijos:['1 / MS','MS','MSST']}
   ];
+  // Mapeo de proyectos por usuario (basado en análisis de Active Collab)
+  const AC_PROYECTOS_POR_USUARIO={
+    136:[15,83,419,122,23,19,251,104,18,433,69],  // Yosded: DELA, STM, Packforce, KM Ortopédica, etc.
+    3:[347,409,117,19,424,29,114,349],             // Alberto: MERGE, ARMANDO LEON, VCORP, etc.
+    142:[109,15,37,117,65],                        // Brenda: SEICA Logística, DELA, CBD, etc.
+    2:[29,81,424,100,81,102,435,425]               // Manuel: MSST, SEICA Grupo, MITOSIS, etc.
+  };
 
   let _d0=new Date();_d0.setDate(_d0.getDate()-7);
   let d0val=_d0.toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
@@ -3249,6 +3258,70 @@ function initReporteGerencial(){
       +'&or=(and(fecha_creacion.gte.'+d0+',fecha_creacion.lte.'+d1+'),and(fecha_conclusion.gte.'+d0+'T00:00:00,fecha_conclusion.lte.'+d1+'T23:59:59))'
       +'&select=*&order=created_at.asc';
     return await sbGet('tareas',qs)||[];
+  }
+
+  // Cargar tareas de ActiveCollab para un usuario en el período
+  async function cargarTareasAC(usuario,d0,d1){
+    const proyIds=AC_PROYECTOS_POR_USUARIO[usuario.acId]||[];
+    if(!proyIds.length) return {abiertas:[],completadas:[]};
+    const d0ts=new Date(d0+'T00:00:00').getTime()/1000;
+    const d1ts=new Date(d1+'T23:59:59').getTime()/1000;
+    const abiertas=[];
+    const completadas=[];
+    // Obtener tareas abiertas del usuario
+    try{
+      const resAb=await fetch(AC_URL+'/api/v1/users/'+usuario.acId+'/tasks?page=1&per_page=200',
+        {headers:{'X-Requested-With':'XMLHttpRequest'},credentials:'include'});
+      if(resAb.ok){
+        const dataAb=await resAb.json();
+        const tasks=Array.isArray(dataAb)?dataAb:(dataAb.tasks||dataAb.data||[]);
+        tasks.forEach(t=>{
+          const creado=t.created_on||0;
+          if(creado>=d0ts&&creado<=d1ts){
+            abiertas.push({
+              id:'ac-'+t.id,
+              descripcion:t.name,
+              client_name:t.project_name||('Proyecto '+t.project_id),
+              status:'pendiente',
+              fecha_creacion:new Date(creado*1000).toISOString().slice(0,10),
+              fecha_conclusion:null,
+              fuente:'activecollab',
+              vence:t.due_on?new Date(t.due_on*1000).toISOString().slice(0,10):null
+            });
+          }
+        });
+      }
+    }catch(e){console.warn('AC abiertas error:',e);}
+
+    // Obtener tareas completadas por proyecto
+    for(const proyId of proyIds){
+      try{
+        const resComp=await fetch(AC_URL+'/api/v1/projects/'+proyId+'/tasks?completed=1&page=1&per_page=100',
+          {headers:{'X-Requested-With':'XMLHttpRequest'},credentials:'include'});
+        if(resComp.ok){
+          const dataComp=await resComp.json();
+          const tasks=Array.isArray(dataComp)?dataComp:(dataComp.tasks||dataComp.data||[]);
+          tasks.forEach(t=>{
+            if(t.assignee_id===usuario.acId||t.completed_by_id===usuario.acId){
+              const compTs=t.completed_on||0;
+              if(compTs>=d0ts&&compTs<=d1ts){
+                completadas.push({
+                  id:'ac-'+t.id,
+                  descripcion:t.name,
+                  client_name:t.project_name||('Proy '+proyId),
+                  status:'concluida',
+                  fecha_creacion:t.created_on?new Date(t.created_on*1000).toISOString().slice(0,10):null,
+                  fecha_conclusion:new Date(compTs*1000).toISOString().slice(0,10),
+                  fuente:'activecollab',
+                  vence:null
+                });
+              }
+            }
+          });
+        }
+      }catch(e){console.warn('AC completadas error proyecto '+proyId+':',e);}
+    }
+    return {abiertas,completadas};
   }
 
   async function analizarConClaude(tareasTexto,dr){
@@ -3316,13 +3389,31 @@ ${tareasTexto}`
     const emails=usuarios.map(u=>u.email);
     const todasTareas=await cargarTareas(emails,d0,d1);
 
-    // Organizar por usuario
-    const porUsuario=usuarios.map(u=>{
+    // Organizar por usuario — TaxIA
+    const porUsuarioBase=usuarios.map(u=>{
       const uT=todasTareas.filter(t=>t.email===u.email);
       const registradas=uT.filter(t=>t.fecha_creacion>=d0&&t.fecha_creacion<=d1);
       const concluidas=uT.filter(t=>t.fecha_conclusion&&t.fecha_conclusion.slice(0,10)>=d0&&t.fecha_conclusion.slice(0,10)<=d1);
-      const vencidas=uT.filter(t=>t.status==='pendiente'&&t.fecha_creacion&&t.fecha_creacion<d1);
+      const vencidas=uT.filter(t=>t.status==='pendiente'&&t.fecha_creacion&&t.fecha_creacion<todayStr);
       return {...u,registradas,concluidas,vencidas,todas:uT};
+    });
+
+    // Cargar tareas de Active Collab en paralelo
+    const acResultados=await Promise.all(usuarios.map(u=>cargarTareasAC(u,d0,d1)));
+    const porUsuario=porUsuarioBase.map((u,i)=>{
+      const ac=acResultados[i];
+      // Combinar TaxIA + AC evitando duplicados por descripción
+      const taxiaDescs=new Set([...u.registradas,...u.concluidas].map(t=>t.descripcion?.toLowerCase()));
+      const acAbiertasNuevas=ac.abiertas.filter(t=>!taxiaDescs.has(t.descripcion?.toLowerCase()));
+      const acConclNuevas=ac.completadas.filter(t=>!taxiaDescs.has(t.descripcion?.toLowerCase()));
+      return {
+        ...u,
+        registradas:[...u.registradas,...acAbiertasNuevas],
+        concluidas:[...u.concluidas,...acConclNuevas],
+        vencidas:[...u.vencidas,...ac.abiertas.filter(t=>t.vence&&t.vence<todayStr)],
+        ac_abiertas:ac.abiertas.length,
+        ac_completadas:ac.completadas.length
+      };
     });
 
     // Todas las vencidas
@@ -3379,16 +3470,20 @@ ${tareasTexto}`
         const cls={ALTA:'background:#fde8e8;color:#c0392b',MEDIA:'background:#fef9e7;color:#b7950b',BAJA:'background:#eafaf1;color:#1e8449'}[nivel]||'';
         return '<span style="'+cls+';padding:1px 6px;border-radius:8px;font-size:8px;font-weight:700;margin-left:3px">'+nivel+'</span>';
       }
+      function fuenteBadge(t){
+        if(t.fuente==='activecollab') return '<span style="background:#e8f4fd;color:#1a73e8;padding:1px 5px;border-radius:4px;font-size:8px;font-weight:700">AC</span>';
+        return '<span style="background:#f0f4ff;color:#3B4BC8;padding:1px 5px;border-radius:4px;font-size:8px;font-weight:700">TX</span>';
+      }
       const rowsConcluidas=u.concluidas.map(t=>'<tr>'+
-        '<td style="white-space:nowrap">'+impBadge(t.id)+compBadge(t.id)+'</td>'+
-        '<td style="max-width:180px">'+escH(t.descripcion)+'</td>'+
+        '<td style="white-space:nowrap">'+fuenteBadge(t)+' '+impBadge(t.id)+compBadge(t.id)+'</td>'+
+        '<td style="max-width:170px">'+escH(t.descripcion)+'</td>'+
         '<td style="font-size:10px;color:#888">'+escH(t.client_name||'—')+'</td>'+
         '<td style="font-size:10px;color:#888;white-space:nowrap">'+escH(t.fecha_creacion||'—')+'</td>'+
         '<td style="font-size:10px;color:#5a8a1a;white-space:nowrap;font-weight:600">'+(t.fecha_conclusion?.slice(0,10)||'—')+'</td>'+
       '</tr>').join('');
-      const rowsPendientes=u.registradas.filter(t=>t.status==='pendiente').slice(0,3).map(t=>'<tr>'+
-        '<td style="white-space:nowrap">'+impBadge(t.id)+compBadge(t.id)+'</td>'+
-        '<td style="max-width:180px;color:#888">'+escH(t.descripcion)+'</td>'+
+      const rowsPendientes=u.registradas.filter(t=>t.status==='pendiente').slice(0,5).map(t=>'<tr>'+
+        '<td style="white-space:nowrap">'+fuenteBadge(t)+' '+impBadge(t.id)+compBadge(t.id)+'</td>'+
+        '<td style="max-width:170px;color:#555">'+escH(t.descripcion)+'</td>'+
         '<td style="font-size:10px;color:#888">'+escH(t.client_name||'—')+'</td>'+
         '<td style="font-size:10px;color:#888;white-space:nowrap">'+escH(t.fecha_creacion||'—')+'</td>'+
         '<td style="font-size:10px;color:#EF9F27">Pendiente</td>'+
@@ -3409,6 +3504,7 @@ ${tareasTexto}`
           '<div><div class="_mpn" style="color:#2e7d52">'+u.concluidas.length+'</div><div class="_mpl">Concluidas</div></div>'+
           '<div><div class="_mpn" style="color:#c0392b">'+u.vencidas.length+'</div><div class="_mpl">Vencidas</div></div>'+
         '</div>'+
+        ((u.ac_abiertas||u.ac_completadas)?'<div style="font-size:9px;color:#1a73e8;margin:3px 0 5px"><span style="background:#e8f4fd;padding:1px 4px;border-radius:3px;font-weight:700">AC</span> '+(u.ac_abiertas||0)+' abiertas · '+(u.ac_completadas||0)+' concluidas en el período</div>':'')+
         (u.concluidas.length?
           '<div style="font-size:9px;font-weight:700;color:#2e7d52;text-transform:uppercase;margin-bottom:4px">Concluidas en el período</div>'+
           '<table class="_mt"><thead><tr><th>Imp./Compl.</th><th>Descripción</th><th>Cliente</th><th>Registro</th><th>Conclusión</th></tr></thead>'+
@@ -3528,6 +3624,7 @@ ${tareasTexto}`
       '<div class="_mh">'+
         '<div><h2>📊 Reporte Gerencial — MSST Consulting SC</h2><p>'+dr+' · Solo para: CPC Manuel Santana</p></div>'+
         '<div class="_mhright">'+
+          '<div style="font-size:9px;color:rgba(255,255,255,.75);margin-right:8px"><span style="background:#1a73e8;padding:1px 5px;border-radius:3px;font-weight:700">AC</span> ActiveCollab &nbsp; <span style="background:#3B4BC8;padding:1px 5px;border-radius:3px;font-weight:700">TX</span> TaxIA</div>'+
           '<button class="_mpdf" onclick="window.print()">🖨️ PDF</button>'+
           '<button class="_mcl" onclick="document.getElementById(\'_msstor\').style.display=\'none\'">✕</button>'+
         '</div>'+
