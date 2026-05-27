@@ -3157,262 +3157,383 @@ function initReporteGerencial(){
   if(session.role!=='admin')return;
   if(document.getElementById('_msstbtn'))return;
 
-  // Estilos del reporte
   if(!document.getElementById('_msst_style')){
-    var se=document.createElement('style');
+    const se=document.createElement('style');
     se.id='_msst_style';
     se.textContent=
-      '#_msstbtn{position:fixed;bottom:24px;right:24px;z-index:8000;background:#2d4a8a;color:#fff;padding:10px 18px;border-radius:50px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.3);border:none;display:flex;align-items:center;gap:6px;}'
+      '#_msstbtn{position:fixed;bottom:24px;right:24px;z-index:8000;background:#2d4a8a;color:#fff;padding:10px 18px;border-radius:50px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.3);border:none;}'
       +'#_msstbtn:hover{background:#4a6fbd;}'
       +'#_msstor{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9000;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:14px;}'
-      +'#_msspanel{background:#f4f6fb;border-radius:12px;width:100%;max-width:1400px;font-family:inherit;overflow:hidden;margin:auto;}'
+      +'#_msspanel{background:#f4f6fb;border-radius:12px;width:100%;max-width:1100px;font-family:inherit;overflow:hidden;margin:auto;}'
       +'._mh{background:linear-gradient(135deg,#2d4a8a,#4a6fbd);color:#fff;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;gap:12px;}'
-      +'._mh h2{font-size:16px;margin:0;}._mh p{font-size:10px;opacity:.8;margin:2px 0 0;}'
-      +'._mhright{display:flex;align-items:center;gap:8px;flex-shrink:0;}'
+      +'._mh h2{font-size:15px;margin:0;}._mh p{font-size:10px;opacity:.8;margin:2px 0 0;}'
+      +'._mhright{display:flex;align-items:center;gap:8px;}'
       +'._mcl{background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px;}'
-      +'._mpdf{background:#27ae60;border:none;color:#fff;padding:7px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;}'
+      +'._mpdf{background:#27ae60;border:none;color:#fff;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:11px;font-weight:700;}'
       +'._mflt{background:#fff;padding:10px 20px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #ddd;}'
-      +'._mflt label{font-size:11px;color:#444;display:flex;align-items:center;gap:4px;cursor:pointer;}'
-      +'._mflt input[type=checkbox]{width:13px;height:13px;accent-color:#2d4a8a;}'
-      +'._mflt input[type=date]{font-size:11px;border:1px solid #ccd;border-radius:6px;padding:3px 7px;cursor:pointer;}'
-      +'._mub{background:#2d4a8a;color:#fff;border:none;padding:6px 14px;border-radius:16px;cursor:pointer;font-size:11px;font-weight:700;}'
+      +'._mflt label{font-size:11px;color:#444;display:flex;align-items:center;gap:4px;}'
+      +'._mflt input[type=date]{font-size:11px;border:1px solid #ccd;border-radius:6px;padding:3px 7px;}'
+      +'._mub{background:#2d4a8a;color:#fff;border:none;padding:5px 12px;border-radius:14px;cursor:pointer;font-size:11px;font-weight:700;}'
       +'._mub:hover{background:#4a6fbd;}._mub.grn{background:#27ae60;}'
       +'._mbd{padding:14px 20px;}'
-      +'._mkpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}'
-      +'._mkc{background:#fff;border-radius:8px;padding:11px 13px;border-left:4px solid #2d4a8a;box-shadow:0 2px 5px rgba(0,0,0,.06);}'
+      +'._mkpi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;}'
+      +'._mkc{background:#fff;border-radius:8px;padding:10px 12px;border-left:4px solid #2d4a8a;box-shadow:0 1px 4px rgba(0,0,0,.06);}'
       +'._mkc.g{border-color:#2e7d52;}._mkc.r{border-color:#c0392b;}._mkc.o{border-color:#e67e22;}'
-      +'._mkn{font-size:22px;font-weight:800;}._mkl{font-size:9px;color:#888;margin-top:1px;}'
+      +'._mkn{font-size:20px;font-weight:800;}._mkl{font-size:9px;color:#888;margin-top:1px;}'
       +'._mkn.b{color:#2d4a8a;}._mkn.g{color:#2e7d52;}._mkn.r{color:#c0392b;}._mkn.o{color:#e67e22;}'
-      +'._msec{font-size:11px;font-weight:800;color:#2d4a8a;padding:5px 0 7px;margin-bottom:8px;border-bottom:2px solid #2d4a8a;}'
-      +'._mug{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}'
-      +'._mcard{background:#fff;border-radius:8px;padding:12px;box-shadow:0 2px 5px rgba(0,0,0,.06);}'
-      +'._mav{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;}'
+      +'._msec{font-size:11px;font-weight:800;color:#2d4a8a;padding:4px 0 6px;margin-bottom:8px;border-bottom:2px solid #2d4a8a;display:flex;align-items:center;justify-content:space-between;}'
+      +'._mug{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;}'
+      +'._mcard{background:#fff;border-radius:8px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);}'
+      +'._mav{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:10px;flex-shrink:0;}'
       +'._mps{display:grid;grid-template-columns:repeat(3,1fr);background:#f8f9fa;border-radius:6px;padding:5px;text-align:center;margin:6px 0 8px;}'
       +'._mpn{font-size:13px;font-weight:800;}._mpl{font-size:8px;color:#888;}'
       +'._mt{width:100%;border-collapse:collapse;font-size:10.5px;}'
-      +'._mt th{background:#f4f6fb;padding:4px 6px;text-align:left;color:#666;font-size:9px;text-transform:uppercase;}'
-      +'._mt td{padding:4px 6px;border-bottom:1px solid #f0f0f0;vertical-align:top;}'
+      +'._mt th{background:#f4f6fb;padding:4px 8px;text-align:left;color:#666;font-size:9px;text-transform:uppercase;border-bottom:1px solid #e5e5e0;}'
+      +'._mt td{padding:5px 8px;border-bottom:1px solid #f0f0f0;vertical-align:top;line-height:1.4;}'
       +'._mt tr:last-child td{border:none;}'
-      +'._mi{display:inline-block;padding:1px 6px;border-radius:8px;font-size:8.5px;font-weight:700;}'
+      +'._mi{display:inline-block;padding:1px 6px;border-radius:8px;font-size:8.5px;font-weight:700;white-space:nowrap;}'
       +'._mic{background:#fde8e8;color:#c0392b;}._mia{background:#fef3e2;color:#d35400;}._mim{background:#fef9e7;color:#b7950b;}._min{background:#eafaf1;color:#1e8449;}'
-      +'._mver{display:block;text-align:center;padding:4px;font-size:10px;color:#4a6fbd;cursor:pointer;background:#f8f9fa;}'
-      +'._mvt{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 5px rgba(0,0,0,.06);font-size:11px;margin-bottom:14px;}'
+      +'._mvt{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);font-size:11px;margin-bottom:14px;}'
       +'._mvt thead th{background:#c0392b;color:#fff;padding:7px 10px;text-align:left;font-size:9.5px;}'
       +'._mvt td{padding:6px 10px;border-bottom:1px solid #f0f0f0;}'
       +'._mvt tr:last-child td{border:none;}'
       +'._mdb{display:inline-block;padding:2px 7px;border-radius:8px;font-weight:700;font-size:9px;}'
       +'._mde{background:#c0392b;color:#fff;}._mdh{background:#e67e22;color:#fff;}._mdm{background:#f39c12;color:#fff;}'
-      +''
-      +''
-      +''
+      +'._mchts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}'
+      +'._mcc{background:#fff;border-radius:8px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,.06);}'
+      +'._mcc h3{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;margin:0 0 6px;padding-bottom:4px;border-bottom:1px solid #eee;}'
       +'._mfoot{background:#2d4a8a;color:rgba(255,255,255,.65);text-align:center;padding:8px;font-size:10px;}'
-      +'@media print{body *{visibility:hidden!important;}#_msspanel,#_msspanel *{visibility:visible!important;}#_msstor{position:static!important;display:block!important;background:none!important;padding:0!important;}#_msspanel{position:static!important;border-radius:0!important;max-width:100%!important;}._mflt,#_msstbtn,._mcl,._mpdf,._mub,._mver{display:none!important;}@page{size:landscape;margin:8mm;}}';
+      +'._opinión{background:#fff;border-radius:8px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px;border-left:4px solid #2d4a8a;}'
+      +'._loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:30px;color:#888;font-size:13px;}'
+      +'@media print{body *{visibility:hidden!important;}#_msspanel,#_msspanel *{visibility:visible!important;}#_msstor{position:static!important;display:block!important;background:none!important;padding:0!important;}#_msspanel{position:static!important;border-radius:0!important;max-width:100%!important;}._mflt,#_msstbtn,._mcl,._mpdf,._mub{display:none!important;}@page{size:letter;margin:10mm;}}';
     document.head.appendChild(se);
   }
 
-  function impG(d){
-    d=(d||'').toUpperCase();
-    var C=['SAT','DECLARAC','REQUERIM','ANTI LAV','PLD','FUSION','CAMBIO DE SOC','DEMANDA','LIQUIDAC'];
-    var A=['IMPUEST','NOMINA','PTU','IVA','DEVOLUC','CORREC','DISPERSION','FINIQUITO','IDSE','ACUSE','REVISION'];
-    var M=['REUNION','PROYECC','SEGUIM','SUBIR','ACTUALIZ','MEMOR','PENDIEN','ESTATUS'];
-    if(C.some(function(k){return d.indexOf(k)>=0;}))return{l:'CRITICA',c:'_mic'};
-    if(A.some(function(k){return d.indexOf(k)>=0;}))return{l:'ALTA',c:'_mia'};
-    if(M.some(function(k){return d.indexOf(k)>=0;}))return{l:'MEDIA',c:'_mim'};
-    return{l:'NORMAL',c:'_min'};
-  }
+  const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
 
-  // Usar datos de Supabase directamente (no scraping del DOM)
-  async function parseFromSupabase(sel,d0,d1){
-    const allUsers=[
-      {name:'Yosded Hernandez',init:'YH',role:'Consultor Junior',color:'#f0a500'},
-      {name:'Brenda Lopez',init:'BL',role:'Consultor Junior',color:'#8e5ea2'},
-      {name:'CP Alberto Smith',init:'CA',role:'Lider Fiscal',color:'#2e7d52'},
-      {name:'CPC Manuel Santana',init:'CM',role:'Director',color:'#2d4a8a'}
-    ];
-    const visible=allUsers.filter(u=>sel.indexOf(u.name)>=0);
-    const emails=visible.map(u=>{
-      const cached=Object.values(usersCache).find(c=>c.name===u.name);
-      return cached?cached.email:null;
-    }).filter(Boolean);
-    if(!emails.length)return[];
+  // Usuarios del sistema
+  const USERS=[
+    {name:'Yosded Hernandez',init:'YH',role:'Consultora Junior',color:'#f0a500',email:'yhernandez@msstconsulting.com'},
+    {name:'Brenda Lopez',init:'BL',role:'Consultora Junior',color:'#8e5ea2',email:'baudelo@msstconsulting.com'},
+    {name:'CP Alberto Smith',init:'CA',role:'Líder Fiscal',color:'#2e7d52',email:'asmith@msstconsulting.com'},
+    {name:'CPC Manuel Santana',init:'CM',role:'Director',color:'#2d4a8a',email:'msantana@msstconsulting.com'}
+  ];
 
-    const tareas=await sbGet('tareas','?email=in.('+emails.map(e=>'"'+e+'"').join(',')+')'+'&select=*&created_at=gte.'+d0+'T00:00:00&order=created_at.asc');
-
-    return visible.map(u=>{
-      const cached=Object.values(usersCache).find(c=>c.name===u.name);
-      if(!cached)return null;
-      const uTareas=(tareas||[]).filter(t=>t.email===cached.email&&t.created_at>=d0&&t.created_at<=d1+'T23:59:59');
-      const concluidas=uTareas.filter(t=>t.status==='concluida');
-      const tasks=uTareas.map(t=>({
-        desc:t.descripcion,client:t.client_name||'',
-        status:t.status,alta:t.fecha_creacion||t.created_at?.slice(0,10)||'',
-        conclusion:t.fecha_conclusion||''
-      }));
-      return {...u,sesiones:0,alta:uTareas.length,concluidas:concluidas.length,tasks};
-    }).filter(Boolean);
-  }
-
-  var _d0=new Date();_d0.setDate(_d0.getDate()-7);
-  var d0val=_d0.toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
-  var d1val=todayKey();
+  let _d0=new Date();_d0.setDate(_d0.getDate()-7);
+  let d0val=_d0.toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
+  let d1val=todayKey();
 
   function navW(dir){
-    var d0=new Date(document.getElementById('_msd0').value+'T12:00:00');
-    var d1=new Date(document.getElementById('_msd1').value+'T12:00:00');
-    var diff=Math.round((d1-d0)/(86400000))+1;
+    const d0=new Date(document.getElementById('_msd0').value+'T12:00:00');
+    const d1=new Date(document.getElementById('_msd1').value+'T12:00:00');
+    const diff=Math.round((d1-d0)/(86400000))+1;
     d0.setDate(d0.getDate()+dir*diff);d1.setDate(d1.getDate()+dir*diff);
     document.getElementById('_msd0').value=d0.toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
     document.getElementById('_msd1').value=d1.toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
     applyDR();
   }
   function applyDR(){
-    var d0=document.getElementById('_msd0').value;
-    var d1=document.getElementById('_msd1').value;
-    var sel=[];document.querySelectorAll('[name=_mu]:checked').forEach(function(c){sel.push(c.value);});
+    const d0=document.getElementById('_msd0').value;
+    const d1=document.getElementById('_msd1').value;
+    const sel=[];document.querySelectorAll('[name=_mu]:checked').forEach(c=>sel.push(c.value));
     renderG(sel,d0,d1);
   }
   window.navW=navW;window.applyDR=applyDR;
+  window.refreshReporteG=function(){
+    const sel=[];document.querySelectorAll('[name=_mu]:checked').forEach(c=>sel.push(c.value));
+    renderG(sel,document.getElementById('_msd0').value,document.getElementById('_msd1').value);
+  };
+
+  async function cargarTareas(emails,d0,d1){
+    const qs='?email=in.('+emails.map(e=>encodeURIComponent(e)).join(',')+')'
+      +'&or=(and(fecha_creacion.gte.'+d0+',fecha_creacion.lte.'+d1+'),and(fecha_conclusion.gte.'+d0+'T00:00:00,fecha_conclusion.lte.'+d1+'T23:59:59))'
+      +'&select=*&order=created_at.asc';
+    return await sbGet('tareas',qs)||[];
+  }
+
+  async function analizarConClaude(tareasTexto,dr){
+    try{
+      const res=await fetch(SB_URL+'/functions/v1/claude-analysis',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},
+        body:JSON.stringify({
+          prompt:`Eres asesor fiscal Big 4 de MSST Consulting SC. Analiza estas tareas del período ${dr} y responde SOLO con JSON sin markdown:
+{
+  "importancias": {"id_tarea": "CRITICA|ALTA|MEDIA|NORMAL"},
+  "opinion": {
+    "fortalezas": ["punto 1","punto 2","punto 3"],
+    "atencion": ["punto 1","punto 2","punto 3"],
+    "conclusion": "párrafo breve de 2 líneas"
+  }
+}
+
+Criterios de importancia:
+- CRITICA: SAT, requerimientos, declaraciones, anti-lavado, fusiones, demandas, liquidaciones, CFDI problemas
+- ALTA: impuestos, nómina, PTU, IVA, devoluciones, correcciones, finiquitos, IMSS/IDSE
+- MEDIA: reuniones, proyecciones, seguimientos, actualizaciones, reportes
+- NORMAL: administrativo, archivos, pendientes menores
+
+Tareas a analizar:
+${tareasTexto}`
+        })
+      });
+      const data=await res.json();
+      const raw=(data.text||'').replace(/```json|```/g,'').trim();
+      return JSON.parse(raw);
+    }catch(e){
+      console.error('Claude analysis error:',e);
+      return {importancias:{},opinion:{fortalezas:[],atencion:[],conclusion:'No se pudo generar el análisis.'}};
+    }
+  }
 
   async function renderG(sel,d0,d1){
     if(!d0)d0=d0val;if(!d1)d1=d1val;
     const ov=document.getElementById('_msstor');
     ov.style.display='flex';
-    ov.innerHTML='<div style="color:#fff;font-size:16px;text-align:center;padding:40px">Cargando reporte...</div>';
+    ov.innerHTML='<div style="background:#fff;border-radius:12px;padding:40px;text-align:center;width:400px;margin:auto"><div class="_loading"><div class="spinner"></div>Cargando datos y analizando con Claude...</div></div>';
+    ov.onclick=e=>{if(e.target===ov)ov.style.display='none';};
 
-    const data=await parseFromSupabase(sel,d0,d1);
-    if(!data||!data.length){ov.innerHTML='<div style="color:#fff;padding:40px">Sin datos.</div>';return;}
+    // Filtrar usuarios seleccionados (excluir Director del análisis de tareas)
+    const usuarios=USERS.filter(u=>sel.includes(u.name));
+    if(!usuarios.length){ov.innerHTML='<div style="color:#fff;padding:40px">Selecciona al menos un colaborador.</div>';return;}
 
-    var tc=data.reduce(function(s,u){return s+u.concluidas;},0);
-    var ta=data.reduce(function(s,u){return s+u.alta;},0);
-    var pct=ta?Math.round(tc/ta*100):0;
-    var today=new Date();
-    var todayStr=today.toLocaleDateString('en-CA',{timeZone:'America/Tijuana'});
+    const emails=usuarios.map(u=>u.email);
+    const todasTareas=await cargarTareas(emails,d0,d1);
 
-    // Tareas vencidas
-    var venc=[];
-    data.forEach(function(u){
-      u.tasks.forEach(function(t){
-        if(t.status==='pendiente'&&t.alta&&t.alta<todayStr){
-          var dias=Math.round((new Date(todayStr)-new Date(t.alta))/86400000);
-          if(dias>2)venc.push({desc:t.desc,client:t.client,init:u.init,color:u.color,dias:dias,name:u.name});
-        }
-      });
+    // Organizar por usuario
+    const porUsuario=usuarios.map(u=>{
+      const uT=todasTareas.filter(t=>t.email===u.email);
+      const registradas=uT.filter(t=>t.fecha_creacion>=d0&&t.fecha_creacion<=d1);
+      const concluidas=uT.filter(t=>t.fecha_conclusion&&t.fecha_conclusion.slice(0,10)>=d0&&t.fecha_conclusion.slice(0,10)<=d1);
+      const vencidas=uT.filter(t=>t.status==='pendiente'&&t.fecha_creacion&&t.fecha_creacion<d1);
+      return {...u,registradas,concluidas,vencidas,todas:uT};
     });
-    venc.sort(function(a,b){return b.dias-a.dias;});
 
-    // Importancia counters
-    var ic={c:0,a:0,m:0,n:0};
-    data.forEach(function(u){u.tasks.forEach(function(t){var i=impG(t.desc);if(i.l==='CRITICA')ic.c++;else if(i.l==='ALTA')ic.a++;else if(i.l==='MEDIA')ic.m++;else ic.n++;});});
+    // Todas las vencidas
+    const todayStr=todayKey();
+    const vencidas=todasTareas.filter(t=>t.status==='pendiente'&&t.fecha_creacion&&t.fecha_creacion<todayStr)
+      .map(t=>{
+        const u=USERS.find(u=>u.email===t.email)||{init:'?',color:'#999',name:'?'};
+        const dias=Math.round((new Date(todayStr)-new Date(t.fecha_creacion))/86400000);
+        return {...t,init:u.init,color:u.color,userName:u.name,dias};
+      }).sort((a,b)=>b.dias-a.dias);
 
-    var dr=new Date(d0+'T12:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'long'})+' al '+new Date(d1+'T12:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'});
+    // Preparar texto para Claude
+    const tareasTexto=porUsuario.map(u=>{
+      const lines=[`=== ${u.name} (${u.role}) ===`];
+      if(u.concluidas.length){
+        lines.push('CONCLUIDAS:');
+        u.concluidas.forEach(t=>lines.push(`[${t.id}] ${t.descripcion} | Cliente: ${t.client_name||'—'} | Conclusión: ${t.fecha_conclusion?.slice(0,10)||'—'}`));
+      }
+      if(u.registradas.filter(t=>t.status==='pendiente').length){
+        lines.push('PENDIENTES REGISTRADAS EN EL PERÍODO:');
+        u.registradas.filter(t=>t.status==='pendiente').forEach(t=>lines.push(`[${t.id}] ${t.descripcion} | Cliente: ${t.client_name||'—'}`));
+      }
+      return lines.join('\n');
+    }).join('\n\n');
 
-    // Cards de usuarios
-    var uHtml=data.map(function(u){
-      var topT=u.tasks.filter(function(t){return t.status==='concluida';}).slice(0,5);
-      var rows=topT.map(function(t){
-        var i=impG(t.desc);
-        return '<tr><td><span class="'+i.c+' _mi">'+i.l+'</span></td>'+
-          '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escH(t.desc)+'</td>'+
-          '<td style="font-size:9px;color:#888">'+escH(t.client||'—')+'</td>'+
-          '<td style="font-size:9px;color:#888;white-space:nowrap">'+escH(t.conclusion||'—')+'</td></tr>';
-      }).join('');
-      var pct2=u.alta?Math.round(u.concluidas/u.alta*100):0;
+    const dr=new Date(d0+'T12:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'long'})+
+      ' al '+new Date(d1+'T12:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'});
+
+    // Llamar a Claude para importancias + opinión
+    const analisis=await analizarConClaude(tareasTexto,dr);
+    const importancias=analisis.importancias||{};
+    const opinion=analisis.opinion||{};
+
+    // KPIs globales
+    const tcTotal=porUsuario.reduce((s,u)=>s+u.concluidas.length,0);
+    const taTotal=porUsuario.reduce((s,u)=>s+u.registradas.length,0);
+    const pct=taTotal?Math.round(tcTotal/taTotal*100):0;
+
+    // Función para badge de importancia
+    function impBadge(id){
+      const nivel=importancias[id]||'NORMAL';
+      const cls={CRITICA:'_mic',ALTA:'_mia',MEDIA:'_mim',NORMAL:'_min'}[nivel]||'_min';
+      return '<span class="_mi '+cls+'">'+nivel+'</span>';
+    }
+
+    // Cards por usuario
+    const uCards=porUsuario.map(u=>{
+      const pctU=u.registradas.length?Math.round(u.concluidas.length/u.registradas.length*100):0;
+      const rowsConcluidas=u.concluidas.map(t=>'<tr>'+
+        '<td>'+impBadge(t.id)+'</td>'+
+        '<td style="max-width:200px">'+escH(t.descripcion)+'</td>'+
+        '<td style="font-size:10px;color:#888">'+escH(t.client_name||'—')+'</td>'+
+        '<td style="font-size:10px;color:#888;white-space:nowrap">'+( t.fecha_conclusion?.slice(0,10)||'—')+'</td>'+
+      '</tr>').join('');
+      const rowsPendientes=u.registradas.filter(t=>t.status==='pendiente').slice(0,3).map(t=>'<tr>'+
+        '<td>'+impBadge(t.id)+'</td>'+
+        '<td style="max-width:200px;color:#888">'+escH(t.descripcion)+'</td>'+
+        '<td style="font-size:10px;color:#888">'+escH(t.client_name||'—')+'</td>'+
+        '<td style="font-size:10px;color:#EF9F27">Pendiente</td>'+
+      '</tr>').join('');
+
       return '<div class="_mcard">'+
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+
-          '<div class="_mav" style="background:'+u.color+'">'+escH(u.init)+'</div>'+
-          '<div><div style="font-size:12px;font-weight:700">'+escH(u.name.split(' ').slice(0,2).join(' '))+'</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
+          '<div class="_mav" style="background:'+u.color+'">'+u.init+'</div>'+
+          '<div style="flex:1"><div style="font-size:12px;font-weight:700">'+escH(u.name)+'</div>'+
             '<div style="font-size:9px;color:#888">'+escH(u.role)+'</div></div>'+
-          '<div style="margin-left:auto;font-size:18px;font-weight:800;color:'+(pct2>=90?'#2e7d52':'#e67e22')+'">'+pct2+'%</div>'+
+          '<div style="text-align:right">'+
+            '<div style="font-size:18px;font-weight:800;color:'+(pctU>=90?'#2e7d52':pctU>=70?'#e67e22':'#c0392b')+'">'+pctU+'%</div>'+
+            '<div style="font-size:9px;color:#888">cumplimiento</div>'+
+          '</div>'+
         '</div>'+
         '<div class="_mps">'+
-          '<div><div class="_mpn">'+u.alta+'</div><div class="_mpl">Registradas</div></div>'+
-          '<div><div class="_mpn" style="color:#2e7d52">'+u.concluidas+'</div><div class="_mpl">Concluidas</div></div>'+
-          '<div><div class="_mpn" style="color:#c0392b">'+(u.alta-u.concluidas)+'</div><div class="_mpl">Pendientes</div></div>'+
+          '<div><div class="_mpn">'+u.registradas.length+'</div><div class="_mpl">Registradas</div></div>'+
+          '<div><div class="_mpn" style="color:#2e7d52">'+u.concluidas.length+'</div><div class="_mpl">Concluidas</div></div>'+
+          '<div><div class="_mpn" style="color:#c0392b">'+u.vencidas.length+'</div><div class="_mpl">Vencidas</div></div>'+
         '</div>'+
-        '<table class="_mt"><thead><tr><th>Imp.</th><th>Descripción</th><th>Cliente</th><th>Conclusión</th></tr></thead>'+
-        '<tbody>'+rows+'</tbody></table>'+
+        (u.concluidas.length?
+          '<div style="font-size:9px;font-weight:700;color:#2e7d52;text-transform:uppercase;margin-bottom:4px">Concluidas en el período</div>'+
+          '<table class="_mt"><thead><tr><th>Imp.</th><th>Descripción</th><th>Cliente</th><th>Fecha</th></tr></thead>'+
+          '<tbody>'+rowsConcluidas+'</tbody></table>':'<div style="font-size:11px;color:#bbb;padding:6px 0">Sin tareas concluidas en el período.</div>')+
+        (rowsPendientes?
+          '<div style="font-size:9px;font-weight:700;color:#EF9F27;text-transform:uppercase;margin:8px 0 4px">Pendientes del período (primeras 3)</div>'+
+          '<table class="_mt"><thead><tr><th>Imp.</th><th>Descripción</th><th>Cliente</th><th>Status</th></tr></thead>'+
+          '<tbody>'+rowsPendientes+'</tbody></table>':'')+
       '</div>';
     }).join('');
 
-    // Vencidas
-    var vHtml=venc.length?venc.map(function(v){
-      var i=impG(v.desc);
-      var cls=v.dias>30?'_mde':v.dias>14?'_mdh':'_mdm';
-      return '<tr><td><strong>'+escH(v.desc)+'</strong><br><span style="font-size:10px;color:#888">'+escH(v.client)+'</span></td>'+
-        '<td><span style="background:'+v.color+';color:#fff;padding:1px 5px;border-radius:7px;font-size:9px;font-weight:700">'+v.init+'</span></td>'+
+    // Tabla vencidas
+    const vHtml=vencidas.length?vencidas.map(v=>{
+      const cls=v.dias>30?'_mde':v.dias>14?'_mdh':'_mdm';
+      const ni=importancias[v.id]||'NORMAL';
+      const nc={CRITICA:'_mic',ALTA:'_mia',MEDIA:'_mim',NORMAL:'_min'}[ni]||'_min';
+      return '<tr>'+
+        '<td><strong>'+escH(v.descripcion)+'</strong>'+(v.client_name?'<br><span style="font-size:10px;color:#888">'+escH(v.client_name)+'</span>':'')+'</td>'+
+        '<td><span class="_mav" style="background:'+v.color+';width:20px;height:20px;font-size:9px">'+v.init+'</span></td>'+
+        '<td style="white-space:nowrap">'+escH(v.fecha_creacion||'—')+'</td>'+
         '<td><span class="_mdb '+cls+'">'+v.dias+' días</span></td>'+
-        '<td><span class="_mi '+i.c+'">'+i.l+'</span></td></tr>';
-    }).join(''):'<tr><td colspan="4" style="text-align:center;padding:12px;color:#2e7d52;font-weight:700">Sin tareas vencidas en el período</td></tr>';
+        '<td><span class="_mi '+nc+'">'+ni+'</span></td>'+
+      '</tr>';
+    }).join(''):'<tr><td colspan="5" style="text-align:center;padding:12px;color:#2e7d52;font-weight:700">✅ Sin tareas vencidas</td></tr>';
 
-    var allU=['Yosded Hernandez','Brenda Lopez','CP Alberto Smith','CPC Manuel Santana'];
-    var fHtml=allU.map(function(n){
-      return '<label><input type="checkbox" name="_mu" value="'+n+'" '+(sel.indexOf(n)>=0?'checked':'')+'>'+n.split(' ').slice(0,2).join(' ')+'</label>';
-    }).join('');
+    // Opinión profesional
+    const opHtml=opinion.fortalezas||opinion.atencion?
+      '<div class="_opinión">'+
+        '<div style="font-size:12px;font-weight:700;color:#2d4a8a;margin-bottom:10px">📋 Opinión Profesional — Análisis de Desempeño</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:10px">'+
+          '<div>'+
+            '<div style="font-size:11px;font-weight:700;color:#2e7d52;margin-bottom:6px">✅ Fortalezas identificadas</div>'+
+            '<ul style="font-size:11px;line-height:1.8;padding-left:14px;color:#444">'+
+              (opinion.fortalezas||[]).map(f=>'<li>'+escH(f)+'</li>').join('')+
+            '</ul>'+
+          '</div>'+
+          '<div>'+
+            '<div style="font-size:11px;font-weight:700;color:#c0392b;margin-bottom:6px">⚠️ Áreas de atención inmediata</div>'+
+            '<ul style="font-size:11px;line-height:1.8;padding-left:14px;color:#444">'+
+              (opinion.atencion||[]).map(a=>'<li>'+escH(a)+'</li>').join('')+
+            '</ul>'+
+          '</div>'+
+        '</div>'+
+        (opinion.conclusion?'<div style="font-size:11px;color:#666;border-top:1px solid #eee;padding-top:8px;font-style:italic">'+escH(opinion.conclusion)+'</div>':'')+
+      '</div>':'';
 
-    var today2=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',weekday:'long',year:'numeric',month:'long',day:'numeric'});
+    // Gráficas SVG simples (sin Chart.js)
+    function svgBarras(){
+      const maxVal=Math.max(...porUsuario.map(u=>u.registradas.length),1);
+      const w=460,h=120,barW=50,gap=20,x0=40;
+      let svg='<svg width="100%" viewBox="0 0 '+w+' '+h+'" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif">';
+      // Grid
+      for(let i=0;i<=4;i++){
+        const y=10+(h-30)*(1-i/4);
+        svg+='<line x1="'+x0+'" y1="'+y+'" x2="'+(w-10)+'" y2="'+y+'" stroke="#f0f0ec" stroke-width="0.5"/>';
+        svg+='<text x="'+(x0-4)+'" y="'+(y+4)+'" text-anchor="end" font-size="8" fill="#bbb">'+Math.round(maxVal*i/4)+'</text>';
+      }
+      porUsuario.forEach((u,i)=>{
+        const x=x0+i*(barW*2+gap);
+        const hR=Math.max(2,Math.round(((h-30)*u.registradas.length)/maxVal));
+        const hC=Math.max(2,Math.round(((h-30)*u.concluidas.length)/maxVal));
+        const yBase=h-20;
+        svg+='<rect x="'+x+'" y="'+(yBase-hR)+'" width="'+barW+'" height="'+hR+'" fill="#3B4BC8" opacity="0.7" rx="2"/>';
+        svg+='<rect x="'+(x+barW+3)+'" y="'+(yBase-hC)+'" width="'+barW+'" height="'+hC+'" fill="#2e7d52" opacity="0.85" rx="2"/>';
+        svg+='<text x="'+(x+barW)+'" y="'+(h-6)+'" text-anchor="middle" font-size="8" fill="#888">'+u.init+'</text>';
+      });
+      svg+='<rect x="'+(w-100)+'" y="4" width="10" height="8" fill="#3B4BC8" opacity="0.7" rx="1"/>';
+      svg+='<text x="'+(w-87)+'" y="12" font-size="8" fill="#666">Registradas</text>';
+      svg+='<rect x="'+(w-100)+'" y="16" width="10" height="8" fill="#2e7d52" opacity="0.85" rx="1"/>';
+      svg+='<text x="'+(w-87)+'" y="24" font-size="8" fill="#666">Concluidas</text>';
+      svg+='</svg>';
+      return svg;
+    }
+
+    function svgCumplimiento(){
+      const w=460,h=120,barH=18,gap=8,x0=90;
+      let svg='<svg width="100%" viewBox="0 0 '+w+' '+h+'" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif">';
+      porUsuario.forEach((u,i)=>{
+        const pctU=u.registradas.length?Math.round(u.concluidas.length/u.registradas.length*100):0;
+        const y=10+i*(barH+gap);
+        const color=pctU>=90?'#2e7d52':pctU>=70?'#e67e22':'#c0392b';
+        const bw=Math.max(2,Math.round((w-x0-60)*pctU/100));
+        svg+='<text x="'+(x0-4)+'" y="'+(y+13)+'" text-anchor="end" font-size="9" fill="#555">'+u.name.split(' ').slice(0,2).join(' ')+'</text>';
+        svg+='<rect x="'+x0+'" y="'+y+'" width="'+(w-x0-60)+'" height="'+barH+'" fill="#f0f0ec" rx="3"/>';
+        svg+='<rect x="'+x0+'" y="'+y+'" width="'+bw+'" height="'+barH+'" fill="'+color+'" rx="3" opacity="0.85"/>';
+        svg+='<text x="'+(x0+bw+4)+'" y="'+(y+13)+'" font-size="9" fill="'+color+'" font-weight="700">'+pctU+'%</text>';
+      });
+      svg+='</svg>';
+      return svg;
+    }
+
+    const today2=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',weekday:'long',year:'numeric',month:'long',day:'numeric'});
+    const allU=USERS.map(u=>'<label><input type="checkbox" name="_mu" value="'+u.name+'" '+(sel.includes(u.name)?'checked':'')+'>'+u.name.split(' ').slice(0,2).join(' ')+'</label>').join('');
 
     ov.innerHTML='<div id="_msspanel">'+
       '<div class="_mh">'+
         '<div><h2>📊 Reporte Gerencial — MSST Consulting SC</h2><p>'+dr+' · Solo para: CPC Manuel Santana</p></div>'+
         '<div class="_mhright">'+
-          '<button class="_mpdf" onclick="window.print()">🖨️ Exportar PDF</button>'+
+          '<button class="_mpdf" onclick="window.print()">🖨️ PDF</button>'+
           '<button class="_mcl" onclick="document.getElementById(\'_msstor\').style.display=\'none\'">✕</button>'+
         '</div>'+
       '</div>'+
       '<div class="_mflt">'+
-        '<span style="font-size:11px;font-weight:700;color:#555">📅</span>'+
-        '<label>Desde&nbsp;<input type="date" id="_msd0" value="'+d0+'"></label>'+
-        '<label>Hasta&nbsp;<input type="date" id="_msd1" value="'+d1+'"></label>'+
+        '<label>Desde <input type="date" id="_msd0" value="'+d0+'"></label>'+
+        '<label>Hasta <input type="date" id="_msd1" value="'+d1+'"></label>'+
         '<button class="_mub grn" onclick="applyDR()">✅ Aplicar</button>'+
         '<button class="_mub" onclick="navW(-1)">← Anterior</button>'+
         '<button class="_mub" onclick="navW(1)">Siguiente →</button>'+
-        '<span style="width:1px;height:22px;background:#ddd;display:inline-block;margin:0 4px"></span>'+
-        fHtml+
+        '<span style="width:1px;height:18px;background:#ddd;display:inline-block;margin:0 2px"></span>'+
+        allU+
         '<button class="_mub" onclick="refreshReporteG()">🔄 Actualizar</button>'+
       '</div>'+
       '<div class="_mbd">'+
         '<div class="_mkpi">'+
-          '<div class="_mkc"><div class="_mkn b">'+tc+'</div><div class="_mkl">Tareas concluidas</div></div>'+
-          '<div class="_mkc g"><div class="_mkn g">'+pct+'%</div><div class="_mkl">Tasa de cumplimiento</div></div>'+
-          '<div class="_mkc r"><div class="_mkn r">'+venc.length+'</div><div class="_mkl">Tareas vencidas (+2 días)</div></div>'+
-          '<div class="_mkc o"><div class="_mkn o">'+ta+'</div><div class="_mkl">Tareas registradas</div></div>'+
+          '<div class="_mkc"><div class="_mkn b">'+tcTotal+'</div><div class="_mkl">Tareas concluidas en el período</div></div>'+
+          '<div class="_mkc g"><div class="_mkn g">'+pct+'%</div><div class="_mkl">Tasa de cumplimiento del equipo</div></div>'+
+          '<div class="_mkc r"><div class="_mkn r">'+vencidas.length+'</div><div class="_mkl">Tareas vencidas</div></div>'+
+          '<div class="_mkc o"><div class="_mkn o">'+taTotal+'</div><div class="_mkl">Tareas registradas</div></div>'+
         '</div>'+
-
+        '<div class="_mchts">'+
+          '<div class="_mcc"><h3>Tareas registradas vs concluidas por persona</h3>'+svgBarras()+'</div>'+
+          '<div class="_mcc"><h3>% Cumplimiento por persona</h3>'+svgCumplimiento()+'</div>'+
+        '</div>'+
         '<div class="_msec">👥 Análisis por Colaborador</div>'+
-        '<div class="_mug">'+uHtml+'</div>'+
-        '<div class="_msec">⚠️ Tareas con más de 2 días de Vencimiento</div>'+
-        '<table class="_mvt"><thead><tr><th>Tarea / Cliente</th><th>Resp.</th><th>Atraso</th><th>Prioridad</th></tr></thead>'+
+        '<div class="_mug">'+uCards+'</div>'+
+        '<div class="_msec">⚠️ Tareas Vencidas</div>'+
+        '<table class="_mvt"><thead><tr><th>Tarea / Cliente</th><th>Resp.</th><th>Fecha alta</th><th>Atraso</th><th>Prioridad</th></tr></thead>'+
         '<tbody>'+vHtml+'</tbody></table>'+
+        opHtml+
       '</div>'+
       '<div class="_mfoot">TaxIA · MSST Consulting SC · '+today2+' · Confidencial — Solo para CPC Manuel Santana</div>'+
     '</div>';
 
-    ov.onclick=function(e){if(e.target===ov)ov.style.display='none';};
-
-
+    ov.onclick=e=>{if(e.target===ov)ov.style.display='none';};
   }
-  window.renderG=renderG;
-  window.refreshReporteG=function(){
-    var s=[];
-    document.querySelectorAll('[name=_mu]:checked').forEach(function(c){s.push(c.value);});
-    var d0=document.getElementById('_msd0').value;
-    var d1=document.getElementById('_msd1').value;
-    renderG(s,d0,d1);
-  };
 
-  // Botón flotante
-  var btn=document.createElement('button');
+  window.renderG=renderG;
+
+  const btn=document.createElement('button');
   btn.id='_msstbtn';
   btn.innerHTML='📊 Mi Reporte';
   btn.title='Reporte Gerencial — Solo CPC Manuel Santana';
-  btn.onclick=function(){renderG(['Yosded Hernandez','Brenda Lopez','CP Alberto Smith','CPC Manuel Santana'],d0val,d1val);};
+  btn.onclick=()=>renderG(USERS.map(u=>u.name),d0val,d1val);
 
-  var ov=document.createElement('div');
+  const ov=document.createElement('div');
   ov.id='_msstor';
 
   document.body.appendChild(btn);
   document.body.appendChild(ov);
 }
+
 
 
 renderLogin();
