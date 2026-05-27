@@ -3324,62 +3324,12 @@ function initReporteGerencial(){
     return {abiertas,completadas};
   }
 
-  async function analizarConClaude(tareasTexto,dr){
-    try{
-      const res=await fetch(SB_URL+'/functions/v1/claude-analysis',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},
-        body:JSON.stringify({
-          prompt:`Eres socio de una firma Big 4 de asesoría fiscal y legal. Analiza las tareas del período ${dr} y responde SOLO con JSON válido sin markdown ni texto adicional:
-{
-  "importancias": {"id_tarea": "CRITICA|ALTA|MEDIA|NORMAL"},
-  "complejidad": {"id_tarea": "ALTA|MEDIA|BAJA"},
-  "calidad_redaccion": {
-    "resumen": "párrafo de 2-3 líneas evaluando la calidad general de la redacción de las tareas del equipo",
-    "observaciones": ["observación específica 1","observación específica 2","observación específica 3"],
-    "recomendaciones": ["recomendación 1","recomendación 2"]
-  },
-  "opinion": {
-    "fortalezas": ["fortaleza concreta 1","fortaleza concreta 2","fortaleza concreta 3"],
-    "atencion": ["área crítica 1","área crítica 2","área crítica 3"],
-    "conclusion": "conclusión ejecutiva de 2 líneas con perspectiva de socio Big 4"
-  }
-}
-
-Criterios de IMPORTANCIA (impacto fiscal/legal/corporativo):
-- CRITICA: SAT, requerimientos fiscales, declaraciones anuales/provisionales, anti-lavado PLD, fusiones/escisiones, demandas judiciales, liquidaciones, CFDI con problemas, cambios societarios
-- ALTA: impuestos mensuales, nómina, PTU, IVA, devoluciones fiscales, correcciones de errores, finiquitos, IMSS/IDSE/INFONAVIT, acuses, revisiones fiscales
-- MEDIA: reuniones con clientes, proyecciones financieras, seguimientos de trámites, actualizaciones de expedientes, reportes periódicos
-- NORMAL: tareas administrativas, archivo de documentos, pendientes menores, coordinación interna
-
-Criterios de COMPLEJIDAD (esfuerzo técnico requerido):
-- ALTA: requiere análisis fiscal profundo, interpretación de normas, cálculos complejos, coordinación multi-área, riesgo legal
-- MEDIA: requiere conocimiento técnico estándar, revisión de documentos, cálculos rutinarios
-- BAJA: tareas operativas, de seguimiento o administrativas
-
-Criterios de CALIDAD DE REDACCIÓN:
-- Evalúa si las descripciones son claras, específicas y suficientes para auditoría
-- Identifica tareas con descripciones vagas o ambiguas
-- Sugiere mejoras en la forma de documentar el trabajo fiscal
-
-Tareas a analizar:
-${tareasTexto}`
-        })
-      });
-      const data=await res.json();
-      const raw=(data.text||'').replace(/```json|```/g,'').trim();
-      return JSON.parse(raw);
-    }catch(e){
-      console.error('Claude analysis error:',e);
-      return {importancias:{},complejidad:{},calidad_redaccion:{resumen:'',observaciones:[],recomendaciones:[]},opinion:{fortalezas:[],atencion:[],conclusion:'No se pudo generar el análisis.'}};
-    }
-  }
 
   async function renderG(sel,d0,d1){
     if(!d0)d0=d0val;if(!d1)d1=d1val;
     const ov=document.getElementById('_msstor');
     ov.style.display='flex';
-    ov.innerHTML='<div style="background:#fff;border-radius:12px;padding:40px;text-align:center;width:400px;margin:auto"><div class="_loading"><div class="spinner"></div>Cargando datos y analizando con Claude...</div></div>';
+    ov.innerHTML='<div style="background:#fff;border-radius:12px;padding:40px;text-align:center;width:400px;margin:auto"><div class="_loading"><div class="spinner"></div>Cargando datos...</div></div>';
     ov.onclick=e=>{if(e.target===ov)ov.style.display='none';};
 
     // Filtrar usuarios seleccionados (excluir Director del análisis de tareas)
@@ -3425,28 +3375,10 @@ ${tareasTexto}`
         return {...t,init:u.init,color:u.color,userName:u.name,dias};
       }).sort((a,b)=>b.dias-a.dias);
 
-    // Preparar texto para Claude
-    const tareasTexto=porUsuario.map(u=>{
-      const lines=[`=== ${u.name} (${u.role}) ===`];
-      if(u.concluidas.length){
-        lines.push('CONCLUIDAS:');
-        u.concluidas.forEach(t=>lines.push(`[${t.id}] ${t.descripcion} | Cliente: ${t.client_name||'—'} | Conclusión: ${t.fecha_conclusion?.slice(0,10)||'—'}`));
-      }
-      if(u.registradas.filter(t=>t.status==='pendiente').length){
-        lines.push('PENDIENTES REGISTRADAS EN EL PERÍODO:');
-        u.registradas.filter(t=>t.status==='pendiente').forEach(t=>lines.push(`[${t.id}] ${t.descripcion} | Cliente: ${t.client_name||'—'}`));
-      }
-      return lines.join('\n');
-    }).join('\n\n');
-
     const dr=new Date(d0+'T12:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'long'})+
       ' al '+new Date(d1+'T12:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'});
-
-    // Llamar a Claude para importancias + opinión
-    const analisis=await analizarConClaude(tareasTexto,dr);
-    const importancias=analisis.importancias||{};
-    const complejidad=analisis.complejidad||{};
-    const calidadRedaccion=analisis.calidad_redaccion||{};
+    const importancias={};
+    const complejidad={};
     const opinion=analisis.opinion||{};
 
     // KPIs globales
@@ -3531,46 +3463,9 @@ ${tareasTexto}`
     }).join(''):'<tr><td colspan="5" style="text-align:center;padding:12px;color:#2e7d52;font-weight:700">✅ Sin tareas vencidas</td></tr>';
 
     // Opinión profesional
-    // Sección calidad de redacción
-    const calidadHtml=calidadRedaccion.resumen?
-      '<div class="_opinión" style="border-left-color:#EF9F27">'+
-        '<div style="font-size:12px;font-weight:700;color:#854F0B;margin-bottom:8px">✍️ Análisis de Redacción y Complejidad de Tareas</div>'+
-        '<div style="font-size:11px;color:#444;margin-bottom:10px;line-height:1.6">'+escH(calidadRedaccion.resumen||'')+'</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">'+
-          '<div>'+
-            '<div style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:6px">Observaciones</div>'+
-            '<ul style="font-size:11px;line-height:1.8;padding-left:14px;color:#444">'+
-              (calidadRedaccion.observaciones||[]).map(o=>'<li>'+escH(o)+'</li>').join('')+
-            '</ul>'+
-          '</div>'+
-          '<div>'+
-            '<div style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:6px">Recomendaciones para documentar mejor</div>'+
-            '<ul style="font-size:11px;line-height:1.8;padding-left:14px;color:#444">'+
-              (calidadRedaccion.recomendaciones||[]).map(r=>'<li>'+escH(r)+'</li>').join('')+
-            '</ul>'+
-          '</div>'+
-        '</div>'+
-      '</div>':'';
+    const calidadHtml='';
 
-    const opHtml=opinion.fortalezas||opinion.atencion?
-      '<div class="_opinión">'+
-        '<div style="font-size:12px;font-weight:700;color:#2d4a8a;margin-bottom:10px">📋 Opinión Profesional — Análisis de Desempeño</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:10px">'+
-          '<div>'+
-            '<div style="font-size:11px;font-weight:700;color:#2e7d52;margin-bottom:6px">✅ Fortalezas identificadas</div>'+
-            '<ul style="font-size:11px;line-height:1.8;padding-left:14px;color:#444">'+
-              (opinion.fortalezas||[]).map(f=>'<li>'+escH(f)+'</li>').join('')+
-            '</ul>'+
-          '</div>'+
-          '<div>'+
-            '<div style="font-size:11px;font-weight:700;color:#c0392b;margin-bottom:6px">⚠️ Áreas de atención inmediata</div>'+
-            '<ul style="font-size:11px;line-height:1.8;padding-left:14px;color:#444">'+
-              (opinion.atencion||[]).map(a=>'<li>'+escH(a)+'</li>').join('')+
-            '</ul>'+
-          '</div>'+
-        '</div>'+
-        (opinion.conclusion?'<div style="font-size:11px;color:#666;border-top:1px solid #eee;padding-top:8px;font-style:italic">'+escH(opinion.conclusion)+'</div>':'')+
-      '</div>':'';
+    const opHtml='';
 
     // Gráficas SVG simples (sin Chart.js)
     function svgBarras(){
