@@ -3257,21 +3257,37 @@ function initReporteGerencial(){
         method:'POST',
         headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},
         body:JSON.stringify({
-          prompt:`Eres asesor fiscal Big 4 de MSST Consulting SC. Analiza estas tareas del período ${dr} y responde SOLO con JSON sin markdown:
+          prompt:`Eres socio de una firma Big 4 de asesoría fiscal y legal. Analiza las tareas del período ${dr} y responde SOLO con JSON válido sin markdown ni texto adicional:
 {
   "importancias": {"id_tarea": "CRITICA|ALTA|MEDIA|NORMAL"},
+  "complejidad": {"id_tarea": "ALTA|MEDIA|BAJA"},
+  "calidad_redaccion": {
+    "resumen": "párrafo de 2-3 líneas evaluando la calidad general de la redacción de las tareas del equipo",
+    "observaciones": ["observación específica 1","observación específica 2","observación específica 3"],
+    "recomendaciones": ["recomendación 1","recomendación 2"]
+  },
   "opinion": {
-    "fortalezas": ["punto 1","punto 2","punto 3"],
-    "atencion": ["punto 1","punto 2","punto 3"],
-    "conclusion": "párrafo breve de 2 líneas"
+    "fortalezas": ["fortaleza concreta 1","fortaleza concreta 2","fortaleza concreta 3"],
+    "atencion": ["área crítica 1","área crítica 2","área crítica 3"],
+    "conclusion": "conclusión ejecutiva de 2 líneas con perspectiva de socio Big 4"
   }
 }
 
-Criterios de importancia:
-- CRITICA: SAT, requerimientos, declaraciones, anti-lavado, fusiones, demandas, liquidaciones, CFDI problemas
-- ALTA: impuestos, nómina, PTU, IVA, devoluciones, correcciones, finiquitos, IMSS/IDSE
-- MEDIA: reuniones, proyecciones, seguimientos, actualizaciones, reportes
-- NORMAL: administrativo, archivos, pendientes menores
+Criterios de IMPORTANCIA (impacto fiscal/legal/corporativo):
+- CRITICA: SAT, requerimientos fiscales, declaraciones anuales/provisionales, anti-lavado PLD, fusiones/escisiones, demandas judiciales, liquidaciones, CFDI con problemas, cambios societarios
+- ALTA: impuestos mensuales, nómina, PTU, IVA, devoluciones fiscales, correcciones de errores, finiquitos, IMSS/IDSE/INFONAVIT, acuses, revisiones fiscales
+- MEDIA: reuniones con clientes, proyecciones financieras, seguimientos de trámites, actualizaciones de expedientes, reportes periódicos
+- NORMAL: tareas administrativas, archivo de documentos, pendientes menores, coordinación interna
+
+Criterios de COMPLEJIDAD (esfuerzo técnico requerido):
+- ALTA: requiere análisis fiscal profundo, interpretación de normas, cálculos complejos, coordinación multi-área, riesgo legal
+- MEDIA: requiere conocimiento técnico estándar, revisión de documentos, cálculos rutinarios
+- BAJA: tareas operativas, de seguimiento o administrativas
+
+Criterios de CALIDAD DE REDACCIÓN:
+- Evalúa si las descripciones son claras, específicas y suficientes para auditoría
+- Identifica tareas con descripciones vagas o ambiguas
+- Sugiere mejoras en la forma de documentar el trabajo fiscal
 
 Tareas a analizar:
 ${tareasTexto}`
@@ -3282,7 +3298,7 @@ ${tareasTexto}`
       return JSON.parse(raw);
     }catch(e){
       console.error('Claude analysis error:',e);
-      return {importancias:{},opinion:{fortalezas:[],atencion:[],conclusion:'No se pudo generar el análisis.'}};
+      return {importancias:{},complejidad:{},calidad_redaccion:{resumen:'',observaciones:[],recomendaciones:[]},opinion:{fortalezas:[],atencion:[],conclusion:'No se pudo generar el análisis.'}};
     }
   }
 
@@ -3338,6 +3354,8 @@ ${tareasTexto}`
     // Llamar a Claude para importancias + opinión
     const analisis=await analizarConClaude(tareasTexto,dr);
     const importancias=analisis.importancias||{};
+    const complejidad=analisis.complejidad||{};
+    const calidadRedaccion=analisis.calidad_redaccion||{};
     const opinion=analisis.opinion||{};
 
     // KPIs globales
@@ -3355,16 +3373,24 @@ ${tareasTexto}`
     // Cards por usuario
     const uCards=porUsuario.map(u=>{
       const pctU=u.registradas.length?Math.round(u.concluidas.length/u.registradas.length*100):0;
+      function compBadge(id){
+        const nivel=complejidad[id]||'';
+        if(!nivel)return '';
+        const cls={ALTA:'background:#fde8e8;color:#c0392b',MEDIA:'background:#fef9e7;color:#b7950b',BAJA:'background:#eafaf1;color:#1e8449'}[nivel]||'';
+        return '<span style="'+cls+';padding:1px 6px;border-radius:8px;font-size:8px;font-weight:700;margin-left:3px">'+nivel+'</span>';
+      }
       const rowsConcluidas=u.concluidas.map(t=>'<tr>'+
-        '<td>'+impBadge(t.id)+'</td>'+
-        '<td style="max-width:200px">'+escH(t.descripcion)+'</td>'+
+        '<td style="white-space:nowrap">'+impBadge(t.id)+compBadge(t.id)+'</td>'+
+        '<td style="max-width:180px">'+escH(t.descripcion)+'</td>'+
         '<td style="font-size:10px;color:#888">'+escH(t.client_name||'—')+'</td>'+
-        '<td style="font-size:10px;color:#888;white-space:nowrap">'+( t.fecha_conclusion?.slice(0,10)||'—')+'</td>'+
+        '<td style="font-size:10px;color:#888;white-space:nowrap">'+escH(t.fecha_creacion||'—')+'</td>'+
+        '<td style="font-size:10px;color:#5a8a1a;white-space:nowrap;font-weight:600">'+(t.fecha_conclusion?.slice(0,10)||'—')+'</td>'+
       '</tr>').join('');
       const rowsPendientes=u.registradas.filter(t=>t.status==='pendiente').slice(0,3).map(t=>'<tr>'+
-        '<td>'+impBadge(t.id)+'</td>'+
-        '<td style="max-width:200px;color:#888">'+escH(t.descripcion)+'</td>'+
+        '<td style="white-space:nowrap">'+impBadge(t.id)+compBadge(t.id)+'</td>'+
+        '<td style="max-width:180px;color:#888">'+escH(t.descripcion)+'</td>'+
         '<td style="font-size:10px;color:#888">'+escH(t.client_name||'—')+'</td>'+
+        '<td style="font-size:10px;color:#888;white-space:nowrap">'+escH(t.fecha_creacion||'—')+'</td>'+
         '<td style="font-size:10px;color:#EF9F27">Pendiente</td>'+
       '</tr>').join('');
 
@@ -3385,11 +3411,11 @@ ${tareasTexto}`
         '</div>'+
         (u.concluidas.length?
           '<div style="font-size:9px;font-weight:700;color:#2e7d52;text-transform:uppercase;margin-bottom:4px">Concluidas en el período</div>'+
-          '<table class="_mt"><thead><tr><th>Imp.</th><th>Descripción</th><th>Cliente</th><th>Fecha</th></tr></thead>'+
+          '<table class="_mt"><thead><tr><th>Imp./Compl.</th><th>Descripción</th><th>Cliente</th><th>Registro</th><th>Conclusión</th></tr></thead>'+
           '<tbody>'+rowsConcluidas+'</tbody></table>':'<div style="font-size:11px;color:#bbb;padding:6px 0">Sin tareas concluidas en el período.</div>')+
         (rowsPendientes?
           '<div style="font-size:9px;font-weight:700;color:#EF9F27;text-transform:uppercase;margin:8px 0 4px">Pendientes del período (primeras 3)</div>'+
-          '<table class="_mt"><thead><tr><th>Imp.</th><th>Descripción</th><th>Cliente</th><th>Status</th></tr></thead>'+
+          '<table class="_mt"><thead><tr><th>Imp./Compl.</th><th>Descripción</th><th>Cliente</th><th>Registro</th><th>Status</th></tr></thead>'+
           '<tbody>'+rowsPendientes+'</tbody></table>':'')+
       '</div>';
     }).join('');
@@ -3409,6 +3435,27 @@ ${tareasTexto}`
     }).join(''):'<tr><td colspan="5" style="text-align:center;padding:12px;color:#2e7d52;font-weight:700">✅ Sin tareas vencidas</td></tr>';
 
     // Opinión profesional
+    // Sección calidad de redacción
+    const calidadHtml=calidadRedaccion.resumen?
+      '<div class="_opinión" style="border-left-color:#EF9F27">'+
+        '<div style="font-size:12px;font-weight:700;color:#854F0B;margin-bottom:8px">✍️ Análisis de Redacción y Complejidad de Tareas</div>'+
+        '<div style="font-size:11px;color:#444;margin-bottom:10px;line-height:1.6">'+escH(calidadRedaccion.resumen||'')+'</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">'+
+          '<div>'+
+            '<div style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:6px">Observaciones</div>'+
+            '<ul style="font-size:11px;line-height:1.8;padding-left:14px;color:#444">'+
+              (calidadRedaccion.observaciones||[]).map(o=>'<li>'+escH(o)+'</li>').join('')+
+            '</ul>'+
+          '</div>'+
+          '<div>'+
+            '<div style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:6px">Recomendaciones para documentar mejor</div>'+
+            '<ul style="font-size:11px;line-height:1.8;padding-left:14px;color:#444">'+
+              (calidadRedaccion.recomendaciones||[]).map(r=>'<li>'+escH(r)+'</li>').join('')+
+            '</ul>'+
+          '</div>'+
+        '</div>'+
+      '</div>':'';
+
     const opHtml=opinion.fortalezas||opinion.atencion?
       '<div class="_opinión">'+
         '<div style="font-size:12px;font-weight:700;color:#2d4a8a;margin-bottom:10px">📋 Opinión Profesional — Análisis de Desempeño</div>'+
@@ -3511,6 +3558,7 @@ ${tareasTexto}`
         '<div class="_msec">⚠️ Tareas Vencidas</div>'+
         '<table class="_mvt"><thead><tr><th>Tarea / Cliente</th><th>Resp.</th><th>Fecha alta</th><th>Atraso</th><th>Prioridad</th></tr></thead>'+
         '<tbody>'+vHtml+'</tbody></table>'+
+        calidadHtml+
         opHtml+
       '</div>'+
       '<div class="_mfoot">TaxIA · MSST Consulting SC · '+today2+' · Confidencial — Solo para CPC Manuel Santana</div>'+
