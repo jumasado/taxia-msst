@@ -3621,6 +3621,7 @@ function initReporteGerencial(){
     const emails=usuarios.map(u=>u.email);
     const todasTareas=await cargarTareas(emails,d0,d1);
 
+    const todayStr=todayKey();
     // Organizar por usuario — TaxIA
     const porUsuarioBase=usuarios.map(u=>{
       const uT=todasTareas.filter(t=>t.email===u.email);
@@ -3647,7 +3648,6 @@ function initReporteGerencial(){
     });
 
     // Todas las vencidas
-    const todayStr=todayKey();
     const vencidas=todasTareas.filter(t=>t.status==='pendiente'&&t.fecha_creacion&&t.fecha_creacion<todayStr)
       .map(t=>{
         const u=USERS.find(u=>u.email===t.email)||{init:'?',color:'#999',name:'?'};
@@ -3935,6 +3935,268 @@ function initReporteGerencial(){
   document.body.appendChild(ov);
 }
 
+
+
+
+async function reporteProyeccionPDF(id){
+  const proy=pfCache.find(p=>p.id===id);if(!proy)return;
+  const [meses,ajustes,cierresHist]=await Promise.all([
+    sbGet('pf_meses','?proyeccion_id=eq.'+id+'&select=*&order=mes.asc'),
+    sbGet('pf_ajustes','?proyeccion_id=eq.'+id+'&select=*&order=created_at.asc'),
+    proy.cliente_id?sbGet('pf_cierres','?cliente_id=eq.'+proy.cliente_id+'&select=*&order=ejercicio.asc'):Promise.resolve([])
+  ]);
+  const mesesData=meses||[];
+  const mesesConDatos=mesesData.filter(m=>m.ingresos!==null);
+  const nMeses=mesesConDatos.length;
+  const avg=campo=>nMeses?mesesConDatos.reduce((s,m)=>s+(parseFloat(m[campo])||0),0)/nMeses:0;
+  const proyectados=[];
+  for(let m=1;m<=12;m++){
+    const real=mesesData.find(md=>md.mes===m);
+    if(real&&real.ingresos!==null) proyectados.push({mes:m,real:true,...real});
+    else{const ing=avg('ingresos'),cv=avg('costo_ventas'),go=avg('gastos_operacion'),oi=avg('otros_ingresos'),og=avg('otros_gastos'),pp=avg('pago_provisional');
+      proyectados.push({mes:m,real:false,ingresos:ing,costo_ventas:cv,utilidad_bruta:ing-cv,gastos_operacion:go,utilidad_operacion:ing-cv-go,otros_ingresos:oi,otros_gastos:og,pago_provisional:pp,utilidad_neta_contable:ing-cv-go+oi-og});}
+  }
+  const totalIngresos=proyectados.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
+  const totalCosto=proyectados.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
+  const totalGastosOp=proyectados.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
+  const totalOtrosIng=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
+  const totalOtrosGas=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_gastos)||0),0);
+  const utilidadContable=totalIngresos-totalCosto-totalGastosOp+totalOtrosIng-totalOtrosGas;
+  const ajustesData=ajustes||[];
+  const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
+  const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
+  const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
+  const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
+  const totalPP2=proyectados.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
+  const isrACargoP=Math.max(0,isrEstimado-totalPP2);
+  const saldoFavorP=Math.max(0,totalPP2-isrEstimado);
+  const cuPDF=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
+  const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
+
+  // Gráficas SVG
+  const labelsM=MESES_NOMBRES.map(m=>m.slice(0,3));
+  const gW=920,gH=180,gX=60,gY=20,gBW=gW-80,gBH=gH-50;
+  const barPairP=Math.floor(gBW/12);
+  const barW=Math.floor(barPairP/2)-2;
+  const maxVal=Math.max(...proyectados.map(m=>parseFloat(m.ingresos)||0),...proyectados.map(m=>(parseFloat(m.costo_ventas)||0)+(parseFloat(m.gastos_operacion)||0)))*1.1||1;
+
+  let svg1='<svg width="100%" viewBox="0 0 '+gW+' '+gH+'" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif">';
+  for(let i=0;i<=4;i++){const y=gY+gBH-(i/4)*gBH;svg1+='<line x1="'+gX+'" y1="'+y+'" x2="'+(gX+gBW)+'" y2="'+y+'" stroke="#e5e5e0" stroke-width="0.5"/>';const val=((maxVal/1.1)*(i/4)/1000000);svg1+='<text x="'+(gX-5)+'" y="'+(y+4)+'" text-anchor="end" font-size="8" fill="#999">$'+val.toFixed(1)+'M</text>';}
+  proyectados.forEach((m,i)=>{
+    const x=gX+i*barPairP;
+    const egresos=(parseFloat(m.costo_ventas)||0)+(parseFloat(m.gastos_operacion)||0)+(parseFloat(m.otros_gastos)||0);
+    const hI=Math.max(1,Math.round(((parseFloat(m.ingresos)||0)/maxVal)*gBH));
+    const hE=Math.max(1,Math.round((egresos/maxVal)*gBH));
+    const op=m.real?1:0.55;
+    svg1+='<rect x="'+x+'" y="'+(gY+gBH-hI)+'" width="'+barW+'" height="'+hI+'" fill="#3B4BC8" opacity="'+op+'" rx="2"/>';
+    svg1+='<rect x="'+(x+barW+2)+'" y="'+(gY+gBH-hE)+'" width="'+barW+'" height="'+hE+'" fill="#dc2626" opacity="'+op+'" rx="2"/>';
+    svg1+='<text x="'+(x+barPairP/2)+'" y="'+(gY+gBH+12)+'" text-anchor="middle" font-size="7.5" fill="#888">'+labelsM[i]+'</text>';
+  });
+  svg1+='<rect x="'+gX+'" y="'+(gY+gBH+22)+'" width="10" height="8" fill="#3B4BC8" rx="2"/><text x="'+(gX+13)+'" y="'+(gY+gBH+30)+'" font-size="8" fill="#555">Ingresos</text>';
+  svg1+='<rect x="'+(gX+80)+'" y="'+(gY+gBH+22)+'" width="10" height="8" fill="#dc2626" rx="2"/><text x="'+(gX+93)+'" y="'+(gY+gBH+30)+'" font-size="8" fill="#555">Egresos</text>';
+  svg1+='</svg>';
+
+  // Tabla mensual HTML
+  const mesRowsHTML=proyectados.map(m=>'<tr style="background:'+(m.real?'#fff':'#f8fff8')+'">'+
+    '<td style="padding:5px 8px;font-size:11px;font-weight:500;border-bottom:1px solid #f0f0ec">'+MESES_NOMBRES[m.mes-1]+(m.real?'':' <span style="font-size:8px;color:#8DC63F;font-weight:700">PROY</span>')+'</td>'+
+    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.ingresos)+'</td>'+
+    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.costo_ventas)+'</td>'+
+    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.gastos_operacion)+'</td>'+
+    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.otros_ingresos)+'</td>'+
+    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.otros_gastos)+'</td>'+
+    '<td style="padding:5px 8px;font-size:11px;text-align:right;font-weight:700;border-bottom:1px solid #f0f0ec;color:'+(parseFloat(m.utilidad_neta_contable||0)>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(m.utilidad_neta_contable)+'</td>'+
+    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;color:#888">'+(m.pago_provisional?fmtMXN(m.pago_provisional)+(m.real?'':' <span style="font-size:8px;color:#8DC63F">p</span>'):'—')+'</td>'+
+  '</tr>').join('');
+
+  // Conciliación
+  const ajustesSortedPDF=[...ajustesData].sort((a,b)=>a.tipo===b.tipo?0:a.tipo==='suma'?-1:1);
+  const concilRows=ajustesSortedPDF.map(a=>'<tr>'+
+    '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #f0f0ec;font-weight:500">'+escH(a.concepto)+'</td>'+
+    '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #f0f0ec;color:'+(a.tipo==='suma'?'#5a8a1a':'#dc2626')+'">'+(a.tipo==='suma'?'Acumulable':'Deducible')+'</td>'+
+    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;font-weight:600">'+fmtMXN(a.importe)+'</td>'+
+    '<td style="padding:5px 8px;font-size:10px;color:#888;border-bottom:1px solid #f0f0ec">'+escH(a.referencia_legal||'')+'</td>'+
+    '<td style="padding:5px 8px;font-size:10px;color:#888;font-style:italic;border-bottom:1px solid #f0f0ec">'+escH(a.notas||'')+'</td>'+
+  '</tr>').join('');
+
+  // Notas automáticas
+  const margenBruto=totalIngresos>0?((totalIngresos-totalCosto)/totalIngresos*100):0;
+  const margenNeto=totalIngresos>0?(utilidadContable/totalIngresos*100):0;
+  const margenOperacion=totalIngresos>0?((totalIngresos-totalCosto-totalGastosOp)/totalIngresos*100):0;
+  const rotacionGastos=totalIngresos>0?(totalGastosOp/totalIngresos*100):0;
+  const pesoCosto=totalIngresos>0?(totalCosto/totalIngresos*100):0;
+  const difFiscalContable=utilidadFiscal-utilidadContable;
+  const relacionPP=isrEstimado>0?(totalPP2/isrEstimado*100):0;
+
+  function seccionNotas(titulo,color,items){
+    if(!items.length)return'';
+    return '<div style="margin-bottom:14px">'+
+      '<div style="font-size:11px;font-weight:700;color:'+color+';text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #e5e5e0">'+titulo+'</div>'+
+      items.map((n,i)=>'<div style="display:flex;gap:10px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid #f5f5f3">'+
+        '<div style="width:18px;height:18px;border-radius:50%;background:'+color+';color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">'+(i+1)+'</div>'+
+        '<div style="font-size:11px;color:#444;line-height:1.6">'+n+'</div>'+
+      '</div>').join('')+
+    '</div>';
+  }
+
+  const notasBase=['La proyección se basa en '+nMeses+' mes'+(nMeses!==1?'es':'')+(nMeses<12?' real'+(nMeses!==1?'es':'')+' y '+(12-nMeses)+' meses proyectados por promedio.':' reales.')];
+  if(nMeses<6) notasBase.push('Con solo '+nMeses+' mes'+(nMeses!==1?'es':'')+' real'+(nMeses!==1?'es':'')+', la proyección tiene margen de variabilidad elevado.');
+
+  const notasRazones=[];
+  notasRazones.push('Margen bruto: '+margenBruto.toFixed(2)+'% — '+(margenBruto<20?'Bajo. Revisar estructura de costos.':margenBruto<40?'Aceptable, con oportunidad de mejora.':'Saludable.'));
+  notasRazones.push('Margen de operación: '+margenOperacion.toFixed(2)+'% — '+(margenOperacion<10?'Bajo. Gastos operativos absorben utilidad bruta.':margenOperacion<20?'Moderado, optimizar gastos.':'Robusto.'));
+  notasRazones.push('Costo de ventas / Ingresos: '+pesoCosto.toFixed(2)+'% — '+(pesoCosto>70?'Elevado. Revisar proveedores y procesos.':pesoCosto>50?'Manejable, vigilar incrementos.':'Bien controlado.'));
+  notasRazones.push('Gastos operativos / Ingresos: '+rotacionGastos.toFixed(2)+'% — '+(rotacionGastos>30?'Elevado. Analizar gastos administrativos.':rotacionGastos>20?'Moderado.':'Bien alineado.'));
+  notasRazones.push('Margen neto contable: '+margenNeto.toFixed(2)+'% — '+(margenNeto<0?'Pérdida neta. Medidas correctivas inmediatas.':margenNeto<5?'Muy reducido. Alta sensibilidad ante variaciones.':margenNeto<15?'Aceptable.':'Sólido.'));
+
+  const notasFiscales=[];
+  if(utilidadFiscal<0) notasFiscales.push('Pérdida fiscal estimada de '+fmtMXN(Math.abs(utilidadFiscal))+'. Evaluar aplicación conforme Art. 57 LISR.');
+  if(utilidadFiscal>0&&utilidadFiscal>utilidadContable) notasFiscales.push('Utilidad fiscal ('+fmtMXN(utilidadFiscal)+') mayor a contable ('+fmtMXN(utilidadContable)+'). Diferencia temporal de '+fmtMXN(difFiscalContable)+'.');
+  if(utilidadFiscal>0&&utilidadFiscal<utilidadContable) notasFiscales.push('Ajustes fiscales reducen base gravable en '+fmtMXN(Math.abs(difFiscalContable))+'. Gestión fiscal eficiente.');
+  if(isrEstimado>0){
+    notasFiscales.push('ISR estimado: '+fmtMXN(isrEstimado)+' ('+proy.tasa_isr+'%). PP acumulados: '+fmtMXN(totalPP2)+'. '+(isrACargoP>0?'ISR a cargo: '+fmtMXN(isrACargoP)+'. Evaluar incrementar PP restantes.':'Saldo a favor: '+fmtMXN(saldoFavorP)+'.'));
+    if(totalPP2>0) notasFiscales.push('Cobertura PP: '+relacionPP.toFixed(1)+'% del ISR estimado.'+(relacionPP<70?' Cobertura baja. Revisar CU aplicado.':relacionPP>100?' PP superan ISR estimado; saldo a favor esperado.':' Adecuada.'));
+  }
+  notasFiscales.push('CU determinado: '+cuPDF.toFixed(2)+'%. Aplicable para pagos provisionales '+( proy.ejercicio+1)+' conforme Art. 14 LISR.');
+  notasFiscales.push('Cifras estimadas sujetas a revisión definitiva al cierre del ejercicio '+proy.ejercicio+'. MSST Consulting SC.');
+
+  const notasHTML=seccionNotas('I. Bases y alcance','#888',notasBase)+seccionNotas('II. Razones financieras','#3B4BC8',notasRazones)+seccionNotas('III. Consideraciones fiscales','#8DC63F',notasFiscales);
+
+  // Historial cierres
+  const histHTML=(()=>{
+    const hist=(cierresHist||[]).filter(c=>c.ejercicio<proy.ejercicio&&c.ingresos_acumulables!=null);
+    if(!hist.length)return'';
+    const filas=hist.map(c=>{
+      const isr_cargo=parseFloat(c.isr_a_cargo||0);const sf=parseFloat(c.saldo_favor||0);
+      return '<tr><td style="padding:5px 8px;font-size:11px;font-weight:600;border-bottom:1px solid #f0f0ec">'+c.ejercicio+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(c.ingresos_acumulables)+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(c.utilidad_contable)+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;color:'+(parseFloat(c.utilidad_fiscal||0)>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(c.utilidad_fiscal)+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(c.isr_causado)+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(c.pagos_provisionales)+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;font-weight:600;border-bottom:1px solid #f0f0ec;color:'+(isr_cargo>0?'#dc2626':'#5a8a1a')+'">'+(isr_cargo>0?fmtMXN(isr_cargo):'('+fmtMXN(sf)+')')+'</td>'+
+        '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;color:#3B4BC8">'+parseFloat(c.cu||0).toFixed(2)+'%</td>'+
+      '</tr>';
+    }).join('');
+    return '<div class="section"><div class="section-title">Historial fiscal de cierres anteriores — '+escH(proy.cliente_nombre)+'</div>'+
+      '<table><thead><tr><th>Ejercicio</th><th class="right">Ingresos acumulables</th><th class="right">Util. contable</th><th class="right">Util. fiscal</th><th class="right">ISR causado</th><th class="right">PP pagados</th><th class="right">ISR a cargo / (S.Favor)</th><th class="right">CU</th></tr></thead>'+
+      '<tbody>'+filas+
+      '<tr style="background:#f0f4ff"><td style="padding:6px 8px;font-size:11px;font-weight:700;color:#3B4BC8" colspan="3">Proyección '+proy.ejercicio+' (estimado)</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#3B4BC8">'+fmtMXN(utilidadFiscal)+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#dc2626">'+fmtMXN(isrEstimado)+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#3B4BC8">'+fmtMXN(totalPP2)+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:'+(isrACargoP>0?'#dc2626':'#5a8a1a')+'">'+(isrACargoP>0?fmtMXN(isrACargoP):'('+fmtMXN(saldoFavorP)+')')+'</td>'+
+      '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#3B4BC8">'+cuPDF.toFixed(2)+'%</td></tr>'+
+      '</tbody></table></div>';
+  })();
+
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Proyección Fiscal ${proy.ejercicio} — ${proy.cliente_nombre}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
+.page{max-width:1050px;margin:0 auto;padding:24px 32px}
+@page{size:A4 landscape;margin:15mm}
+.header{display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:20px;border-bottom:3px solid #3B4BC8;margin-bottom:24px}
+.logo-mark{font-size:22px;font-weight:700;color:#3B4BC8;letter-spacing:-0.5px}
+.logo-mark span{color:#8DC63F}
+.firma{font-size:11px;color:#888;margin-top:2px;font-weight:500}
+.section{margin-bottom:24px}
+.section-title{font-size:11px;font-weight:700;color:#3B4BC8;text-transform:uppercase;letter-spacing:.08em;padding-bottom:6px;border-bottom:2px solid #3B4BC8;margin-bottom:14px}
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
+.kpi{background:#f8f9ff;border-radius:8px;padding:12px;border-left:3px solid #3B4BC8}
+.kpi.verde{border-left-color:#8DC63F}.kpi.rojo{border-left-color:#dc2626}.kpi.naranja{border-left-color:#EF9F27}
+.kpi-label{font-size:9px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.kpi-val{font-size:15px;font-weight:700;color:#3B4BC8}
+.kpi.verde .kpi-val{color:#5a8a1a}.kpi.rojo .kpi-val{color:#dc2626}.kpi.naranja .kpi-val{color:#92400E}
+.kpi-sub{font-size:9px;color:#aaa;margin-top:2px}
+.graf-box{background:#fafbff;border:1px solid #e5e5e0;border-radius:8px;padding:14px;margin-bottom:14px}
+.graf-title{font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+table{width:100%;border-collapse:collapse}
+th{padding:7px 8px;text-align:left;font-size:10px;font-weight:700;color:#fff;background:#3B4BC8}
+th.right{text-align:right}
+td{padding:5px 8px;font-size:11px;border-bottom:1px solid #f0f0ec;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.total-row td{background:#f0f4ff;font-weight:700;font-size:12px}
+.fiscal-row td{background:#EEEDFE;font-weight:700;font-size:12px;color:#3B4BC8}
+.isr-row td{background:#fef2f2;font-weight:700;font-size:12px;color:#dc2626}
+.isr-row.favor td{background:#f0f7d4;color:#5a8a1a}
+.footer{border-top:1px solid #e5e5e0;padding-top:14px;margin-top:24px;display:flex;justify-content:space-between;align-items:flex-end}
+.footer-left{font-size:9px;color:#bbb;line-height:1.8}
+.conf-badge{background:#3B4BC8;color:#fff;font-size:9px;font-weight:700;padding:3px 10px;border-radius:4px}
+.disclaimer{font-size:9px;color:#bbb;margin-top:4px;text-align:right}
+@media print{body{padding:0}.page{padding:12px 20px;max-width:100%}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body><div class="page">
+
+<div class="header">
+  <div><div class="logo-mark">MSST <span>Consulting</span> SC</div><div class="firma">Asesoría Fiscal y Legal · Tijuana, B.C.</div></div>
+  <div style="text-align:right">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">Proyección de Resultado Fiscal</div>
+    <div style="font-size:11px;color:#888">Ejercicio ${proy.ejercicio} · ${escH(proy.cliente_nombre)}</div>
+    <div style="font-size:11px;color:#888;margin-top:3px">Tasa ISR: ${proy.tasa_isr}% · ${hoy}</div>
+    <div style="font-size:11px;color:#EF9F27;font-weight:600;margin-top:3px">INFORMACIÓN CONFIDENCIAL Y PRIVILEGIADA</div>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi"><div class="kpi-label">Ingresos proyectados</div><div class="kpi-val">${fmtMXN(totalIngresos)}</div><div class="kpi-sub">${nMeses} reales · ${12-nMeses} proyectados</div></div>
+  <div class="kpi naranja"><div class="kpi-label">Utilidad contable</div><div class="kpi-val" style="color:${utilidadContable>=0?'#92400E':'#dc2626'}">${fmtMXN(utilidadContable)}</div><div class="kpi-sub">Margen ${(totalIngresos>0?(utilidadContable/totalIngresos*100):0).toFixed(1)}%</div></div>
+  <div class="kpi ${utilidadFiscal>=0?'verde':'rojo'}"><div class="kpi-label">Utilidad fiscal estimada</div><div class="kpi-val">${fmtMXN(utilidadFiscal)}</div><div class="kpi-sub">Ajustes: ${fmtMXN(totalSumas-totalRestas)}</div></div>
+  <div class="kpi ${isrACargoP>0?'rojo':'verde'}"><div class="kpi-label">${isrACargoP>0?'ISR a cargo':'Saldo a favor'}</div><div class="kpi-val">${isrACargoP>0?fmtMXN(isrACargoP):fmtMXN(saldoFavorP)}</div><div class="kpi-sub">ISR estimado: ${fmtMXN(isrEstimado)}</div></div>
+  <div class="kpi"><div class="kpi-label">Coeficiente de utilidad</div><div class="kpi-val">${cuPDF.toFixed(2)}%</div><div class="kpi-sub">Art. 14 LISR · Para ${proy.ejercicio+1}</div></div>
+</div>
+
+<div class="section">
+  <div class="section-title">Evolución mensual — Ingresos vs Egresos</div>
+  <div class="graf-box"><div class="graf-title">Comparativo mensual (MXN)</div>${svg1}</div>
+</div>
+
+<div class="section">
+  <div class="section-title">Estado de Resultados proyectado — Ejercicio ${proy.ejercicio}</div>
+  <table>
+    <thead><tr><th>Mes</th><th class="right">Ingresos</th><th class="right">Costo venta</th><th class="right">Gastos op.</th><th class="right">Otros ing.</th><th class="right">Otros gas.</th><th class="right">Util. neta</th><th class="right">Pago prov.</th></tr></thead>
+    <tbody>${mesRowsHTML}
+    <tr class="total-row"><td>TOTAL ANUAL</td><td style="text-align:right">${fmtMXN(totalIngresos)}</td><td style="text-align:right">${fmtMXN(totalCosto)}</td><td style="text-align:right">${fmtMXN(totalGastosOp)}</td><td style="text-align:right">${fmtMXN(totalOtrosIng)}</td><td style="text-align:right">${fmtMXN(totalOtrosGas)}</td><td style="text-align:right;color:${utilidadContable>=0?'#3B4BC8':'#dc2626'}">${fmtMXN(utilidadContable)}</td><td style="text-align:right;color:#888">${fmtMXN(totalPP2)}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-title">Conciliación contable-fiscal — Art. 9 LISR</div>
+  <table>
+    <thead><tr><th>Concepto</th><th>Tipo</th><th class="right">Importe</th><th>Ref. Legal</th><th>Notas / Identificación</th></tr></thead>
+    <tbody>
+      <tr style="background:#f8f9ff"><td style="font-weight:700">Utilidad contable base</td><td>—</td><td style="text-align:right;font-weight:700">${fmtMXN(utilidadContable)}</td><td>—</td><td>—</td></tr>
+      ${concilRows}
+      <tr style="background:#e8f5e9"><td style="color:#5a8a1a">+ Total ajustes acumulables</td><td></td><td style="text-align:right;color:#5a8a1a;font-weight:700">${fmtMXN(totalSumas)}</td><td></td><td></td></tr>
+      <tr style="background:#fef2f2"><td style="color:#dc2626">- Total ajustes deducibles</td><td></td><td style="text-align:right;color:#dc2626;font-weight:700">(${fmtMXN(totalRestas)})</td><td></td><td></td></tr>
+    </tbody>
+    <tfoot>
+      <tr class="fiscal-row"><td colspan="2">= Utilidad fiscal estimada al cierre</td><td style="text-align:right;color:${utilidadFiscal>=0?'#3B4BC8':'#dc2626'}">${fmtMXN(utilidadFiscal)}</td><td></td><td></td></tr>
+      <tr class="${isrEstimado>0?'isr-row':'isr-row favor'}"><td colspan="2">ISR estimado (${proy.tasa_isr}%)</td><td style="text-align:right">${fmtMXN(isrEstimado)}</td><td></td><td></td></tr>
+      <tr style="background:#f5f5f3"><td colspan="2" style="color:#888;font-size:10px">- Pagos provisionales realizados + proyectados</td><td style="text-align:right;color:#888;font-weight:600">(${fmtMXN(totalPP2)})</td><td></td><td></td></tr>
+      <tr style="background:${isrACargoP>0?'#fef2f2':'#f0f7d4'}"><td colspan="2" style="font-weight:700;font-size:13px;color:${isrACargoP>0?'#dc2626':'#5a8a1a'}">${isrACargoP>0?'ISR a cargo del ejercicio':'Saldo a favor del contribuyente'}</td><td style="text-align:right;font-weight:700;font-size:13px;color:${isrACargoP>0?'#dc2626':'#5a8a1a'}">${isrACargoP>0?fmtMXN(isrACargoP):fmtMXN(saldoFavorP)}</td><td></td><td></td></tr>
+      <tr style="background:#f0f4ff"><td colspan="4" style="font-size:10px;color:#3B4BC8;padding:8px"><strong>CU = ${fmtMXN(utilidadFiscal)} ÷ ${fmtMXN(totalIngresos)} = ${cuPDF.toFixed(2)}%</strong> · Aplicable ejercicio ${proy.ejercicio+1} (Art. 14 LISR)</td><td></td></tr>
+    </tfoot>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-title">Notas, observaciones y recomendaciones</div>
+  ${notasHTML}
+</div>
+
+${histHTML}
+
+<div class="footer">
+  <div class="footer-left"><div><strong>MSST Consulting SC</strong></div><div>Asesoría Fiscal y Legal · Tijuana, Baja California</div><div>TaxIA día a día · ${hoy}</div></div>
+  <div style="text-align:right"><div class="conf-badge">CONFIDENCIAL</div><div class="disclaimer">Reporte estimativo. Sujeto a revisión al cierre del ejercicio.</div></div>
+</div>
+
+</div></body></html>`);
+  win.document.close();
+  setTimeout(()=>win.print(),800);
+}
 
 
 renderLogin();
