@@ -2843,6 +2843,282 @@ async function renderDetalleProyeccion(id){
     if(btnResta) btnResta.addEventListener('click',()=>agregarAjusteFiscal(btnResta.dataset.proy,'resta'));
   },50);
 }
+
+async function agregarAjusteFiscal(proyId,tipoDefault){
+  document.getElementById('modal-ajuste')?.remove();
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-ajuste';
+  const sugerencias=tipoDefault==='suma'?
+    ['Ingresos acumulables no contabilizados (LISR Art. 16)','Ajuste anual por inflación acumulable (LISR Art. 44-46)','Utilidad por enajenación de activos (LISR Art. 18)','Ganancia cambiaria (LISR Art. 20)','Otros ingresos acumulables']:
+    ['Depreciación fiscal adicional (LISR Art. 31-38)','Ajuste anual por inflación deducible (LISR Art. 44-46)','PTU pagada deducible (LISR Art. 25 Fr. III)','Pérdida por enajenación de activos (LISR Art. 25 Fr. IV)','Deducción inmediata (LISR Art. 220)','Gastos no deducibles a revertir','Otras deducciones autorizadas'];
+  const sugerOpts='<option value="">Elige sugerencia o escribe abajo...</option>'+sugerencias.map(s=>'<option value="'+escH(s)+'">'+escH(s)+'</option>').join('');
+  overlay.innerHTML='<div class="modal-box">'+
+    '<div class="modal-title">'+(tipoDefault==='suma'?'Agregar ingreso acumulable':'Agregar deducción adicional')+'</div>'+
+    '<div style="margin-bottom:8px"><div style="font-size:11px;color:#888;margin-bottom:3px">Sugerencias frecuentes</div>'+
+      '<select id="aj-suger" style="width:100%" onchange="pfFillSuger(this)">'+sugerOpts+'</select></div>'+
+    '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto (editable) *</div>'+
+      '<input id="aj-concepto" type="text" placeholder="Escribe o edita el concepto..." style="width:100%"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Tipo</div>'+
+        '<select id="aj-tipo" style="width:100%">'+
+          '<option value="suma"'+(tipoDefault==='suma'?' selected':'')+'>Acumulable (suma)</option>'+
+          '<option value="resta"'+(tipoDefault==='resta'?' selected':'')+'>Deducible (resta)</option>'+
+        '</select></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Importe</div>'+
+        '<input id="aj-importe" type="number" placeholder="0.00"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
+        '<input id="aj-ref" type="text" placeholder="LISR Art. ..."></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas / Identificación</div>'+
+      '<input id="aj-notas" type="text" placeholder="Notas adicionales"></div>'+
+    '<input type="hidden" id="aj-proy-id" value="'+proyId+'">'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-full" onclick="document.getElementById(\'modal-ajuste\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="guardarAjuste()" style="flex:1;margin-top:0">Guardar</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(overlay);
+}
+
+function pfFillSuger(sel){
+  const val=sel.value;if(!val)return;
+  const inp=document.getElementById('aj-concepto');
+  if(inp){inp.value=val;sel.value='';}
+}
+
+async function guardarAjuste(){
+  const concepto=document.getElementById('aj-concepto')?.value.trim();
+  const tipo=document.getElementById('aj-tipo').value;
+  const importe=parseFloat(document.getElementById('aj-importe').value)||0;
+  const referencia_legal=document.getElementById('aj-ref').value.trim()||null;
+  const notas=document.getElementById('aj-notas').value.trim()||null;
+  const proyId=document.getElementById('aj-proy-id').value;
+  if(!concepto){alert('El concepto es obligatorio.');return;}
+  document.getElementById('modal-ajuste').remove();
+  await sbPost('pf_ajustes',{proyeccion_id:proyId,concepto,tipo,importe,referencia_legal,notas},'return=minimal');
+  renderDetalleProyeccion(proyId);
+}
+
+async function editarAjuste(ajusteId,proyId){
+  const data=await sbGet('pf_ajustes','?id=eq.'+ajusteId+'&select=*');
+  const a=data?.[0];if(!a)return;
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-edit-ajuste';
+  overlay.innerHTML='<div class="modal-box">'+
+    '<div class="modal-title">Editar ajuste fiscal</div>'+
+    '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto</div>'+
+      '<input id="eaj-concepto" type="text" value="'+escH(a.concepto||'')+'"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Tipo</div>'+
+        '<select id="eaj-tipo" style="width:100%"><option value="suma"'+(a.tipo==='suma'?' selected':'')+'>Acumulable</option><option value="resta"'+(a.tipo==='resta'?' selected':'')+'>Deducible</option></select></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Importe</div>'+
+        '<input id="eaj-importe" type="number" value="'+(a.importe||0)+'"></div>'+
+      '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
+        '<input id="eaj-ref" type="text" value="'+escH(a.referencia_legal||'')+'"></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas / Identificación</div>'+
+      '<input id="eaj-notas" type="text" value="'+escH(a.notas||'')+'"></div>'+
+    '<input type="hidden" id="eaj-id" value="'+ajusteId+'">'+
+    '<input type="hidden" id="eaj-proy-id" value="'+proyId+'">'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-sm btn-danger" onclick="eliminarAjuste(\''+ajusteId+'\',\''+proyId+'\')" style="margin-top:0">Eliminar</button>'+
+      '<div style="flex:1"></div>'+
+      '<button class="btn btn-full" onclick="document.getElementById(\'modal-edit-ajuste\').remove()" style="margin-top:0">Cancelar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="actualizarAjuste()" style="margin-top:0">Guardar</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(overlay);
+}
+
+async function actualizarAjuste(){
+  const id=document.getElementById('eaj-id').value;
+  const proyId=document.getElementById('eaj-proy-id').value;
+  const concepto=document.getElementById('eaj-concepto').value.trim();
+  const tipo=document.getElementById('eaj-tipo').value;
+  const importe=parseFloat(document.getElementById('eaj-importe').value)||0;
+  const referencia_legal=document.getElementById('eaj-ref').value.trim()||null;
+  const notas=document.getElementById('eaj-notas').value.trim()||null;
+  document.getElementById('modal-edit-ajuste').remove();
+  await sbPatch('pf_ajustes','?id=eq.'+id,{concepto,tipo,importe,referencia_legal,notas});
+  renderDetalleProyeccion(proyId);
+}
+
+async function eliminarAjuste(ajusteId,proyId){
+  if(!confirm('¿Eliminar este ajuste?'))return;
+  document.getElementById('modal-edit-ajuste')?.remove();
+  await sbDelete('pf_ajustes','?id=eq.'+ajusteId);
+  renderDetalleProyeccion(proyId);
+}
+
+async function deleteProyeccion(id){
+  const p=pfCache.find(x=>x.id===id);
+  if(!confirm('¿Eliminar la proyección de '+(p?.cliente_nombre||'este cliente')+' '+(p?.ejercicio||'')+'? No se puede deshacer.'))return;
+  await sbDelete('pf_meses','?proyeccion_id=eq.'+id);
+  await sbDelete('pf_ajustes','?proyeccion_id=eq.'+id);
+  await sbDelete('pf_proyecciones','?id=eq.'+id);
+  pfCache=pfCache.filter(x=>x.id!==id);
+  renderProyeccion();
+}
+
+async function guardarEscenarioProyeccion(id){
+  const proy=pfCache.find(p=>p.id===id);if(!proy)return;
+  const [meses,ajustes]=await Promise.all([
+    sbGet('pf_meses','?proyeccion_id=eq.'+id+'&select=*&order=mes.asc'),
+    sbGet('pf_ajustes','?proyeccion_id=eq.'+id+'&select=*')
+  ]);
+  const mesesData=meses||[];
+  const mesesConDatos=mesesData.filter(m=>m.ingresos!==null);
+  const nMeses=mesesConDatos.length;
+  if(!nMeses){alert('No hay datos capturados para guardar.');return;}
+  const avg=campo=>nMeses?mesesConDatos.reduce((s,m)=>s+(parseFloat(m[campo])||0),0)/nMeses:0;
+  const proyectados=[];
+  for(let m=1;m<=12;m++){
+    const real=mesesData.find(md=>md.mes===m);
+    if(real&&real.ingresos!==null) proyectados.push({...real,real:true});
+    else{const ing=avg('ingresos'),cv=avg('costo_ventas'),go=avg('gastos_operacion'),oi=avg('otros_ingresos'),og=avg('otros_gastos'),pp=avg('pago_provisional');
+      proyectados.push({mes:m,real:false,ingresos:ing,costo_ventas:cv,gastos_operacion:go,otros_ingresos:oi,otros_gastos:og,pago_provisional:pp,utilidad_neta_contable:ing-cv-go+oi-og});}
+  }
+  const totalIngresos=proyectados.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
+  const totalCosto=proyectados.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
+  const totalGastosOp=proyectados.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
+  const totalOtrosIng=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
+  const totalOtrosGas=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_gastos)||0),0);
+  const utilidadContable=totalIngresos-totalCosto-totalGastosOp+totalOtrosIng-totalOtrosGas;
+  const ajustesData=ajustes||[];
+  const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
+  const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
+  const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
+  const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
+  const totalPP=proyectados.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
+  const isrACargo=Math.max(0,isrEstimado-totalPP);
+  const saldoFavor=Math.max(0,totalPP-isrEstimado);
+  const cu=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
+  const margenBruto=totalIngresos>0?((totalIngresos-totalCosto)/totalIngresos*100):0;
+  const margenNeto=totalIngresos>0?(utilidadContable/totalIngresos*100):0;
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-escenario-save';
+  overlay.innerHTML='<div class="modal-box">'+
+    '<div class="modal-title">Guardar escenario de proyección</div>'+
+    '<div class="modal-sub">Estado actual al '+todayKey()+'</div>'+
+    '<div style="background:#f5f5f3;border-radius:8px;padding:12px;margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px">'+
+      '<div style="font-size:11px"><span style="color:#888">Meses reales:</span> <strong>'+nMeses+'/12</strong></div>'+
+      '<div style="font-size:11px"><span style="color:#888">Utilidad fiscal:</span> <strong>'+fmtMXN(utilidadFiscal)+'</strong></div>'+
+      '<div style="font-size:11px"><span style="color:#888">ISR estimado:</span> <strong>'+fmtMXN(isrEstimado)+'</strong></div>'+
+      '<div style="font-size:11px"><span style="color:#888">ISR a cargo:</span> <strong>'+fmtMXN(isrACargo)+'</strong></div>'+
+      '<div style="font-size:11px"><span style="color:#888">CU:</span> <strong>'+cu.toFixed(2)+'%</strong></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px"><div style="font-size:12px;color:#888;margin-bottom:4px">Notas del escenario (opcional)</div>'+
+      '<textarea id="esc-notas" rows="2" placeholder="Ej: Proyección al mes de marzo..." style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea></div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-full" onclick="document.getElementById(\'modal-escenario-save\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="confirmarEscenario(\''+id+'\','+totalIngresos+','+totalCosto+','+totalGastosOp+','+utilidadContable+','+totalSumas+','+totalRestas+','+utilidadFiscal+','+isrEstimado+','+totalPP+','+isrACargo+','+cu+','+margenBruto+','+margenNeto+','+nMeses+')" style="flex:1;margin-top:0">💾 Guardar</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(overlay);
+}
+
+async function confirmarEscenario(proyId,ti,tc,tgo,uc,ts,tr,uf,isr,pp,isrC,cu,mb,mn,nM){
+  const proy=pfCache.find(p=>p.id===proyId);if(!proy)return;
+  const notas=document.getElementById('esc-notas')?.value.trim()||null;
+  document.getElementById('modal-escenario-save')?.remove();
+  await sbPost('pf_reportes',{proyeccion_id:proyId,cliente_nombre:proy.cliente_nombre,ejercicio:proy.ejercicio,fecha_corte:todayKey(),meses_reales:nM,total_ingresos:ti,total_costo:tc,total_gastos_op:tgo,utilidad_contable:uc,total_sumas:ts,total_restas:tr,utilidad_fiscal:uf,isr_estimado:isr,total_pp:pp,isr_a_cargo:isrC,cu,margen_bruto:mb,margen_neto:mn,notas},'return=minimal');
+  const msg=document.createElement('div');
+  msg.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:10px 20px;border-radius:8px;z-index:9999';
+  msg.textContent='✅ Escenario guardado — '+todayKey();
+  document.body.appendChild(msg);
+  setTimeout(()=>msg.remove(),3000);
+}
+
+async function verEscenariosProyeccion(id){
+  const proy=pfCache.find(p=>p.id===id);if(!proy)return;
+  document.getElementById('modal-escenarios')?.remove();
+  const reportes=await sbGet('pf_reportes','?proyeccion_id=eq.'+id+'&select=*&order=fecha_corte.asc');
+  const data=reportes||[];
+  if(!data.length){alert('No hay escenarios guardados. Usa "💾 Guardar escenario" para crear el primero.');return;}
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.id='modal-escenarios';
+  const escRows=data.map((r,i)=>'<div style="border:0.5px solid #e5e5e0;border-radius:8px;padding:12px;margin-bottom:8px">'+
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
+      '<div style="flex:1">'+
+        '<div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#3B4BC8">Escenario '+(i+1)+' — '+r.fecha_corte+'</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:6px">'+
+          '<div style="font-size:11px;color:#888">Meses: <strong>'+r.meses_reales+'/12</strong></div>'+
+          '<div style="font-size:11px;color:#888">Ingresos: <strong>'+fmtMXN(r.total_ingresos)+'</strong></div>'+
+          '<div style="font-size:11px;color:#888">Util. fiscal: <strong>'+fmtMXN(r.utilidad_fiscal)+'</strong></div>'+
+          '<div style="font-size:11px;color:#888">ISR estimado: <strong>'+fmtMXN(r.isr_estimado)+'</strong></div>'+
+          '<div style="font-size:11px;color:#888">PP: <strong>'+fmtMXN(r.total_pp)+'</strong></div>'+
+          '<div style="font-size:11px;color:#888">ISR a cargo: <strong style="color:'+(parseFloat(r.isr_a_cargo)>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(r.isr_a_cargo)+'</strong></div>'+
+          '<div style="font-size:11px;color:#888">CU: <strong>'+parseFloat(r.cu).toFixed(2)+'%</strong></div>'+
+          '<div style="font-size:11px;color:#888">Mg. neto: <strong>'+parseFloat(r.margen_neto).toFixed(2)+'%</strong></div>'+
+        '</div>'+
+        (r.notas?'<div style="font-size:11px;color:#888;font-style:italic;background:#f5f5f3;padding:6px 8px;border-radius:6px">'+escH(r.notas)+'</div>':'')+
+      '</div>'+
+      (session.role==='admin'?'<button id="del-esc-'+r.id+'" data-esc="'+r.id+'" data-proy="'+id+'" class="btn btn-sm btn-danger" style="font-size:10px">🗑</button>':'')+
+    '</div>'+
+  '</div>').join('');
+  overlay.innerHTML='<div class="modal-box" style="max-width:620px;max-height:80vh;overflow-y:auto">'+
+    '<div class="modal-title">📊 Escenarios anteriores</div>'+
+    '<div class="modal-sub">'+escH(proy.cliente_nombre)+' — Ejercicio '+proy.ejercicio+' · '+data.length+' escenario'+(data.length!==1?'s':'')+'</div>'+
+    '<div style="margin:12px 0">'+escRows+'</div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<button class="btn btn-full" onclick="document.getElementById(\'modal-escenarios\').remove()" style="flex:1;margin-top:0">Cerrar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="document.getElementById(\'modal-escenarios\').remove();generarComparativoPDF(\''+id+'\')" style="flex:1;margin-top:0">⎙ Reporte PDF comparativo</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(overlay);
+  if(session.role==='admin'){
+    setTimeout(()=>{
+      data.forEach(r=>{
+        const btn=document.getElementById('del-esc-'+r.id);
+        if(btn) btn.addEventListener('click',()=>borrarEscenario(r.id,id));
+      });
+    },50);
+  }
+}
+
+async function borrarEscenario(escId,proyId){
+  if(!confirm('¿Eliminar este escenario? No se puede deshacer.'))return;
+  await sbDelete('pf_reportes','?id=eq.'+escId);
+  document.getElementById('modal-escenarios')?.remove();
+  verEscenariosProyeccion(proyId);
+}
+
+async function generarComparativoPDF(id){
+  const proy=pfCache.find(p=>p.id===id);if(!proy)return;
+  const reportes=await sbGet('pf_reportes','?proyeccion_id=eq.'+id+'&select=*&order=fecha_corte.asc');
+  const data=reportes||[];if(!data.length)return;
+  const cols=['Fecha corte','Meses reales','Ingresos','Util. contable','Util. fiscal','ISR estimado','PP acumulado','ISR a cargo','CU','Mg. bruto','Mg. neto','Notas'];
+  const rows=data.map(r=>[r.fecha_corte,r.meses_reales+'/12',fmtMXN(r.total_ingresos),fmtMXN(r.utilidad_contable),fmtMXN(r.utilidad_fiscal),fmtMXN(r.isr_estimado),fmtMXN(r.total_pp),fmtMXN(r.isr_a_cargo),parseFloat(r.cu).toFixed(2)+'%',parseFloat(r.margen_bruto).toFixed(2)+'%',parseFloat(r.margen_neto).toFixed(2)+'%',r.notas||'—']);
+  const primero=data[0];const ultimo=data[data.length-1];
+  const tendencias=[];
+  if(data.length>1){
+    const difIng=parseFloat(ultimo.total_ingresos)-parseFloat(primero.total_ingresos);
+    const difFiscal=parseFloat(ultimo.utilidad_fiscal)-parseFloat(primero.utilidad_fiscal);
+    const difISR=parseFloat(ultimo.isr_a_cargo)-parseFloat(primero.isr_a_cargo);
+    if(Math.abs(difIng)>0) tendencias.push((difIng>0?'📈':'📉')+' Ingresos: '+(difIng>0?'+':'')+fmtMXN(difIng)+' vs primer escenario');
+    if(Math.abs(difFiscal)>0) tendencias.push((difFiscal>0?'📈':'📉')+' Utilidad fiscal: '+(difFiscal>0?'+':'')+fmtMXN(difFiscal)+' vs primer escenario');
+    if(Math.abs(difISR)>0) tendencias.push((difISR>0?'⚠️':'✅')+' ISR a cargo: '+(difISR>0?'+':'')+fmtMXN(difISR)+' vs primer escenario');
+  }
+  const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Escenarios — ${proy.cliente_nombre}</title>
+  <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;font-size:11px;color:#1a1a1a}.page{max-width:1100px;margin:0 auto;padding:24px 32px}@page{size:A4 landscape;margin:15mm}.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #3B4BC8;margin-bottom:18px}.logo{font-size:18px;font-weight:700;color:#3B4BC8}.logo span{color:#8DC63F}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#3B4BC8;color:#fff;padding:6px 8px;text-align:left}th.right{text-align:right}td{padding:6px 8px;border-bottom:1px solid #f0f0ec}td.right{text-align:right}tr:nth-child(even){background:#fafafa}tr:last-child td{background:#f0f4ff;font-weight:700}.tend{background:#f5f5f3;border-radius:8px;padding:12px;margin-bottom:16px}.footer{margin-top:20px;padding-top:10px;border-top:1px solid #e5e5e0;font-size:9px;color:#bbb;text-align:center}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>
+  </head><body><div class="page">
+  <div class="header"><div><div class="logo">MSST <span>Consulting</span> SC</div><div style="font-size:10px;color:#888;margin-top:2px">Asesoría Fiscal y Legal</div></div>
+  <div style="text-align:right"><div style="font-size:14px;font-weight:700">Escenarios anteriores — Proyección Fiscal</div><div style="color:#888">${proy.cliente_nombre} · Ejercicio ${proy.ejercicio}</div><div style="color:#EF9F27;font-weight:600;font-size:10px">CONFIDENCIAL</div></div></div>
+  ${tendencias.length?'<div class="tend"><div style="font-size:11px;font-weight:700;color:#3B4BC8;margin-bottom:8px">Tendencias vs primer escenario</div>'+tendencias.map(t=>'<div style="font-size:11px;color:#444;padding:3px 0;border-bottom:1px solid #eee">'+t+'</div>').join('')+'</div>':''}
+  <table><thead><tr>${cols.map((c,i)=>'<th'+(i>1&&i<12?' class="right"':'')+'>'+c+'</th>').join('')}</tr></thead>
+  <tbody>${rows.map(r=>'<tr>'+r.map((c,ci)=>'<td'+(ci>1&&ci<12?' class="right"':'')+'>'+c+'</td>').join('')+'</tr>').join('')}</tbody></table>
+  <div class="footer">TaxIA · MSST Consulting SC · ${hoy} · Confidencial</div></div></body></html>`);
+  win.document.close();
+  setTimeout(()=>win.print(),600);
+}
+
+
 async function guardarMes(){
   const proyId=document.getElementById('ms-proy-id').value;
   const mes=parseInt(document.getElementById('ms-mes').value);
@@ -3260,6 +3536,14 @@ function initReporteGerencial(){
     return await sbGet('tareas',qs)||[];
   }
 
+  // Fetch con timeout para AC
+  function fetchAC(url,ms=5000){
+    const ctrl=new AbortController();
+    const timer=setTimeout(()=>ctrl.abort(),ms);
+    return fetch(url,{headers:{'X-Requested-With':'XMLHttpRequest'},credentials:'include',signal:ctrl.signal})
+      .finally(()=>clearTimeout(timer));
+  }
+
   // Cargar tareas de ActiveCollab para un usuario en el período
   async function cargarTareasAC(usuario,d0,d1){
     const proyIds=AC_PROYECTOS_POR_USUARIO[usuario.acId]||[];
@@ -3270,8 +3554,7 @@ function initReporteGerencial(){
     const completadas=[];
     // Obtener tareas abiertas del usuario
     try{
-      const resAb=await fetch(AC_URL+'/api/v1/users/'+usuario.acId+'/tasks?page=1&per_page=200',
-        {headers:{'X-Requested-With':'XMLHttpRequest'},credentials:'include'});
+      const resAb=await fetchAC(AC_URL+'/api/v1/users/'+usuario.acId+'/tasks?page=1&per_page=200');
       if(resAb.ok){
         const dataAb=await resAb.json();
         const tasks=Array.isArray(dataAb)?dataAb:(dataAb.tasks||dataAb.data||[]);
@@ -3296,8 +3579,7 @@ function initReporteGerencial(){
     // Obtener tareas completadas por proyecto
     for(const proyId of proyIds){
       try{
-        const resComp=await fetch(AC_URL+'/api/v1/projects/'+proyId+'/tasks?completed=1&page=1&per_page=100',
-          {headers:{'X-Requested-With':'XMLHttpRequest'},credentials:'include'});
+        const resComp=await fetchAC(AC_URL+'/api/v1/projects/'+proyId+'/tasks?completed=1&page=1&per_page=100');
         if(resComp.ok){
           const dataComp=await resComp.json();
           const tasks=Array.isArray(dataComp)?dataComp:(dataComp.tasks||dataComp.data||[]);
@@ -3325,7 +3607,7 @@ function initReporteGerencial(){
   }
 
 
-  async function renderG(sel,d0,d1){
+  async function renderG(sel,d0,d1,_porUsuarioPre){
     if(!d0)d0=d0val;if(!d1)d1=d1val;
     const ov=document.getElementById('_msstor');
     ov.style.display='flex';
@@ -3348,11 +3630,9 @@ function initReporteGerencial(){
       return {...u,registradas,concluidas,vencidas,todas:uT};
     });
 
-    // Cargar tareas de Active Collab en paralelo
-    const acResultados=await Promise.all(usuarios.map(u=>cargarTareasAC(u,d0,d1)));
-    const porUsuario=porUsuarioBase.map((u,i)=>{
-      const ac=acResultados[i];
-      // Combinar TaxIA + AC evitando duplicados por descripción
+    // AC se carga solo si el usuario lo solicita manualmente
+    const porUsuario=_porUsuarioPre||porUsuarioBase.map(u=>{
+      const ac=_acDataCache[u.acId]||{abiertas:[],completadas:[]};
       const taxiaDescs=new Set([...u.registradas,...u.concluidas].map(t=>t.descripcion?.toLowerCase()));
       const acAbiertasNuevas=ac.abiertas.filter(t=>!taxiaDescs.has(t.descripcion?.toLowerCase()));
       const acConclNuevas=ac.completadas.filter(t=>!taxiaDescs.has(t.descripcion?.toLowerCase()));
@@ -3533,6 +3813,9 @@ function initReporteGerencial(){
         '<span style="width:1px;height:18px;background:#ddd;display:inline-block;margin:0 2px"></span>'+
         allU+
         '<button class="_mub" onclick="refreshReporteG()">🔄 Actualizar</button>'+
+        '<span style="width:1px;height:18px;background:#ddd;display:inline-block;margin:0 2px"></span>'+
+        '<button id="_btn_ac" class="_mub" style="background:#1a73e8" onclick="cargarACtahora()">📥 Cargar Active Collab</button>'+
+        '<span id="_ac_status" style="font-size:10px;color:#888"></span>'+
       '</div>'+
       '<div class="_mbd">'+
         '<div class="_mkpi">'+
@@ -3560,6 +3843,84 @@ function initReporteGerencial(){
   }
 
   window.renderG=renderG;
+
+  // Datos AC en memoria para no perderlos al refrescar
+  let _acDataCache={};
+
+  window.cargarACtahora=async function(){
+    const btn=document.getElementById('_btn_ac');
+    const status=document.getElementById('_ac_status');
+    if(btn) btn.disabled=true;
+    if(status) status.textContent=' Conectando con Active Collab...';
+
+    const d0=document.getElementById('_msd0')?.value||d0val;
+    const d1=document.getElementById('_msd1')?.value||d1val;
+    const sel=[];document.querySelectorAll('[name=_mu]:checked').forEach(c=>sel.push(c.value));
+    const usuarios=USERS.filter(u=>sel.includes(u.name));
+
+    let ok=0;let err=0;
+    for(const u of usuarios){
+      try{
+        if(status) status.textContent=' Cargando '+u.name.split(' ')[0]+'...';
+        const ac=await cargarTareasAC(u,d0,d1);
+        _acDataCache[u.acId]={abiertas:ac.abiertas,completadas:ac.completadas,d0,d1};
+        ok++;
+      }catch(e){
+        console.warn('AC error para '+u.name+':',e.message);
+        err++;
+      }
+    }
+
+    if(status){
+      if(ok>0) status.innerHTML=' <span style="color:#2e7d52">✓ AC cargado ('+ok+' usuarios)</span>'+(err?' <span style="color:#c0392b">'+err+' errores</span>':'');
+      else status.innerHTML=' <span style="color:#c0392b">✗ No se pudo conectar con AC</span>';
+    }
+    if(btn){btn.disabled=false;btn.textContent='🔄 Recargar AC';}
+
+    // Refrescar el reporte con los datos de AC
+    if(ok>0) renderGconAC(sel,d0,d1);
+  };
+
+  async function renderGconAC(sel,d0,d1){
+    // Igual que renderG pero usando _acDataCache
+    const ov=document.getElementById('_msstor');
+    if(!ov) return;
+
+    const usuarios=USERS.filter(u=>sel.includes(u.name));
+    const emails=usuarios.map(u=>u.email);
+    const todasTareas=await cargarTareas(emails,d0,d1);
+    const todayStr=todayKey();
+
+    const porUsuarioBase=usuarios.map(u=>{
+      const uT=todasTareas.filter(t=>t.email===u.email);
+      const registradas=uT.filter(t=>t.fecha_creacion>=d0&&t.fecha_creacion<=d1);
+      const concluidas=uT.filter(t=>t.fecha_conclusion&&t.fecha_conclusion.slice(0,10)>=d0&&t.fecha_conclusion.slice(0,10)<=d1);
+      const vencidas=uT.filter(t=>t.status==='pendiente'&&t.fecha_creacion&&t.fecha_creacion<todayStr);
+      return {...u,registradas,concluidas,vencidas,todas:uT};
+    });
+
+    const porUsuario=porUsuarioBase.map(u=>{
+      const ac=_acDataCache[u.acId]||{abiertas:[],completadas:[]};
+      const taxiaDescs=new Set([...u.registradas,...u.concluidas].map(t=>t.descripcion?.toLowerCase()));
+      const acAbiertasNuevas=ac.abiertas.filter(t=>!taxiaDescs.has(t.descripcion?.toLowerCase()));
+      const acConclNuevas=ac.completadas.filter(t=>!taxiaDescs.has(t.descripcion?.toLowerCase()));
+      return {
+        ...u,
+        registradas:[...u.registradas,...acAbiertasNuevas],
+        concluidas:[...u.concluidas,...acConclNuevas],
+        vencidas:[...u.vencidas,...ac.abiertas.filter(t=>t.vence&&t.vence<todayStr)],
+        ac_abiertas:ac.abiertas.length,
+        ac_completadas:ac.completadas.length
+      };
+    });
+
+    // Reconstruir solo el cuerpo del panel (mantener header y filtros)
+    const cuerpo=document.getElementById('_msspanel');
+    if(!cuerpo) return;
+
+    // Actualizar los datos en el panel existente usando renderG completo
+    renderG(sel,d0,d1,porUsuario);
+  }
 
   const btn=document.createElement('button');
   btn.id='_msstbtn';
