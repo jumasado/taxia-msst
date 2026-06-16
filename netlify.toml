@@ -1,4 +1,3 @@
 [build]
-  publish = "."
+  publish = "/"
   command = ""
-# build 1775518465921
