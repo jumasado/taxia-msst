@@ -469,12 +469,25 @@ async function renderLogin(){
       </div>
     </div>
   </div>`;
-  // Cargar noticias después de que el DOM esté listo
+  // Cargar noticias: primero desde NEWS_POOL local, luego intentar API
   setTimeout(()=>{
+    // Pre-cargar desde NEWS_POOL inmediatamente
+    if (typeof NEWS_POOL !== 'undefined' && NEWS_POOL.length > 0) {
+      const _d = new Date();
+      const _s = (_d.getDay() * 2) % NEWS_POOL.length;
+      noticiasCache = NEWS_POOL.slice(_s, _s + 3).map(n => ({
+        titulo: n.title, resumen: n.summary, fuente: n.src, fecha: n.date, url: n.url
+      }));
+      const _el = document.getElementById('news-container');
+      if(_el) _el.innerHTML = renderNewsCards();
+    }
+    // Luego intentar actualizar desde la API
     fetchNoticias().then(()=>{
-      const newsEl=document.getElementById('news-container');
-      if(newsEl) newsEl.innerHTML=renderNewsCards();
-    });
+      if(noticiasCache.length > 0) {
+        const newsEl=document.getElementById('news-container');
+        if(newsEl) newsEl.innerHTML=renderNewsCards();
+      }
+    }).catch(()=>{});
   }, 100);
 }
 
