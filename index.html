@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TaxIA día a día</title>
+<title>TaxIA dÃ­a a dÃ­a</title>
 <!-- build: 20260406 -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -106,7 +106,7 @@ table.data-table tr:hover td{background:#fafaf8}
 .tarea-header{display:flex;align-items:flex-start;gap:10px}
 .tarea-check{width:20px;height:20px;border-radius:50%;border:2px solid #d1d1d1;flex-shrink:0;margin-top:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
 .tarea-check.checked{background:#8DC63F;border-color:#8DC63F}
-.tarea-check.checked::after{content:'✓';color:#fff;font-size:11px;font-weight:700}
+.tarea-check.checked::after{content:'â';color:#fff;font-size:11px;font-weight:700}
 .tarea-check.disabled{cursor:default;opacity:.4}
 .tarea-body{flex:1}
 .tarea-desc{font-size:14px;font-weight:500;color:#1a1a1a;margin-bottom:4px}
@@ -122,6 +122,22 @@ table.data-table tr:hover td{background:#fafaf8}
 <body>
 <div class="app" id="app"></div>
 <script>
+const NEWS_POOL=[
+  {src:'RMF 2026 / Siempre Al Día',date:'Mar 2026',title:'Días inhábiles SAT: 2 y 3 de abril 2026 (Jueves y Viernes Santo)',summary:'La Regla 2.1.6 de la RMF 2026 declara inhábiles el 2 y 3 de abril para actos y trámites ante el SAT. Ajusta tus plazos de presentación y pago si vencen en esas fechas.',url:'https://www.sat.gob.mx/consulta/65334/conoce-los-dias-inhabiles'},
+  {src:'BBVA / SAT',date:'Mar 2026',title:'Plataformas digitales obligadas a dar acceso al SAT desde abril 2026',summary:'A partir del 1 de abril de 2026, las plataformas digitales de servicios e intermediación deben permitir al SAT acceso a información de operaciones en tiempo real conforme al CFDI 4.0.',url:'https://www.sat.gob.mx'},
+  {src:'El Imparcial',date:'9 Mar 2026',title:'SAT intensifica vigilancia de transferencias electrónicas en 2026',summary:'El SAT mantiene monitoreo de operaciones electrónicas y reporta movimientos inusuales. Depósitos en efectivo >$15,000 mensuales son reportados automáticamente por los bancos.',url:'https://www.elimparcial.com'},
+  {src:'PRODECON',date:'Mar 2026',title:'PRODECON habilita micrositio guía para declaración anual 2026',summary:'La Procuraduría de la Defensa del Contribuyente (PRODECON) habilitó un micrositio con guía paso a paso para contribuyentes en la presentación de su declaración anual ante el SAT.',url:'https://www.prodecon.gob.mx'},
+  {src:'SAT',date:'Feb 2026',title:'Nueva versión del CFDI 4.0: cambios en catálogos de uso',summary:'El SAT publicó actualizaciones a los catálogos del CFDI 4.0, incluyendo nuevos usos de comprobante y modificaciones a la validación de RFC receptor para personas morales.',url:'https://www.sat.gob.mx'},
+  {src:'El Financiero',date:'Feb 2026',title:'ISR personas físicas: deducciones personales que no debes olvidar',summary:'Gastos médicos, dentales, hospitalarios, colegiaturas y donativos son deducibles en la declaración anual. El límite de deducciones es el 15% del ingreso total o 5 UMAs anuales.',url:'https://www.elfinanciero.com.mx'},
+  {src:'SAT / DOF',date:'Ene 2026',title:'Actualización de la UMA para 2026: impacto en obligaciones fiscales',summary:'El INEGI publicó el nuevo valor de la UMA 2026 en $113.14 diarios. Este valor impacta límites de deducciones personales, multas fiscales y aportaciones de seguridad social.',url:'https://www.dof.gob.mx'},
+  {src:'IMSS',date:'Ene 2026',title:'IMSS: nuevas tablas de cuotas obrero-patronales 2026',summary:'El IMSS publicó las tablas actualizadas de cuotas para 2026 conforme al SBC actualizado. Los patrones deben revisar sus determinaciones de cuotas y ajustar sus sistemas de nómina.',url:'https://www.imss.gob.mx'},
+  {src:'El Informador',date:'Ene 2026',title:'Buzón Tributario: SAT intensifica notificaciones electrónicas en 2026',summary:'El SAT ha incrementado el uso del Buzón Tributario para enviar requerimientos y actos administrativos. Se recomienda revisar el buzón al menos cada 3 días para evitar notificaciones por estrados.',url:'https://www.informador.mx'},
+  {src:'SAT',date:'Dic 2025',title:'Complemento Carta Porte 3.1 obligatorio desde enero 2026',summary:'A partir del 1 de enero de 2026, el Complemento Carta Porte versión 3.1 es obligatorio para el transporte de mercancías por carretera, incluyendo nuevos campos de ubicación y autotransporte.',url:'https://www.sat.gob.mx'},
+  {src:'SHCP',date:'Dic 2025',title:'Presupuesto de Egresos 2026: impacto en deducciones corporativas',summary:'El PEF 2026 modifica algunas partidas deducibles para empresas del sector energético y financiero. Los contadores deben revisar los artículos 28 y 32 de la LISR actualizados.',url:'https://www.shcp.gob.mx'},
+  {src:'SAT',date:'Nov 2025',title:'Régimen Simplificado de Confianza: ajustes para 2026',summary:'El SAT publicó actualizaciones al RESICO para personas físicas y morales. Se amplían los sectores elegibles y se modifica el cálculo de pagos provisionales para contribuyentes con ingresos mixtos.',url:'https://www.sat.gob.mx'},
+  {src:'INFONAVIT',date:'Nov 2025',title:'INFONAVIT actualiza tabla de aportaciones patronales 2026',summary:'Las aportaciones al INFONAVIT se mantienen en 5% del SBC, pero se actualizan los topes y procedimientos de determinación conforme a los cambios en la UMA y el salario mínimo 2026.',url:'https://www.infonavit.org.mx'},
+  {src:'DOF',date:'Oct 2025',title:'Reforma al CFF: nuevas facultades de comprobación del SAT',summary:'El Diario Oficial publicó reformas al Código Fiscal de la Federación que amplían las facultades de revisión electrónica del SAT y reducen los plazos de respuesta para aclaraciones de contribuyentes.',url:'https://www.dof.gob.mx'}
+];
 const SB_URL='https://ysctgzbqaducghivamff.supabase.co';
 const SB_KEY='sb_publishable_t3OG3DkHfRGxVA1hrnJUbg_kRZ6hbM8';
 const RESEND_KEY='re_af8ioNRf_PL4mNcXJTDq7eRk6t8HM7DZr';
@@ -154,7 +170,7 @@ function todayKey(){
 function nowISO(){return new Date().toLocaleString('sv-SE',{timeZone:'America/Tijuana',hour12:false}).replace(' ','T')+'-07:00'}
 function formatDate(k){const d=new Date(k+'T12:00:00');return d.toLocaleDateString('es-MX',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}
 function formatDateShort(k){const d=new Date(k+'T12:00:00');return d.toLocaleDateString('es-MX',{month:'short',day:'numeric'})}
-function roleBadge(r){return r==='admin'?'<span class="badge badge-admin">Director</span>':r==='manager'?'<span class="badge badge-mgr">Líder de Práctica Fiscal</span>':'<span class="badge badge-ast">Consultor Junior</span>'}
+function roleBadge(r){return r==='admin'?'<span class="badge badge-admin">Director</span>':r==='manager'?'<span class="badge badge-mgr">LÃ­der de PrÃ¡ctica Fiscal</span>':'<span class="badge badge-ast">Consultor Junior</span>'}
 function escH(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function av(a){return a||'av-x'}
 function pc(email){const u=usersCache[email];return u?COLORS[av(u.av)]||'#888':'#888'}
@@ -185,8 +201,8 @@ async function getActiveTareas(email){
 }
 
 async function ensureArrastre(email){
-  // Si hoy no tiene tareas pendientes propias, verificar si hay pendientes de días anteriores ya cargadas
-  // Las pendientes simplemente persisten — no hay acción adicional necesaria
+  // Si hoy no tiene tareas pendientes propias, verificar si hay pendientes de dÃ­as anteriores ya cargadas
+  // Las pendientes simplemente persisten â no hay acciÃ³n adicional necesaria
 }
 
 function renderTopNav(active){
@@ -196,12 +212,12 @@ function renderTopNav(active){
     {id:'clientes',label:'Clientes',roles:['admin','manager','assistant']},
     {id:'historial',label:'Historial',roles:['admin','manager','assistant']},
     {id:'devoluciones',label:'Devoluciones IVA',roles:['admin','manager','assistant']},
-    {id:'proyeccion',label:'Proyección Fiscal',roles:['admin','manager']},
+    {id:'proyeccion',label:'ProyecciÃ³n Fiscal',roles:['admin','manager']},
     {id:'admin',label:'Usuarios',roles:['admin']}
   ];
   return `<div class="nav">
     <div style="display:flex;align-items:center;gap:10px">
-      <div style="font-size:16px;font-weight:700;color:#3B4BC8">T<span style="color:#8DC63F">a</span><span style="color:#8DC63F">x</span>IA <span style="color:#8DC63F">día a día</span></div>
+      <div style="font-size:16px;font-weight:700;color:#3B4BC8">T<span style="color:#8DC63F">a</span><span style="color:#8DC63F">x</span>IA <span style="color:#8DC63F">dÃ­a a dÃ­a</span></div>
       <div style="font-size:13px;color:#888">${formatDate(todayKey())}</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
@@ -249,7 +265,7 @@ async function doLogout(porInactividad=false){
     setTimeout(()=>{
       const msg=document.createElement('div');
       msg.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:10px 20px;border-radius:8px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2)';
-      msg.textContent='Sesión cerrada por inactividad (10 min)';
+      msg.textContent='SesiÃ³n cerrada por inactividad (10 min)';
       document.body.appendChild(msg);
       setTimeout(()=>msg.remove(),3500);
     },100);
@@ -294,7 +310,7 @@ function nav(s){
 }
 
 
-// Noticias dinámicas desde fiscalia.com vía Edge Function
+// Noticias dinÃ¡micas desde fiscalia.com vÃ­a Edge Function
 let noticiasCache = [];
 
 async function fetchNoticias() {
@@ -325,7 +341,7 @@ function renderNewsCards() {
       </div>
       <div class="news-titulo">${escH(n.titulo||'')}</div>
       <div class="news-resumen">${escH(n.resumen||'')}</div>
-      <div class="news-link">Leer más →</div>
+      <div class="news-link">Leer mÃ¡s â</div>
     </a>`).join('');
 }
 
@@ -334,7 +350,7 @@ function renderNewsSection() {
   const dateStr = now.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
   return `<div class="news-section">
     <div class="news-header">
-      <span class="news-badge">Fiscal MX — Hoy</span>
+      <span class="news-badge">Fiscal MX â Hoy</span>
       <span class="news-date">${dateStr}</span>
     </div>
     <div id='news-container'><div style='font-size:12px;color:#bbb;font-style:italic;padding:6px 0'>Cargando noticias fiscales...</div></div>
@@ -400,7 +416,7 @@ async function renderLogin(){
     <div class="login-content">
       <!-- Logo -->
       <div class="login-top anim-logo">
-        <div style="font-size:28px;font-weight:700;color:#3B4BC8;margin-bottom:4px">T<span style="color:#8DC63F">a</span><span style="color:#8DC63F">x</span>IA <span style="color:#8DC63F">día a día</span></div>
+        <div style="font-size:28px;font-weight:700;color:#3B4BC8;margin-bottom:4px">T<span style="color:#8DC63F">a</span><span style="color:#8DC63F">x</span>IA <span style="color:#8DC63F">dÃ­a a dÃ­a</span></div>
         <div class="anim-sub" style="font-size:12px;color:#888;margin-bottom:20px;letter-spacing:.04em">MSST Consulting SC</div>
       </div>
 
@@ -411,24 +427,24 @@ async function renderLogin(){
           <input class="login-input" id="lemail" type="email" placeholder="usuario@msstconsulting.com" autocomplete="email">
         </div>
         <div>
-          <label class="login-label">Contraseña</label>
-          <input class="login-input" id="lpass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+          <label class="login-label">ContraseÃ±a</label>
+          <input class="login-input" id="lpass" type="password" placeholder="â¢â¢â¢â¢â¢â¢â¢â¢" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
         </div>
-        <div class="login-err" id="lerr">Correo o contraseña incorrectos.</div>
+        <div class="login-err" id="lerr">Correo o contraseÃ±a incorrectos.</div>
         <button class="login-btn-main" onclick="doLogin()" id="lbtn">Entrar</button>
       </div>
 
       <!-- Noticias -->
       <div class="news-box anim-news">
         <div class="news-header">
-          <span class="news-badge">Fiscal MX — Hoy</span>
+          <span class="news-badge">Fiscal MX â Hoy</span>
           <span class="news-date-lbl">${dateStr}</span>
         </div>
         ${newsHTML}
       </div>
     </div>
   </div>`;
-  // Cargar noticias después de que el DOM esté listo
+  // Cargar noticias despuÃ©s de que el DOM estÃ© listo
   setTimeout(()=>{
     fetchNoticias().then(()=>{
       const newsEl=document.getElementById('news-container');
@@ -477,7 +493,7 @@ async function renderMisPlan(targetEmail){
           <div class="avatar ${av((usersCache[e]||{}).av||'av-x')}" style="width:28px;height:28px;font-size:11px">${(usersCache[e]||{}).initials||'??'}</div>
           <div>
             <div style="font-size:13px;font-weight:600;color:${e===email?'#3B4BC8':'#1a1a1a'}">${escH((usersCache[e]||{}).name||e)}</div>
-            <div style="font-size:11px;color:${e===email?'#3B4BC8':'#888'}">${e===session.email?'Yo':((usersCache[e]||{}).role==='manager'?'Líder':'Consultor')}</div>
+            <div style="font-size:11px;color:${e===email?'#3B4BC8':'#888'}">${e===session.email?'Yo':((usersCache[e]||{}).role==='manager'?'LÃ­der':'Consultor')}</div>
           </div>
         </div>`).join('')}
     </div>`:'';
@@ -537,9 +553,9 @@ function buildPlanUI(tareas,today,targetEmail,canEdit,isRemote){
       if(canDelete) actionsHTML+='<button class="btn btn-sm btn-danger" style="font-size:11px;padding:4px 8px" onclick="eliminarTarea(\'' +tid+ '\',\'' +te+ '\')">Eliminar</button>';
       actionsHTML+='</div>';
     } else if(isDone){
-      actionsHTML='<div style="width:24px;height:24px;border-radius:50%;background:#8DC63F;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:700">✓</span></div>';
+      actionsHTML='<div style="width:24px;height:24px;border-radius:50%;background:#8DC63F;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:700">â</span></div>';
     } else if(isEliminada){
-      actionsHTML='<div style="width:24px;height:24px;border-radius:50%;background:#fca5a5;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:700">✕</span></div>';
+      actionsHTML='<div style="width:24px;height:24px;border-radius:50%;background:#fca5a5;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:700">â</span></div>';
     }
     let cardClass='tarea-card'+(isDone?' done':isStandby?' standby':isEliminada?' eliminada':'')+(isOld&&!isDone&&!isStandby&&!isEliminada?' dragged-in':'');
     tareasHTML+='<div class="'+cardClass+'" id="tcard-'+t.id+'">'+
@@ -555,8 +571,8 @@ function buildPlanUI(tareas,today,targetEmail,canEdit,isRemote){
     '</div>';
   });
 
-  // Slots vacíos: siempre que haya menos de 5 tareas pendientes activas
-  const slotsLibres=slots-pendientes.length; // standby NO cuenta para el límite
+  // Slots vacÃ­os: siempre que haya menos de 5 tareas pendientes activas
+  const slotsLibres=slots-pendientes.length; // standby NO cuenta para el lÃ­mite
   let newSlotsHTML='';
   if(slotsLibres>0){
     const slotPlaceholder=total===0?'Agrega tu tarea...':'Agregar tarea...';
@@ -601,7 +617,7 @@ function mostrarModalConclusion(tareaId, targetEmail){
     {id:'no_satisfactorio',txt:'No satisfactoriamente'},
     {id:'no_aplica',txt:'Se concluye porque ya no aplica'},
     {id:'genera_nueva',txt:'Se concluye pero se genera una nueva tarea'},
-    {id:'comentar_superior',txt:'Se comentará con superior'}
+    {id:'comentar_superior',txt:'Se comentarÃ¡ con superior'}
   ];
   let selected=null;
   const overlay=document.createElement('div');
@@ -610,7 +626,7 @@ function mostrarModalConclusion(tareaId, targetEmail){
   overlay.innerHTML=`
     <div class="modal-box">
       <div class="modal-title">Concluir tarea</div>
-      <div class="modal-sub">Selecciona el motivo de conclusión:</div>
+      <div class="modal-sub">Selecciona el motivo de conclusiÃ³n:</div>
       ${motivos.map((m,i)=>`<div class="motivo-opt" id="mopt-${m.id}" onclick="selectMotivo('${m.id}')">
         <div class="motivo-num">${i+1}</div>
         <div class="motivo-text">${m.txt}</div>
@@ -639,7 +655,7 @@ const MOTIVOS_TEXTO={
   no_satisfactorio:'No satisfactoriamente',
   no_aplica:'Ya no aplica',
   genera_nueva:'Genera nueva tarea',
-  comentar_superior:'Se comentará con superior'
+  comentar_superior:'Se comentarÃ¡ con superior'
 };
 
 async function confirmarConclusion(tareaId,targetEmail){
@@ -650,14 +666,14 @@ async function confirmarConclusion(tareaId,targetEmail){
   const motivoTxt=MOTIVOS_TEXTO[motivoId]||motivoId;
   const generaNueva=motivoId==='genera_nueva';
   const {data:t}=await sbGet('tareas',`?id=eq.${tareaId}&select=bitacora,descripcion,client_id,client_name,fecha_creacion`).then(r=>({data:r?.[0]}));
-  const bits=[...(t?.bitacora||[]),{fecha:nowISO(),evento:`Concluida por ${session.name} — ${motivoTxt}`}];
+  const bits=[...(t?.bitacora||[]),{fecha:nowISO(),evento:`Concluida por ${session.name} â ${motivoTxt}`}];
   await sbPatch('tareas',`?id=eq.${tareaId}`,{status:'concluida',fecha_conclusion:nowISO(),updated_at:nowISO(),motivo_conclusion:motivoTxt,genera_nueva_tarea:generaNueva,bitacora:bits});
   if(generaNueva){
     const today=todayKey();
     const tareas=await getActiveTareas(targetEmail);
     const pendientes=tareas.filter(x=>x.status==='pendiente');
     if(pendientes.length<5){
-      const bitNueva=[{fecha:nowISO(),evento:`Generada por conclusión de tarea anterior — ${session.name}`}];
+      const bitNueva=[{fecha:nowISO(),evento:`Generada por conclusiÃ³n de tarea anterior â ${session.name}`}];
       await sbPost('tareas',{email:targetEmail,descripcion:'[NUEVA] '+escH(t?.descripcion||''),client_id:t?.client_id||null,client_name:t?.client_name||'',fecha_creacion:today,status:'pendiente',orden:tareas.length,asignada_por:session.email,bitacora:bitNueva});
     }
   }
@@ -665,7 +681,7 @@ async function confirmarConclusion(tareaId,targetEmail){
 }
 
 async function eliminarTarea(tareaId,targetEmail){
-  if(!confirm('¿Eliminar esta tarea? Quedará marcada como eliminada en el historial.')) return;
+  if(!confirm('Â¿Eliminar esta tarea? QuedarÃ¡ marcada como eliminada en el historial.')) return;
   const {data:t}=await sbGet('tareas',`?id=eq.${tareaId}&select=bitacora`).then(r=>({data:r?.[0]}));
   const bits=[...(t?.bitacora||[]),{fecha:nowISO(),evento:`Eliminada por ${session.name}`}];
   await sbPatch('tareas',`?id=eq.${tareaId}`,{status:'eliminada',updated_at:nowISO(),bitacora:bits});
@@ -679,7 +695,7 @@ async function addTareaRemota(idx,targetEmail){
   const cliId=document.getElementById(`ncli-${idx}`).value;
   const cliName=cliId?(clientesCache.find(c=>c.id===cliId)||{}).nombre||'':'';
   const err=document.getElementById('tarea-err');
-  if(!desc){err.textContent='Escribe una descripción.';err.style.display='block';setTimeout(()=>err.style.display='none',2500);return;}
+  if(!desc){err.textContent='Escribe una descripciÃ³n.';err.style.display='block';setTimeout(()=>err.style.display='none',2500);return;}
   const today=todayKey();
   const tareas=await getActiveTareas(targetEmail);
   const pendientes=tareas.filter(t=>t.status==='pendiente');
@@ -736,16 +752,16 @@ async function sendPlanNotification(tareas,targetEmail){
   const filas=tareas.filter(t=>t.descripcion).map((t,i)=>`<tr>
     <td style="padding:6px 12px;border-bottom:1px solid #f0f0ec">${i+1}</td>
     <td style="padding:6px 12px;border-bottom:1px solid #f0f0ec;font-weight:500">${escH(t.descripcion)}</td>
-    <td style="padding:6px 12px;border-bottom:1px solid #f0f0ec;color:#888">${escH(t.client_name||'—')}</td>
+    <td style="padding:6px 12px;border-bottom:1px solid #f0f0ec;color:#888">${escH(t.client_name||'â')}</td>
     <td style="padding:6px 12px;border-bottom:1px solid #f0f0ec;color:${t.status==='concluida'?'#8DC63F':'#EF9F27'};font-weight:500">${t.status==='concluida'?'Concluida':'Pendiente'}</td>
   </tr>`).join('');
   const html=`<div style="font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:24px">
     <div style="background:#3B4BC8;color:#fff;border-radius:10px 10px 0 0;padding:20px 24px">
       <div style="font-size:18px;font-weight:700">MSST Consulting</div>
-      <div style="font-size:13px;opacity:.8">Actualización de tareas — ${today}</div>
+      <div style="font-size:13px;opacity:.8">ActualizaciÃ³n de tareas â ${today}</div>
     </div>
     <div style="background:#fff;border:1px solid #e5e5e0;border-top:none;border-radius:0 0 10px 10px;padding:20px 24px">
-      <p style="font-size:14px;color:#555;margin-bottom:16px"><strong>${session.name}</strong> actualizó sus tareas del día.</p>
+      <p style="font-size:14px;color:#555;margin-bottom:16px"><strong>${session.name}</strong> actualizÃ³ sus tareas del dÃ­a.</p>
       <table style="width:100%;border-collapse:collapse;font-size:14px">
         <thead><tr style="background:#f5f5f3">
           <th style="padding:8px 12px;text-align:left;font-size:12px;color:#888">#</th>
@@ -755,11 +771,11 @@ async function sendPlanNotification(tareas,targetEmail){
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>
-      <p style="font-size:12px;color:#bbb;margin-top:20px">Generado automáticamente — MSST Consulting</p>
+      <p style="font-size:12px;color:#bbb;margin-top:20px">Generado automÃ¡ticamente â MSST Consulting</p>
     </div>
   </div>`;
   try{
-    await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':'Bearer '+RESEND_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:FROM_EMAIL,to:recipients,subject:`Tareas actualizadas — ${session.name} — ${today}`,html})});
+    await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':'Bearer '+RESEND_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:FROM_EMAIL,to:recipients,subject:`Tareas actualizadas â ${session.name} â ${today}`,html})});
   }catch(e){console.warn('Email error:',e);}
 }
 
@@ -789,14 +805,14 @@ async function renderDashboard(date){
     const pct=total>0?Math.round(done/total*100):0;
     const color=pc(em);
     const tList=total>0?tareas.map(t=>`<div style="display:flex;align-items:center;gap:6px;margin:2px 0;font-size:13px;color:${t.status==='concluida'?'#999':'#555'}">
-      <span style="color:${t.status==='concluida'?'#8DC63F':'#d1d1d1'};font-size:11px">${t.status==='concluida'?'✓':'○'}</span>
+      <span style="color:${t.status==='concluida'?'#8DC63F':'#d1d1d1'};font-size:11px">${t.status==='concluida'?'â':'â'}</span>
       <span style="${t.status==='concluida'?'text-decoration:line-through':''}">${escH(t.descripcion)}</span>
       ${t.client_name?`<span style="font-size:11px;color:#999">(${escH(t.client_name)})</span>`:''}
     </div>
     <div style="display:flex;gap:10px;margin-left:18px;margin-top:2px;flex-wrap:wrap">
-      <span style="font-size:10px;color:#bbb">📅 Alta: ${t.fecha_creacion||'—'}</span>
-      ${t.status==='concluida'&&t.fecha_conclusion?`<span style="font-size:10px;color:#1D9E75;font-weight:500">✓ Concluida: ${t.fecha_conclusion.slice(0,10)}</span>`:''}
-      ${t.status==='standby'?`<span style="font-size:10px;color:#3B4BC8;font-weight:500">⏸ Stand By</span>`:''}
+      <span style="font-size:10px;color:#bbb">ð Alta: ${t.fecha_creacion||'â'}</span>
+      ${t.status==='concluida'&&t.fecha_conclusion?`<span style="font-size:10px;color:#1D9E75;font-weight:500">â Concluida: ${t.fecha_conclusion.slice(0,10)}</span>`:''}
+      ${t.status==='standby'?`<span style="font-size:10px;color:#3B4BC8;font-weight:500">â¸ Stand By</span>`:''}
     </div>
   </div>`).join(''):'<div style="font-size:13px;color:#bbb">Sin tareas registradas</div>';
     const canActOn=(session.role==='admin')||(session.role==='manager'&&u.role==='assistant');
@@ -837,7 +853,7 @@ async function renderDashboard(date){
   const montoCartera=devActivas.reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
   const montoDev=(allDev||[]).filter(d=>d.status==='devuelta').reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
 
-  // Alertas de plazos críticos (<=5 días hábiles)
+  // Alertas de plazos crÃ­ticos (<=5 dÃ­as hÃ¡biles)
   const alertasDev=devActivas.map(d=>{
     const plazos=calcPlazos(d);
     const alerts=[];
@@ -847,7 +863,7 @@ async function renderDashboard(date){
     }
     if(d.fecha_presentacion_sat&&plazos.limite_resolucion){
       const dr=diasRestantes(plazos.limite_resolucion);
-      if(dr<=10) alerts.push({tipo:'Vence plazo resolución',dias:dr,cliente:d.cliente_nombre,periodo:d.periodo,id:d.id});
+      if(dr<=10) alerts.push({tipo:'Vence plazo resoluciÃ³n',dias:dr,cliente:d.cliente_nombre,periodo:d.periodo,id:d.id});
     }
     return alerts;
   }).flat();
@@ -858,7 +874,7 @@ async function renderDashboard(date){
     devRows=devActivas.slice(0,8).map(d=>{
       const plazos=calcPlazos(d);
       const dr=d.fecha_presentacion_sat?diasRestantes(plazos.limite_resolucion):(plazos.presentacion?diasRestantes(plazos.presentacion):null);
-      const drLabel=d.fecha_presentacion_sat?'Resolución':'Presentar';
+      const drLabel=d.fecha_presentacion_sat?'ResoluciÃ³n':'Presentar';
       let drBadge='';
       if(dr!==null){
         if(dr<0) drBadge='<span style="background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600">Vencido '+Math.abs(dr)+'d</span>';
@@ -867,12 +883,12 @@ async function renderDashboard(date){
       }
       const s=DEV_STATUS[d.status]||{label:d.status,color:'#888',bg:'#f5f5f3'};
       return '<tr onclick="nav(\'devoluciones\')" style="cursor:pointer">'+
-        '<td style="font-weight:500">'+escH(d.cliente_nombre||'—')+'</td>'+
-        '<td style="color:#888">'+escH(d.periodo||'—')+'</td>'+
+        '<td style="font-weight:500">'+escH(d.cliente_nombre||'â')+'</td>'+
+        '<td style="color:#888">'+escH(d.periodo||'â')+'</td>'+
         '<td><span style="background:'+s.bg+';color:'+s.color+';padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+s.label+'</span></td>'+
         '<td style="font-size:12px;color:#3B4BC8;font-weight:500">'+fmtMXN(d.monto_solicitado)+'</td>'+
         '<td>'+drBadge+'</td>'+
-        '<td style="font-size:11px;color:#888">'+escH(d.responsable||'—')+'</td>'+
+        '<td style="font-size:11px;color:#888">'+escH(d.responsable||'â')+'</td>'+
       '</tr>';
     }).join('');
   } else {
@@ -880,7 +896,7 @@ async function renderDashboard(date){
   }
 
   dc.innerHTML=`
-  <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Operaciones del equipo — ${formatDate(today)}</div>
+  <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Operaciones del equipo â ${formatDate(today)}</div>
   <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:1rem">
     <div class="metric"><div class="metric-label">Con tareas activas</div><div class="metric-val">${registros}<span style="font-size:14px;color:#888">/${visible.length}</span></div></div>
     <div class="metric"><div class="metric-label">Concluidas hoy</div><div class="metric-val">${totalDone}<span style="font-size:14px;color:#888">/${totalAll}</span></div></div>
@@ -897,16 +913,16 @@ async function renderDashboard(date){
     <div class="metric" style="border-left:3px solid #EF9F27">
       <div class="metric-label">Con requerimiento SAT</div>
       <div class="metric-val" style="color:#EF9F27">${devConReq}</div>
-      <div style="font-size:11px;color:#888;margin-top:2px">${devConReq>0?'Atención requerida':'Sin alertas'}</div>
+      <div style="font-size:11px;color:#888;margin-top:2px">${devConReq>0?'AtenciÃ³n requerida':'Sin alertas'}</div>
     </div>
     <div class="metric" style="border-left:3px solid #3B4BC8">
       <div class="metric-label">Monto en cartera</div>
-      <div class="metric-val" style="font-size:16px;color:#3B4BC8">${montoCartera>0?'$'+Math.round(montoCartera/1000)+'K':'—'}</div>
+      <div class="metric-val" style="font-size:16px;color:#3B4BC8">${montoCartera>0?'$'+Math.round(montoCartera/1000)+'K':'â'}</div>
       <div style="font-size:11px;color:#888;margin-top:2px">MXN solicitado</div>
     </div>
     <div class="metric" style="border-left:3px solid #8DC63F">
       <div class="metric-label">Monto recuperado</div>
-      <div class="metric-val" style="font-size:16px;color:#8DC63F">${montoDev>0?'$'+Math.round(montoDev/1000)+'K':'—'}</div>
+      <div class="metric-val" style="font-size:16px;color:#8DC63F">${montoDev>0?'$'+Math.round(montoDev/1000)+'K':'â'}</div>
       <div style="font-size:11px;color:#888;margin-top:2px">MXN devuelto</div>
     </div>
   </div>
@@ -915,7 +931,7 @@ async function renderDashboard(date){
   <div class="card" style="margin-bottom:1rem;border-left:3px solid #dc2626">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <div style="width:8px;height:8px;border-radius:50%;background:#dc2626;flex-shrink:0"></div>
-      <div style="font-size:12px;font-weight:600;color:#dc2626;text-transform:uppercase;letter-spacing:.06em">Alertas de plazos críticos (${alertasDev.length})</div>
+      <div style="font-size:12px;font-weight:600;color:#dc2626;text-transform:uppercase;letter-spacing:.06em">Alertas de plazos crÃ­ticos (${alertasDev.length})</div>
     </div>
     ${alertasDev.map(a=>'<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid #f0f0ec;cursor:pointer" onclick="nav(\'devoluciones\')">'+
       '<span style="background:'+(a.dias<0?'#fef2f2':a.dias<=2?'#fef2f2':'#FEF3C7')+';color:'+(a.dias<=2?'#dc2626':'#92400E')+';padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;flex-shrink:0">'+
@@ -923,7 +939,7 @@ async function renderDashboard(date){
       '</span>'+
       '<div style="flex:1">'+
         '<div style="font-size:13px;font-weight:500">'+escH(a.cliente)+'</div>'+
-        '<div style="font-size:11px;color:#888">'+escH(a.periodo)+' · '+a.tipo+'</div>'+
+        '<div style="font-size:11px;color:#888">'+escH(a.periodo)+' Â· '+a.tipo+'</div>'+
       '</div>'+
     '</div>').join('')}
   </div>`:''}
@@ -931,11 +947,11 @@ async function renderDashboard(date){
   <div class="card" style="margin-bottom:1rem">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div class="sec-label">Devoluciones IVA activas</div>
-      <button class="btn btn-sm btn-purple" onclick="nav(\'devoluciones\')" style="font-size:11px">Ver todas →</button>
+      <button class="btn btn-sm btn-purple" onclick="nav(\'devoluciones\')" style="font-size:11px">Ver todas â</button>
     </div>
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th>Cliente</th><th>Período</th><th>Estatus</th><th>Monto</th><th>Plazo</th><th>Responsable</th></tr></thead>
+        <thead><tr><th>Cliente</th><th>PerÃ­odo</th><th>Estatus</th><th>Monto</th><th>Plazo</th><th>Responsable</th></tr></thead>
         <tbody>${devRows}</tbody>
       </table>
     </div>
@@ -946,20 +962,20 @@ async function renderDashboard(date){
     ${sumRows||'<div style="font-size:14px;color:#888">Sin tareas registradas.</div>'}
   </div>
   <div class="grid2" style="margin-bottom:1rem">
-    <div class="card" style="margin:0"><div class="sec-label">Historial — tareas concluidas por día</div><canvas id="chart-hist" height="200"></canvas></div>
+    <div class="card" style="margin:0"><div class="sec-label">Historial â tareas concluidas por dÃ­a</div><canvas id="chart-hist" height="200"></canvas></div>
     <div class="card" style="margin:0"><div class="sec-label">Avance hoy por persona</div><canvas id="chart-comp" height="200"></canvas></div>
   </div>
   <div class="card">
-    <div class="sec-label">Análisis ejecutivo — Claude</div>
+    <div class="sec-label">AnÃ¡lisis ejecutivo â Claude</div>
     <div class="analysis-box" id="abox"><span style="color:#bbb;font-style:italic">Presiona "Analizar" para el resumen ejecutivo.</span></div>
-    <button class="btn btn-purple btn-full" style="margin-top:12px" onclick="runAnalysis()">Analizar con Claude ↗</button>
+    <button class="btn btn-purple btn-full" style="margin-top:12px" onclick="runAnalysis()">Analizar con Claude â</button>
   </div>`;
 
   buildCharts(visible,allTareas||[],byEmail);
 }
 
 function buildCharts(visible,allTareas,byEmail){
-  // Historial: últimos 14 días, tareas concluidas por día por persona
+  // Historial: Ãºltimos 14 dÃ­as, tareas concluidas por dÃ­a por persona
   const dateMap={};
   allTareas.forEach(t=>{
     if(!visible.includes(t.email)||t.status!=='concluida'||!t.fecha_conclusion)return;
@@ -975,7 +991,7 @@ function buildCharts(visible,allTareas,byEmail){
   });
   const ctx1=document.getElementById('chart-hist');
   if(ctx1&&labels.length) new Chart(ctx1,{type:'line',data:{labels,datasets},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},scales:{y:{min:0,ticks:{stepSize:1},grid:{color:'#f0f0ec'}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
-  else if(ctx1) ctx1.parentElement.innerHTML+='<div style="font-size:13px;color:#bbb;padding:1rem 0;text-align:center">Sin historial aún</div>';
+  else if(ctx1) ctx1.parentElement.innerHTML+='<div style="font-size:13px;color:#bbb;padding:1rem 0;text-align:center">Sin historial aÃºn</div>';
 
   const ctx2=document.getElementById('chart-comp');
   if(ctx2) new Chart(ctx2,{type:'bar',data:{
@@ -988,7 +1004,7 @@ function buildCharts(visible,allTareas,byEmail){
 
 async function runAnalysis(){
   const visible=visibleEmails();
-  // Excluir al Director del análisis — solo analizar el equipo
+  // Excluir al Director del anÃ¡lisis â solo analizar el equipo
   const equipo=visible.filter(em=>em!==session.email);
   const today=todayKey();
   const box=document.getElementById('abox');
@@ -1000,14 +1016,14 @@ async function runAnalysis(){
   const lines=equipo.map(em=>{
     const u=usersCache[em];if(!u)return'';
     const tareas=(allT||[]).filter(t=>t.email===em&&(t.status==='pendiente'||t.status==='standby'||(t.status==='concluida'&&t.fecha_conclusion?.startsWith(today))));
-    if(!tareas.length)return u.name+' ('+( u.role==='manager'?'Líder de Práctica Fiscal':'Consultor Junior')+'): sin tareas hoy';
+    if(!tareas.length)return u.name+' ('+( u.role==='manager'?'LÃ­der de PrÃ¡ctica Fiscal':'Consultor Junior')+'): sin tareas hoy';
     const done=tareas.filter(t=>t.status==='concluida').length;
     const sb=tareas.filter(t=>t.status==='standby').length;
-    return u.name+' ('+(u.role==='manager'?'Líder de Práctica Fiscal':'Consultor Junior')+') — '+done+'/'+tareas.length+' concluidas'+(sb?' · '+sb+' en Stand By':'')+': \n'+tareas.map(t=>'  '+(t.status==='concluida'?'✓':t.status==='standby'?'⏸':'·')+' '+t.descripcion+(t.client_name?' ['+t.client_name+']':'')).join('\n');
+    return u.name+' ('+(u.role==='manager'?'LÃ­der de PrÃ¡ctica Fiscal':'Consultor Junior')+') â '+done+'/'+tareas.length+' concluidas'+(sb?' Â· '+sb+' en Stand By':'')+': \n'+tareas.map(t=>'  '+(t.status==='concluida'?'â':t.status==='standby'?'â¸':'Â·')+' '+t.descripcion+(t.client_name?' ['+t.client_name+']':'')).join('\n');
   }).filter(Boolean).join('\n\n');
-  const devLines=(allDev||[]).length?'\n\nDevoluciones IVA activas:\n'+(allDev||[]).map(d=>'  · '+d.cliente_nombre+' ('+d.periodo+') — '+d.status+(d.responsable?' — Resp: '+d.responsable:'')+(d.monto_solicitado?' — $'+Number(d.monto_solicitado).toLocaleString('es-MX'):'')).join('\n'):'';
+  const devLines=(allDev||[]).length?'\n\nDevoluciones IVA activas:\n'+(allDev||[]).map(d=>'  Â· '+d.cliente_nombre+' ('+d.periodo+') â '+d.status+(d.responsable?' â Resp: '+d.responsable:'')+(d.monto_solicitado?' â $'+Number(d.monto_solicitado).toLocaleString('es-MX'):'')).join('\n'):'';
   try{
-    const prompt='Eres asesor senior de MSST Consulting SC, firma de asesoría fiscal mexicana en Tijuana. Analizas el desempeño del equipo operativo (excluyendo al Director que es quien lee este análisis).\n\nEstado del equipo hoy '+today+':\n\n'+lines+devLines+'\n\nAnálisis ejecutivo Big 4 (máx 6 oraciones en prosa corrida, español formal): (1) avance general del equipo hoy, (2) quién destaca positivamente y quién requiere atención, (3) estado de la cartera de devoluciones IVA si hay activas, (4) recomendación de acción puntual para el Director.';
+    const prompt='Eres asesor senior de MSST Consulting SC, firma de asesorÃ­a fiscal mexicana en Tijuana. Analizas el desempeÃ±o del equipo operativo (excluyendo al Director que es quien lee este anÃ¡lisis).\n\nEstado del equipo hoy '+today+':\n\n'+lines+devLines+'\n\nAnÃ¡lisis ejecutivo Big 4 (mÃ¡x 6 oraciones en prosa corrida, espaÃ±ol formal): (1) avance general del equipo hoy, (2) quiÃ©n destaca positivamente y quiÃ©n requiere atenciÃ³n, (3) estado de la cartera de devoluciones IVA si hay activas, (4) recomendaciÃ³n de acciÃ³n puntual para el Director.';
     const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
     const res=await fetch(SB_URL+'/functions/v1/claude-analysis',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},body:JSON.stringify({prompt})});
     const data=await res.json();
@@ -1048,7 +1064,7 @@ async function renderHistory(){
         <input type="date" id="hist-desde" value="${hace7}" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none">
         <input type="date" id="hist-hasta" value="${hoy}" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none">
         <button class="btn btn-sm btn-primary" onclick="loadHistorial()">Ver reporte</button>
-        <button class="btn btn-sm btn-purple" onclick="imprimirHistorial()">⎙ PDF</button>
+        <button class="btn btn-sm btn-purple" onclick="imprimirHistorial()">â PDF</button>
       </div>
     </div>
   </div>
@@ -1059,7 +1075,7 @@ async function renderHistory(){
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div>
         <div style="font-size:13px;font-weight:600">Historial de sesiones</div>
-        <div style="font-size:11px;color:#888;margin-top:2px">Entradas y salidas del sistema — últimos 7 días</div>
+        <div style="font-size:11px;color:#888;margin-top:2px">Entradas y salidas del sistema â Ãºltimos 7 dÃ­as</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         ${session.role!=='assistant'?'<select id="ses-user-sel" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none">'+userOptsHTML+'</select>':''}
@@ -1126,7 +1142,7 @@ async function loadHistorial(){
     const sesUser=sesByEmail[em]||[];
     const tareasUser=tareasByEmail[em]||[];
 
-    // Estadísticas resumen
+    // EstadÃ­sticas resumen
     const totalSes=sesUser.length;
     const totalMin=sesUser.reduce((s,x)=>s+(x.duracion_min||0),0);
     const totalHrs=Math.floor(totalMin/60);
@@ -1143,7 +1159,7 @@ async function loadHistorial(){
       sesRows=sesUser.map(s=>{
         const entrada=new Date(s.login_at).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'});
         const salida=s.logout_at?new Date(s.logout_at).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'}):'<span style="color:#EF9F27;font-weight:500">Activa</span>';
-        const dur=s.duracion_min!=null?(s.duracion_min>=60?Math.floor(s.duracion_min/60)+'h '+(s.duracion_min%60)+'min':s.duracion_min+' min'):'—';
+        const dur=s.duracion_min!=null?(s.duracion_min>=60?Math.floor(s.duracion_min/60)+'h '+(s.duracion_min%60)+'min':s.duracion_min+' min'):'â';
         return '<tr>'+
           '<td>'+entrada+'</td>'+
           '<td>'+salida+'</td>'+
@@ -1151,7 +1167,7 @@ async function loadHistorial(){
         '</tr>';
       }).join('');
     } else {
-      sesRows='<tr><td colspan="3" style="color:#bbb;text-align:center">Sin sesiones en este período</td></tr>';
+      sesRows='<tr><td colspan="3" style="color:#bbb;text-align:center">Sin sesiones en este perÃ­odo</td></tr>';
     }
 
     // Tabla de tareas
@@ -1164,8 +1180,8 @@ async function loadHistorial(){
         return fa.localeCompare(fb);
       });
       tarRows=sorted.map(t=>{
-        const fechaAlta=t.created_at?new Date(t.created_at).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'}):t.fecha_creacion||'—';
-        const fechaCon=t.fecha_conclusion?new Date(t.fecha_conclusion).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'}):'—';
+        const fechaAlta=t.created_at?new Date(t.created_at).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'}):t.fecha_creacion||'â';
+        const fechaCon=t.fecha_conclusion?new Date(t.fecha_conclusion).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'}):'â';
         const statusBadge=t.status==='concluida'?
           '<span style="background:#f0f7d4;color:#5a8a1a;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600">Concluida</span>':
           t.status==='standby'?
@@ -1185,7 +1201,7 @@ async function loadHistorial(){
         '</tr>';
       }).join('');
     } else {
-      tarRows='<tr><td colspan="4" style="color:#bbb;text-align:center">Sin tareas en este período</td></tr>';
+      tarRows='<tr><td colspan="4" style="color:#bbb;text-align:center">Sin tareas en este perÃ­odo</td></tr>';
     }
 
     html+='<div class="card" style="margin-bottom:1.25rem">'+
@@ -1198,7 +1214,7 @@ async function loadHistorial(){
         '</div>'+
         roleBadge(u.role)+
       '</div>'+
-      // Métricas resumen
+      // MÃ©tricas resumen
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1rem">'+
         '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center">'+
           '<div style="font-size:11px;color:#888;margin-bottom:4px">Sesiones</div>'+
@@ -1206,7 +1222,7 @@ async function loadHistorial(){
         '</div>'+
         '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center">'+
           '<div style="font-size:11px;color:#888;margin-bottom:4px">Tiempo total</div>'+
-          '<div style="font-size:20px;font-weight:700;color:#3B4BC8">'+(totalMin>0?totalHrs+'h '+restMin+'m':'—')+'</div>'+
+          '<div style="font-size:20px;font-weight:700;color:#3B4BC8">'+(totalMin>0?totalHrs+'h '+restMin+'m':'â')+'</div>'+
         '</div>'+
         '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center">'+
           '<div style="font-size:11px;color:#888;margin-bottom:4px">Tareas dadas de alta</div>'+
@@ -1221,28 +1237,28 @@ async function loadHistorial(){
       '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Sesiones</div>'+
       '<div class="table-wrap" style="margin-bottom:1rem">'+
         '<table class="data-table">'+
-          '<thead><tr><th>Entrada</th><th>Salida</th><th>Duración</th></tr></thead>'+
+          '<thead><tr><th>Entrada</th><th>Salida</th><th>DuraciÃ³n</th></tr></thead>'+
           '<tbody>'+sesRows+'</tbody>'+
         '</table>'+
       '</div>'+
       // Tabla tareas
-      '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Tareas del período</div>'+
+      '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Tareas del perÃ­odo</div>'+
       '<div class="table-wrap">'+
         '<table class="data-table">'+
-          '<thead><tr><th>Descripción</th><th>Estatus</th><th>Alta</th><th>Conclusión</th></tr></thead>'+
+          '<thead><tr><th>DescripciÃ³n</th><th>Estatus</th><th>Alta</th><th>ConclusiÃ³n</th></tr></thead>'+
           '<tbody>'+tarRows+'</tbody>'+
         '</table>'+
       '</div>'+
     '</div>';
   });
 
-  // ===== GRÁFICA GLOBAL: tareas por día =====
+  // ===== GRÃFICA GLOBAL: tareas por dÃ­a =====
   // Recopilar todos los datos de tareas de todos los usuarios visibles
   const allTareasGraf=await sbGet('tareas','?email=in.'+emailFilter+'&select=created_at,fecha_creacion,fecha_conclusion,status&order=created_at.asc');
   const desdeDt2=new Date(document.getElementById('hist-desde').value+'T00:00:00');
   const hastaDt2=new Date(document.getElementById('hist-hasta').value+'T23:59:59');
 
-  // Construir mapa de días en el rango
+  // Construir mapa de dÃ­as en el rango
   const diasMap={};
   const cursor=new Date(desdeDt2);
   while(cursor<=hastaDt2){
@@ -1263,15 +1279,15 @@ async function loadHistorial(){
   const dataAlta=dias.map(d=>diasMap[d].alta);
   const dataCon=dias.map(d=>diasMap[d].concluida);
 
-  // Agregar canvas de gráfica al final del html
+  // Agregar canvas de grÃ¡fica al final del html
   html+='<div class="card" id="hist-graf-card" style="margin-bottom:1.25rem">'+
-    '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Tareas registradas vs concluidas por día</div>'+
+    '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Tareas registradas vs concluidas por dÃ­a</div>'+
     '<canvas id="hist-chart" height="120"></canvas>'+
   '</div>';
 
-  body.innerHTML=html||'<div class="card"><div style="font-size:14px;color:#888">Sin actividad en el período seleccionado.</div></div>';
+  body.innerHTML=html||'<div class="card"><div style="font-size:14px;color:#888">Sin actividad en el perÃ­odo seleccionado.</div></div>';
 
-  // Renderizar gráfica con Chart.js
+  // Renderizar grÃ¡fica con Chart.js
   const ctx=document.getElementById('hist-chart');
   if(ctx&&dias.length){
     new Chart(ctx,{
@@ -1318,7 +1334,7 @@ async function loadSesiones(){
   });
 
   if(!sesFilt.length){
-    body.innerHTML='<div style="font-size:13px;color:#888;padding:8px 0">Sin sesiones en el período seleccionado.</div>';
+    body.innerHTML='<div style="font-size:13px;color:#888;padding:8px 0">Sin sesiones en el perÃ­odo seleccionado.</div>';
     return;
   }
 
@@ -1340,16 +1356,16 @@ async function loadSesiones(){
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;padding-bottom:6px;border-bottom:0.5px solid #e5e5e0">'+
         '<div class="avatar '+av(u.av)+'" style="width:28px;height:28px;font-size:11px">'+(u.initials||'??')+'</div>'+
         '<div style="flex:1;font-size:13px;font-weight:600">'+escH(u.name)+'</div>'+
-        '<div style="font-size:11px;color:#888">'+sess.length+' sesiones · '+(totalMin>0?hrs+'h '+mins+'m total':'—')+'</div>'+
+        '<div style="font-size:11px;color:#888">'+sess.length+' sesiones Â· '+(totalMin>0?hrs+'h '+mins+'m total':'â')+'</div>'+
       '</div>'+
       '<div class="table-wrap">'+
         '<table class="data-table">'+
-          '<thead><tr><th>Entrada</th><th>Salida</th><th>Duración</th><th>Estado</th></tr></thead>'+
+          '<thead><tr><th>Entrada</th><th>Salida</th><th>DuraciÃ³n</th><th>Estado</th></tr></thead>'+
           '<tbody>'+
           sess.map(s=>{
             const entrada=new Date(s.login_at).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'});
-            const salida=s.logout_at?new Date(s.logout_at).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'}):'—';
-            const dur=s.duracion_min!=null?(s.duracion_min>=60?Math.floor(s.duracion_min/60)+'h '+(s.duracion_min%60)+'min':s.duracion_min+' min'):'—';
+            const salida=s.logout_at?new Date(s.logout_at).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'}):'â';
+            const dur=s.duracion_min!=null?(s.duracion_min>=60?Math.floor(s.duracion_min/60)+'h '+(s.duracion_min%60)+'min':s.duracion_min+' min'):'â';
             const estado=s.logout_at?
               '<span style="background:#f0f7d4;color:#5a8a1a;padding:1px 8px;border-radius:999px;font-size:10px;font-weight:600">Cerrada</span>':
               '<span style="background:#FEF3C7;color:#92400E;padding:1px 8px;border-radius:999px;font-size:10px;font-weight:600">Activa</span>';
@@ -1367,7 +1383,7 @@ async function loadSesiones(){
 function imprimirHistorial(){
   const desde=document.getElementById('hist-desde')?.value||'';
   const hasta=document.getElementById('hist-hasta')?.value||'';
-  // Obtener contenido sin la card de la gráfica (se regenera en la ventana de impresión)
+  // Obtener contenido sin la card de la grÃ¡fica (se regenera en la ventana de impresiÃ³n)
   const grafCard=document.getElementById('hist-graf-card');
   const grafHTML=grafCard?grafCard.outerHTML:'';
   const bodyEl=document.getElementById('hist-body');
@@ -1377,7 +1393,7 @@ function imprimirHistorial(){
   if(canvasEl)canvasEl.remove();
   const contenido=clone.innerHTML||'';
 
-  // Capturar datos de la gráfica desde el canvas original
+  // Capturar datos de la grÃ¡fica desde el canvas original
   let chartImgSrc='';
   const origCanvas=document.getElementById('hist-chart');
   if(origCanvas){
@@ -1387,7 +1403,7 @@ function imprimirHistorial(){
   const win=window.open('','_blank');
   win.document.write(`<!DOCTYPE html><html lang="es"><head>
     <meta charset="UTF-8">
-    <title>Historial MSST Consulting — ${desde} al ${hasta}</title>
+    <title>Historial MSST Consulting â ${desde} al ${hasta}</title>
     <style>
       *{box-sizing:border-box;margin:0;padding:0}
       body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;color:#1a1a1a;padding:24px}
@@ -1418,22 +1434,22 @@ function imprimirHistorial(){
   </head><body>
     <div class="print-header">
       <div>
-        <div class="print-logo">T<span>a</span><span>x</span>IA <span>día a día</span></div>
+        <div class="print-logo">T<span>a</span><span>x</span>IA <span>dÃ­a a dÃ­a</span></div>
         <div style="font-size:11px;color:#888;margin-top:2px">MSST Consulting SC</div>
       </div>
       <div class="print-meta">
         <div style="font-weight:600;font-size:13px">Historial de actividad</div>
-        <div>Período: ${desde} al ${hasta}</div>
+        <div>PerÃ­odo: ${desde} al ${hasta}</div>
         <div>Generado: ${new Date().toLocaleString('es-MX',{timeZone:'America/Tijuana'})}</div>
       </div>
     </div>
     ${contenido}
     ${chartImgSrc?`<div class="graf-card">
-      <div class="graf-label">Tareas registradas vs concluidas por día</div>
-      <img class="graf-img" src="${chartImgSrc}" alt="Gráfica de tareas">
+      <div class="graf-label">Tareas registradas vs concluidas por dÃ­a</div>
+      <img class="graf-img" src="${chartImgSrc}" alt="GrÃ¡fica de tareas">
     </div>`:''}
     <div style="margin-top:20px;padding-top:12px;border-top:1px solid #e5e5e0;font-size:10px;color:#bbb;text-align:center">
-      Reporte generado por TaxIA día a día — MSST Consulting SC — Confidencial
+      Reporte generado por TaxIA dÃ­a a dÃ­a â MSST Consulting SC â Confidencial
     </div>
   </body></html>`);
   win.document.close();
@@ -1446,12 +1462,12 @@ async function reporteDevolucionesPDF(){
   const clientes=[...new Set(devCache.map(d=>d.cliente_nombre).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
   const cliOpts='<option value="all">Todos los clientes</option>'+clientes.map(c=>'<option value="'+escH(c)+'">'+escH(c)+'</option>').join('');
 
-  // Mostrar modal de selección
+  // Mostrar modal de selecciÃ³n
   const overlay=document.createElement('div');
   overlay.className='modal-overlay';
   overlay.id='modal-reporte-dev';
   overlay.innerHTML='<div class="modal-box">'+
-    '<div class="modal-title">Reporte PDF — Devoluciones IVA</div>'+
+    '<div class="modal-title">Reporte PDF â Devoluciones IVA</div>'+
     '<div class="modal-sub">Selecciona el alcance del reporte</div>'+
     '<div style="margin-bottom:12px">'+
       '<div style="font-size:12px;color:#888;margin-bottom:4px">Cliente</div>'+
@@ -1467,12 +1483,12 @@ async function reporteDevolucionesPDF(){
     '<div style="margin-bottom:16px">'+
       '<div style="font-size:12px;color:#888;margin-bottom:4px">Enviar por correo (opcional)</div>'+
       '<input id="rep-correo" type="email" placeholder="correo@ejemplo.com, correo2@ejemplo.com" style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px;box-sizing:border-box">'+
-      '<div style="font-size:11px;color:#bbb;margin-top:3px">Separa múltiples correos con coma</div>'+
+      '<div style="font-size:11px;color:#bbb;margin-top:3px">Separa mÃºltiples correos con coma</div>'+
     '</div>'+
     '<div style="display:flex;gap:8px">'+
       '<button class="btn btn-full" onclick="document.getElementById(\'modal-reporte-dev\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-purple btn-full" onclick="generarReporteDevPDF(true)" style="flex:1;margin-top:0">✉ Solo correo</button>'+
-      '<button class="btn btn-primary btn-full" onclick="generarReporteDevPDF(false)" style="flex:1;margin-top:0">⎙ PDF</button>'+
+      '<button class="btn btn-purple btn-full" onclick="generarReporteDevPDF(true)" style="flex:1;margin-top:0">â Solo correo</button>'+
+      '<button class="btn btn-primary btn-full" onclick="generarReporteDevPDF(false)" style="flex:1;margin-top:0">â PDF</button>'+
     '</div>'+
   '</div>';
   document.body.appendChild(overlay);
@@ -1512,32 +1528,32 @@ async function generarReporteDevPDF(soloCorreo=false){
       const plazos=calcPlazos(d);
       const s=DEV_STATUS[d.status]||{label:d.status,color:'#888',bg:'#f5f5f3'};
       const dr=d.fecha_presentacion_sat?diasRestantes(plazos.limite_resolucion):(plazos.presentacion?diasRestantes(plazos.presentacion):null);
-      const plazoTxt=d.status==='devuelta'?'Concluida':d.status==='negada'?'Negada':(dr===null?'—':dr<0?'Vencido '+Math.abs(dr)+'d':dr+'d');
+      const plazoTxt=d.status==='devuelta'?'Concluida':d.status==='negada'?'Negada':(dr===null?'â':dr<0?'Vencido '+Math.abs(dr)+'d':dr+'d');
       return '<tr>'+
-        '<td>'+escH(d.periodo||'—')+'</td>'+
+        '<td>'+escH(d.periodo||'â')+'</td>'+
         '<td><span style="background:'+s.bg+';color:'+s.color+';padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">'+s.label+'</span></td>'+
-        '<td>'+escH(d.fecha_inicio||'—')+'</td>'+
-        '<td>'+escH(d.fecha_presentacion_sat||'—')+'</td>'+
-        '<td>'+escH(plazos.limite_resolucion||'—')+'</td>'+
+        '<td>'+escH(d.fecha_inicio||'â')+'</td>'+
+        '<td>'+escH(d.fecha_presentacion_sat||'â')+'</td>'+
+        '<td>'+escH(plazos.limite_resolucion||'â')+'</td>'+
         '<td style="font-weight:600">'+fmtMXN(d.monto_solicitado)+'</td>'+
         '<td style="font-weight:600;color:'+(d.monto_devuelto?'#5a8a1a':'#888')+'">'+fmtMXN(d.monto_devuelto)+'</td>'+
         '<td style="color:'+(dr!==null&&dr<0?'#dc2626':dr!==null&&dr<=5?'#92400E':'#5a8a1a')+'">'+plazoTxt+'</td>'+
-        '<td>'+escH(d.responsable||'—')+'</td>'+
+        '<td>'+escH(d.responsable||'â')+'</td>'+
       '</tr>';
     }).join('');
 
     seccionesHTML+='<div style="margin-bottom:24px;break-inside:avoid">'+
       '<div style="background:#3B4BC8;color:#fff;padding:8px 12px;border-radius:6px 6px 0 0;display:flex;justify-content:space-between;align-items:center">'+
         '<span style="font-size:13px;font-weight:700">'+escH(cli)+'</span>'+
-        '<span style="font-size:11px;opacity:.85">'+devs.length+' solicitud'+(devs.length>1?'es':'')+(totalSol?' · Sol: '+fmtMXN(totalSol):'')+(totalDev?' · Dev: '+fmtMXN(totalDev):'')+'</span>'+
+        '<span style="font-size:11px;opacity:.85">'+devs.length+' solicitud'+(devs.length>1?'es':'')+(totalSol?' Â· Sol: '+fmtMXN(totalSol):'')+(totalDev?' Â· Dev: '+fmtMXN(totalDev):'')+'</span>'+
       '</div>'+
       '<table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #e5e5e0;border-top:none">'+
         '<thead><tr style="background:#f5f5f3">'+
-          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Período</th>'+
+          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">PerÃ­odo</th>'+
           '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Estatus</th>'+
           '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Inicio</th>'+
-          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Presentación SAT</th>'+
-          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Límite resolución</th>'+
+          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">PresentaciÃ³n SAT</th>'+
+          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">LÃ­mite resoluciÃ³n</th>'+
           '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Solicitado</th>'+
           '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Devuelto</th>'+
           '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Plazo</th>'+
@@ -1558,7 +1574,7 @@ async function generarReporteDevPDF(soloCorreo=false){
   const win=window.open('','_blank');
   win.document.write('<!DOCTYPE html><html lang="es"><head>'+
     '<meta charset="UTF-8">'+
-    '<title>Reporte Devoluciones IVA — MSST Consulting</title>'+
+    '<title>Reporte Devoluciones IVA â MSST Consulting</title>'+
     '<style>'+
       '*{box-sizing:border-box;margin:0;padding:0}'+
       'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:12px;color:#1a1a1a;padding:24px}'+
@@ -1569,7 +1585,7 @@ async function generarReporteDevPDF(soloCorreo=false){
   '</head><body>'+
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding-bottom:14px;border-bottom:2px solid #3B4BC8;margin-bottom:20px">'+
       '<div>'+
-        '<div style="font-size:18px;font-weight:700;color:#3B4BC8">T<span style="color:#8DC63F">ax</span>IA <span style="color:#8DC63F">día a día</span></div>'+
+        '<div style="font-size:18px;font-weight:700;color:#3B4BC8">T<span style="color:#8DC63F">ax</span>IA <span style="color:#8DC63F">dÃ­a a dÃ­a</span></div>'+
         '<div style="font-size:11px;color:#888;margin-top:2px">MSST Consulting SC</div>'+
       '</div>'+
       '<div style="text-align:right">'+
@@ -1602,7 +1618,7 @@ async function generarReporteDevPDF(soloCorreo=false){
     '</div>'+
     seccionesHTML+
     '<div style="margin-top:20px;padding-top:10px;border-top:1px solid #e5e5e0;font-size:10px;color:#bbb;text-align:center">'+
-      'Reporte generado por TaxIA día a día — MSST Consulting SC — Confidencial — '+hoy+
+      'Reporte generado por TaxIA dÃ­a a dÃ­a â MSST Consulting SC â Confidencial â '+hoy+
     '</div>'+
   '</body></html>');
   win.document.close();
@@ -1610,15 +1626,15 @@ async function generarReporteDevPDF(soloCorreo=false){
 
   // Enviar por correo si hay destinatarios
   if(destinatarios.length){
-    const asunto='Reporte Devoluciones IVA — '+tituloCliente+' — '+hoy;
+    const asunto='Reporte Devoluciones IVA â '+tituloCliente+' â '+hoy;
     const htmlCorreo='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>'+asunto+'</title></head><body>'+
       '<div style="font-family:-apple-system,sans-serif;max-width:700px;margin:0 auto">'+
       '<div style="background:#3B4BC8;padding:20px 24px;border-radius:12px 12px 0 0">'+
-        '<div style="font-size:18px;font-weight:700;color:#fff">TaxIA día a día</div>'+
-        '<div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:2px">Reporte de Devoluciones IVA — MSST Consulting SC</div>'+
+        '<div style="font-size:18px;font-weight:700;color:#fff">TaxIA dÃ­a a dÃ­a</div>'+
+        '<div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:2px">Reporte de Devoluciones IVA â MSST Consulting SC</div>'+
       '</div>'+
       '<div style="background:#fff;border:1px solid #e5e5e0;border-top:none;border-radius:0 0 12px 12px;padding:20px 24px">'+
-        '<p style="font-size:13px;color:#555;margin:0 0 16px">'+tituloCliente+' · Generado: '+hoy+'</p>'+
+        '<p style="font-size:13px;color:#555;margin:0 0 16px">'+tituloCliente+' Â· Generado: '+hoy+'</p>'+
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">'+
           '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center;border-left:3px solid #3B4BC8"><div style="font-size:11px;color:#888">Total</div><div style="font-size:20px;font-weight:700;color:#3B4BC8">'+lista.length+'</div></div>'+
           '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center;border-left:3px solid #EF9F27"><div style="font-size:11px;color:#888">En proceso</div><div style="font-size:20px;font-weight:700;color:#EF9F27">'+enProceso+'</div></div>'+
@@ -1626,7 +1642,7 @@ async function generarReporteDevPDF(soloCorreo=false){
         '</div>'+
         seccionesHTML+
         '<div style="border-top:1px solid #f0f0ec;padding-top:12px;margin-top:16px">'+
-          '<p style="font-size:11px;color:#bbb;margin:0">Generado por TaxIA día a día · MSST Consulting SC · Confidencial</p>'+
+          '<p style="font-size:11px;color:#bbb;margin:0">Generado por TaxIA dÃ­a a dÃ­a Â· MSST Consulting SC Â· Confidencial</p>'+
         '</div>'+
       '</div></div></body></html>';
 
@@ -1641,7 +1657,7 @@ async function generarReporteDevPDF(soloCorreo=false){
       if(data.ok){
         const msg=document.createElement('div');
         msg.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:10px 20px;border-radius:8px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
-        msg.textContent='✉ Reporte enviado a '+destinatarios.join(', ');
+        msg.textContent='â Reporte enviado a '+destinatarios.join(', ');
         document.body.appendChild(msg);
         setTimeout(()=>msg.remove(),4000);
       }
@@ -1670,10 +1686,10 @@ async function renderClientes(){
     const formHTML='<div class="card" id="cli-form-card">'+
       '<div class="sec-label" id="cli-form-label">Nuevo cliente</div>'+
       '<div class="grid2" style="margin-bottom:10px">'+
-        '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Nombre *</div><input id="cf-nombre" type="text" placeholder="Razón social o nombre"></div>'+
+        '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Nombre *</div><input id="cf-nombre" type="text" placeholder="RazÃ³n social o nombre"></div>'+
         '<div><div style="font-size:12px;color:#888;margin-bottom:4px">RFC / Tax ID</div><input id="cf-rfc" type="text" placeholder="RFC000000000"></div>'+
         '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Tipo</div>'+
-          '<select id="cf-tipo" style="width:100%"><option value="">Selecciona...</option><option>Persona Física</option><option>Persona Moral</option></select>'+
+          '<select id="cf-tipo" style="width:100%"><option value="">Selecciona...</option><option>Persona FÃ­sica</option><option>Persona Moral</option></select>'+
         '</div>'+
         '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Grupo</div>'+
           '<select id="cf-grupo" style="width:100%">'+grupoOpts+'</select>'+
@@ -1710,15 +1726,15 @@ function renderClientesTabla(){
   if(!list.length){tbody.innerHTML=`<tr><td colspan="6" style="color:#bbb;text-align:center;padding:1rem">Sin resultados</td></tr>`;return;}
   const canEdit=session.role==='admin'||session.role==='manager';
   tbody.innerHTML=list.map(c=>{
-    const grupoCell=c.grupos?'<span class="badge badge-group">'+escH(c.grupos.nombre)+'</span>':'—';
-    const editBtn=canEdit?'<button class="btn btn-sm" onclick="editCliente(\''+c.id+'\')">​Editar</button>':'';
-    const delBtn=canEdit?'<button class="btn btn-sm btn-danger" onclick="deleteCliente(\''+c.id+'\')">​Eliminar</button>':'';
+    const grupoCell=c.grupos?'<span class="badge badge-group">'+escH(c.grupos.nombre)+'</span>':'â';
+    const editBtn=canEdit?'<button class="btn btn-sm" onclick="editCliente(\''+c.id+'\')">âEditar</button>':'';
+    const delBtn=canEdit?'<button class="btn btn-sm btn-danger" onclick="deleteCliente(\''+c.id+'\')">âEliminar</button>':'';
     return '<tr>'+
       '<td style="font-weight:500">'+escH(c.nombre)+'</td>'+
-      '<td style="color:#888">'+escH(c.rfc||'—')+'</td>'+
-      '<td>'+escH(c.tipo||'—')+'</td>'+
+      '<td style="color:#888">'+escH(c.rfc||'â')+'</td>'+
+      '<td>'+escH(c.tipo||'â')+'</td>'+
       '<td>'+grupoCell+'</td>'+
-      '<td>'+escH(c.responsable||'—')+'</td>'+
+      '<td>'+escH(c.responsable||'â')+'</td>'+
       '<td style="white-space:nowrap">'+editBtn+' '+delBtn+'</td>'+
     '</tr>';
   }).join('');
@@ -1759,7 +1775,7 @@ async function saveCliente(){
 }
 async function deleteCliente(id){
   const c=clientesCache.find(x=>x.id===id);
-  if(!confirm(`¿Eliminar "${c?.nombre}"?`))return;
+  if(!confirm(`Â¿Eliminar "${c?.nombre}"?`))return;
   await sbDelete('clientes',`?id=eq.${id}`);
   await loadCaches();renderClientesTabla();
 }
@@ -1767,7 +1783,7 @@ async function deleteCliente(id){
 async function renderGrupos(){
   app.innerHTML=renderTopNav('clientes')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
-    <button class="btn btn-sm" onclick="renderClientes()">← Clientes</button>
+    <button class="btn btn-sm" onclick="renderClientes()">â Clientes</button>
     <div style="font-size:15px;font-weight:600">Grupos de clientes</div>
   </div>
   <div class="card"><div class="sec-label">Grupos existentes</div><div id="grupos-list"></div></div>
@@ -1784,7 +1800,7 @@ async function renderGrupos(){
 }
 function renderGruposList(){
   const el=document.getElementById('grupos-list');if(!el)return;
-  if(!gruposCache.length){el.innerHTML='<div style="font-size:14px;color:#888">Sin grupos aún.</div>';return;}
+  if(!gruposCache.length){el.innerHTML='<div style="font-size:14px;color:#888">Sin grupos aÃºn.</div>';return;}
   el.innerHTML=gruposCache.map(g=>`
     <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0ec">
       <span class="badge badge-group">${escH(g.nombre)}</span>
@@ -1806,8 +1822,8 @@ async function saveGrupo(){
 }
 async function deleteGrupo(id,nombre){
   const count=clientesCache.filter(c=>c.grupo_id===id).length;
-  if(count>0){alert(`No puedes eliminar "${nombre}" — tiene ${count} cliente(s).`);return;}
-  if(!confirm(`¿Eliminar grupo "${nombre}"?`))return;
+  if(count>0){alert(`No puedes eliminar "${nombre}" â tiene ${count} cliente(s).`);return;}
+  if(!confirm(`Â¿Eliminar grupo "${nombre}"?`))return;
   await sbDelete('grupos',`?id=eq.${id}`);
   await loadCaches();renderGruposList();
 }
@@ -1836,9 +1852,9 @@ async function renderAdmin(){
     <div class="grid2" style="margin-bottom:10px">
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Nombre</div><input id="un" type="text" placeholder="Nombre Apellido"></div>
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Correo</div><input id="ue" type="email" placeholder="usuario@msstconsulting.com"></div>
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Contraseña</div><input id="up" type="text" placeholder="Contraseña"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">ContraseÃ±a</div><input id="up" type="text" placeholder="ContraseÃ±a"></div>
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Rol</div>
-        <select id="ur" style="width:100%"><option value="admin">Director</option><option value="manager">Líder de Práctica Fiscal</option><option value="assistant" selected>Consultor Junior</option></select>
+        <select id="ur" style="width:100%"><option value="admin">Director</option><option value="manager">LÃ­der de PrÃ¡ctica Fiscal</option><option value="assistant" selected>Consultor Junior</option></select>
       </div>
     </div>
     <input type="hidden" id="uediting" value="">
@@ -1854,7 +1870,7 @@ function fillEditUser(email,name,role,pass){
 }
 async function deleteUser(email){
   if(email===session.email)return;
-  if(!confirm(`¿Eliminar a ${usersCache[email]?.name}?`))return;
+  if(!confirm(`Â¿Eliminar a ${usersCache[email]?.name}?`))return;
   await sbDelete('users',`?email=eq.${encodeURIComponent(email)}`);
   delete usersCache[email];renderAdmin();
 }
@@ -1866,7 +1882,7 @@ async function saveUser(){
   const editing=document.getElementById('uediting').value;
   const err=document.getElementById('aerr');err.style.display='none';
   if(!name||!email||!pass){err.textContent='Completa todos los campos.';err.style.display='block';return;}
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){err.textContent='Correo inválido.';err.style.display='block';return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){err.textContent='Correo invÃ¡lido.';err.style.display='block';return;}
   const AVM={admin:'av-m',manager:'av-a',assistant:'av-y'};
   const initials=name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
   const av2=AVM[role]||'av-y';
@@ -1886,23 +1902,23 @@ const DEV_STATUS={
   requisitos_pendientes:{label:'Requisitos pendientes',color:'#92400E',bg:'#FEF3C7'},
   solicitud_preparada:{label:'Solicitud preparada',color:'#0C447C',bg:'#E6F1FB'},
   presentada_sat:{label:'Presentada ante SAT',color:'#3B4BC8',bg:'#EEEDFE'},
-  en_revision_sat:{label:'En revisión SAT',color:'#633806',bg:'#FAEEDA'},
+  en_revision_sat:{label:'En revisiÃ³n SAT',color:'#633806',bg:'#FAEEDA'},
   requerimiento_sat:{label:'Requerimiento SAT',color:'#dc2626',bg:'#fef2f2'},
-  informacion_entregada:{label:'Información entregada a SAT',color:'#5a8a1a',bg:'#f0f7d4'},
+  informacion_entregada:{label:'InformaciÃ³n entregada a SAT',color:'#5a8a1a',bg:'#f0f7d4'},
   devuelta:{label:'Devuelta / Concluida',color:'#5a8a1a',bg:'#f0f7d4'},
   negada:{label:'Negada / Rechazada',color:'#dc2626',bg:'#fef2f2'}
 };
 
 const DEV_REQUISITOS_SAT=[
   'e.firma vigente del contribuyente',
-  'Declaración mensual IVA del período presentada',
-  'DIOT del período presentada',
-  'Estado de cuenta bancario (máx. 2 meses) con CLABE',
+  'DeclaraciÃ³n mensual IVA del perÃ­odo presentada',
+  'DIOT del perÃ­odo presentada',
+  'Estado de cuenta bancario (mÃ¡x. 2 meses) con CLABE',
   'CLABE registrada en portal SAT',
-  'CFDIs de compras/gastos en formato .zip (máx 4MB c/u)',
+  'CFDIs de compras/gastos en formato .zip (mÃ¡x 4MB c/u)',
   'Papeles de trabajo del IVA acreditable',
-  'Acuse de declaración mensual',
-  'Buzón tributario activo'
+  'Acuse de declaraciÃ³n mensual',
+  'BuzÃ³n tributario activo'
 ];
 
 let devCache=[];
@@ -1939,7 +1955,7 @@ function devStatusBadge(status){
 }
 
 function fmtMXN(n){
-  if(!n&&n!==0)return'—';
+  if(!n&&n!==0)return'â';
   return'$'+Number(n).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 
@@ -1952,9 +1968,9 @@ function diasRestantes(fechaStr){
 
 function alertaDias(d,label){
   if(d===null)return'';
-  if(d<0)return'<span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+label+': vencido hace '+Math.abs(d)+' días</span>';
-  if(d<=5)return'<span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+label+': '+d+' días</span>';
-  return'<span style="background:#f0f7d4;color:#5a8a1a;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+label+': '+d+' días</span>';
+  if(d<0)return'<span style="background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+label+': vencido hace '+Math.abs(d)+' dÃ­as</span>';
+  if(d<=5)return'<span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+label+': '+d+' dÃ­as</span>';
+  return'<span style="background:#f0f7d4;color:#5a8a1a;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+label+': '+d+' dÃ­as</span>';
 }
 
 async function renderDevoluciones(){
@@ -1962,7 +1978,7 @@ async function renderDevoluciones(){
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
     <div style="font-size:15px;font-weight:600">Devoluciones IVA</div>
     <div style="display:flex;gap:8px">
-    <button class="btn btn-sm btn-purple" onclick="reporteDevolucionesPDF()">⎙ Reporte PDF</button>
+    <button class="btn btn-sm btn-purple" onclick="reporteDevolucionesPDF()">â Reporte PDF</button>
     <button class="btn btn-primary btn-sm" onclick="renderNuevaDevolucion()">+ Nueva solicitud</button>
   </div>
   </div>
@@ -1986,7 +2002,7 @@ function sortDevoluciones(arr){
     const nc=(a.cliente_nombre||'').toLowerCase();
     const nb=(b.cliente_nombre||'').toLowerCase();
     if(nc!==nb)return nc.localeCompare(nb,'es');
-    // Luego por período (mes año)
+    // Luego por perÃ­odo (mes aÃ±o)
     const pa=(a.periodo||'').toLowerCase().split(' ');
     const pb=(b.periodo||'').toLowerCase().split(' ');
     const ma=MESES.indexOf(pa[0]);const ya=parseInt(pa[1])||0;
@@ -2003,7 +2019,7 @@ function renderDevList(){
     return;
   }
 
-  // Agrupar por status activos vs concluidos — ordenados por cliente y período
+  // Agrupar por status activos vs concluidos â ordenados por cliente y perÃ­odo
   const activos=sortDevoluciones(devCache.filter(d=>d.status!=='devuelta'&&d.status!=='negada'));
   const cerrados=sortDevoluciones(devCache.filter(d=>d.status==='devuelta'||d.status==='negada'));
 
@@ -2018,8 +2034,8 @@ function renderDevList(){
       html+='<div class="card" style="margin-bottom:10px;cursor:pointer" onclick="renderDetalleDevolucion(\''+d.id+'\')">'+
         '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">'+
           '<div style="flex:1">'+
-            '<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+escH(d.cliente_nombre||'—')+'</div>'+
-            '<div style="font-size:12px;color:#888;margin-bottom:6px">Período: '+escH(d.periodo)+(d.folio_fed?' · Folio: '+escH(d.folio_fed):'')+'</div>'+
+            '<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+escH(d.cliente_nombre||'â')+'</div>'+
+            '<div style="font-size:12px;color:#888;margin-bottom:6px">PerÃ­odo: '+escH(d.periodo)+(d.folio_fed?' Â· Folio: '+escH(d.folio_fed):'')+'</div>'+
             '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'+
               devStatusBadge(d.status)+
               (d.monto_solicitado?'<span style="font-size:12px;color:#888">Solicitado: <strong>'+fmtMXN(d.monto_solicitado)+'</strong></span>':'')+
@@ -2027,13 +2043,13 @@ function renderDevList(){
             '</div>'+
             '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+
               (plazos.presentacion&&!d.fecha_presentacion_sat?alertaDias(diasRestantes(plazos.presentacion),'Presentar'):'')+ 
-              (d.fecha_presentacion_sat&&drp!==null?alertaDias(drp,'Resolución SAT'):'')+ 
+              (d.fecha_presentacion_sat&&drp!==null?alertaDias(drp,'ResoluciÃ³n SAT'):'')+ 
             '</div>'+
           '</div>'+
           '<div style="text-align:right;flex-shrink:0">'+
             '<div style="font-size:11px;color:#888">Responsable</div>'+
-            '<div style="font-size:12px;font-weight:500">'+escH(d.responsable||'—')+'</div>'+
-            '<div style="font-size:11px;color:#888;margin-top:4px">Inicio: '+escH(d.fecha_inicio||'—')+'</div>'+
+            '<div style="font-size:12px;font-weight:500">'+escH(d.responsable||'â')+'</div>'+
+            '<div style="font-size:11px;color:#888;margin-top:4px">Inicio: '+escH(d.fecha_inicio||'â')+'</div>'+
           '</div>'+
         '</div>'+
       '</div>';
@@ -2046,7 +2062,7 @@ function renderDevList(){
       html+='<div class="card" style="margin-bottom:8px;opacity:.8;cursor:pointer" onclick="renderDetalleDevolucion(\''+d.id+'\')">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'+
           '<div>'+
-            '<div style="font-size:13px;font-weight:600">'+escH(d.cliente_nombre||'—')+'</div>'+
+            '<div style="font-size:13px;font-weight:600">'+escH(d.cliente_nombre||'â')+'</div>'+
             '<div style="font-size:11px;color:#888">'+escH(d.periodo)+'</div>'+
           '</div>'+
           '<div style="display:flex;align-items:center;gap:10px">'+
@@ -2068,15 +2084,15 @@ async function renderNuevaDevolucion(id){
   const periodoMes=editing&&editing.periodo?editing.periodo.split(' ')[0]:'';
   const periodoAnio=editing&&editing.periodo?editing.periodo.split(' ')[1]:'';
   const mesOpts='<option value="">Mes...</option>'+MESES.map(m=>'<option value="'+m+'"'+(periodoMes===m?' selected':'')+'>'+m+'</option>').join('');
-  const anioOpts='<option value="">Año...</option>'+[2020,2021,2022,2023,2024,2025,2026,2027].map(y=>'<option value="'+y+'"'+(periodoAnio===String(y)?' selected':'')+'>'+y+'</option>').join('');
+  const anioOpts='<option value="">AÃ±o...</option>'+[2020,2021,2022,2023,2024,2025,2026,2027].map(y=>'<option value="'+y+'"'+(periodoAnio===String(y)?' selected':'')+'>'+y+'</option>').join('');
   const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+'</option>').join('');
   const statusOpts=Object.entries(DEV_STATUS).map(([k,v])=>'<option value="'+k+'"'+(editing&&editing.status===k?' selected':k==='requisitos_pendientes'&&!editing?' selected':'')+'>'+v.label+'</option>').join('');
   const correos=editing&&editing.correos_cliente?(editing.correos_cliente||[]).join(', '):'';
 
   app.innerHTML=renderTopNav('devoluciones')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
-    <button class="btn btn-sm" onclick="renderDevoluciones()">← Devoluciones</button>
-    <div style="font-size:15px;font-weight:600">${editing?'Editar solicitud':'Nueva solicitud de devolución IVA'}</div>
+    <button class="btn btn-sm" onclick="renderDevoluciones()">â Devoluciones</button>
+    <div style="font-size:15px;font-weight:600">${editing?'Editar solicitud':'Nueva solicitud de devoluciÃ³n IVA'}</div>
   </div>
   <div class="card">
     <div class="sec-label">Datos generales</div>
@@ -2085,7 +2101,7 @@ async function renderNuevaDevolucion(id){
         <select id="df-cliente" style="width:100%" onchange="document.getElementById('df-cli-nombre').value=this.options[this.selectedIndex].dataset.nombre||''">${cliOpts}</select>
         <input type="hidden" id="df-cli-nombre" value="${escH(editing?.cliente_nombre||'')}">
       </div>
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Período *</div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">PerÃ­odo *</div>
         <div style="display:flex;gap:6px">
           <select id="df-mes" style="flex:1">${mesOpts}</select>
           <select id="df-anio" style="width:100px">${anioOpts}</select>
@@ -2103,9 +2119,9 @@ async function renderNuevaDevolucion(id){
         <select id="df-status" style="width:100%">${statusOpts}</select></div>
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Folio FED / SAT</div>
         <input id="df-folio" type="text" placeholder="Folio de la solicitud SAT" value="${escH(editing?.folio_fed||'')}"></div>
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Fecha presentación SAT</div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Fecha presentaciÃ³n SAT</div>
         <input id="df-fecpres" type="date" value="${editing?.fecha_presentacion_sat||''}"></div>
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Fecha depósito</div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Fecha depÃ³sito</div>
         <input id="df-fecdep" type="date" value="${editing?.fecha_deposito||''}"></div>
     </div>
     <div style="margin-bottom:12px">
@@ -2149,7 +2165,7 @@ async function saveDevolucion(){
   const notas=document.getElementById('df-notas').value.trim()||null;
   const editing=document.getElementById('df-editing').value;
   const err=document.getElementById('df-err');err.style.display='none';
-  if(!periodo||!fecha_inicio){err.textContent='Período y fecha de inicio son obligatorios.';err.style.display='block';return;}
+  if(!periodo||!fecha_inicio){err.textContent='PerÃ­odo y fecha de inicio son obligatorios.';err.style.display='block';return;}
 
   const payload={cliente_id,cliente_nombre,periodo,fecha_inicio,responsable,monto_solicitado,monto_devuelto,status,folio_fed,fecha_presentacion_sat,fecha_deposito,correos_cliente,motivo_rechazo,notas,updated_at:nowISO()};
 
@@ -2175,10 +2191,10 @@ async function renderDetalleDevolucion(id){
   const plazos=calcPlazos(dev);
   app.innerHTML=renderTopNav('devoluciones')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
-    <button class="btn btn-sm" onclick="renderDevoluciones()">← Devoluciones</button>
-    <div style="font-size:15px;font-weight:600;flex:1">${escH(dev.cliente_nombre||'—')} — ${escH(dev.periodo)}</div>
-    <button class="btn btn-sm btn-purple" onclick="renderNuevaDevolucion('${id}')">✏️ Editar</button>
-    ${session.role==='admin'?'<button class="btn btn-sm btn-danger" onclick="deleteDevolucion(\''+id+'\')">🗑 Eliminar</button>':''}
+    <button class="btn btn-sm" onclick="renderDevoluciones()">â Devoluciones</button>
+    <div style="font-size:15px;font-weight:600;flex:1">${escH(dev.cliente_nombre||'â')} â ${escH(dev.periodo)}</div>
+    <button class="btn btn-sm btn-purple" onclick="renderNuevaDevolucion('${id}')">âï¸ Editar</button>
+    ${session.role==='admin'?'<button class="btn btn-sm btn-danger" onclick="deleteDevolucion(\''+id+'\')">ð Eliminar</button>':''}
   </div>
   <div class="loading" id="detl"><span class="spinner"></span>Cargando...</div>
   <div id="det-body"></div>`;
@@ -2190,30 +2206,30 @@ async function renderDetalleDevolucion(id){
   ]);
   document.getElementById('detl').style.display='none';
 
-  // ---- LÍNEA DE TIEMPO ----
+  // ---- LÃNEA DE TIEMPO ----
   const hitos=[
-    {label:'Día 0 — Inicio trámite',fecha:dev.fecha_inicio,done:!!dev.fecha_inicio,color:'#3B4BC8'},
-    {label:'Día 10 hábil — Presentar ante SAT',fecha:plazos.presentacion,done:!!dev.fecha_presentacion_sat,color:dev.fecha_presentacion_sat?'#8DC63F':'#EF9F27'},
-    {label:'Día 20 hábil — Límite requerimiento SAT',fecha:plazos.limite_req1,done:dev.status==='informacion_entregada'||dev.status==='devuelta',color:'#EF9F27'},
-    {label:'Día 40 hábil — Resolución SAT',fecha:plazos.limite_resolucion,done:dev.status==='devuelta'||dev.status==='negada',color:dev.status==='devuelta'?'#8DC63F':dev.status==='negada'?'#dc2626':'#888'},
+    {label:'DÃ­a 0 â Inicio trÃ¡mite',fecha:dev.fecha_inicio,done:!!dev.fecha_inicio,color:'#3B4BC8'},
+    {label:'DÃ­a 10 hÃ¡bil â Presentar ante SAT',fecha:plazos.presentacion,done:!!dev.fecha_presentacion_sat,color:dev.fecha_presentacion_sat?'#8DC63F':'#EF9F27'},
+    {label:'DÃ­a 20 hÃ¡bil â LÃ­mite requerimiento SAT',fecha:plazos.limite_req1,done:dev.status==='informacion_entregada'||dev.status==='devuelta',color:'#EF9F27'},
+    {label:'DÃ­a 40 hÃ¡bil â ResoluciÃ³n SAT',fecha:plazos.limite_resolucion,done:dev.status==='devuelta'||dev.status==='negada',color:dev.status==='devuelta'?'#8DC63F':dev.status==='negada'?'#dc2626':'#888'},
   ];
   if(dev.fecha_presentacion_sat) hitos[1]={...hitos[1],fecha:dev.fecha_presentacion_sat,done:true,color:'#8DC63F'};
 
-  // ---- GRÁFICA HORIZONTAL SVG DE LÍNEA DE TIEMPO ----
+  // ---- GRÃFICA HORIZONTAL SVG DE LÃNEA DE TIEMPO ----
   const totalDias=40;
   const fi=dev.fecha_inicio?new Date(dev.fecha_inicio+'T12:00:00'):new Date();
   const hoy=new Date(todayKey()+'T12:00:00');
   const diasTranscurridos=Math.max(0,Math.round((hoy-fi)/(1000*60*60*24)));
   const pctHoy=Math.min(100,Math.round((diasTranscurridos/60)*100));
 
-  // Posiciones relativas de cada hito en la barra (sobre 60 días calendario aprox)
+  // Posiciones relativas de cada hito en la barra (sobre 60 dÃ­as calendario aprox)
   const posHitos=[
-    {pct:0,   label:'Inicio',      sublabel:dev.fecha_inicio||'—',      done:!!dev.fecha_inicio,       color:hitos[0].color},
-    {pct:14,  label:'Presentar',   sublabel:hitos[1].fecha||'—',         done:hitos[1].done,            color:hitos[1].color},
-    {pct:42,  label:'Req. SAT',    sublabel:hitos[2].fecha||'—',         done:hitos[2].done,            color:hitos[2].color},
-    {pct:72,  label:'Resolución',  sublabel:hitos[3].fecha||'—',         done:hitos[3].done,            color:hitos[3].color},
+    {pct:0,   label:'Inicio',      sublabel:dev.fecha_inicio||'â',      done:!!dev.fecha_inicio,       color:hitos[0].color},
+    {pct:14,  label:'Presentar',   sublabel:hitos[1].fecha||'â',         done:hitos[1].done,            color:hitos[1].color},
+    {pct:42,  label:'Req. SAT',    sublabel:hitos[2].fecha||'â',         done:hitos[2].done,            color:hitos[2].color},
+    {pct:72,  label:'ResoluciÃ³n',  sublabel:hitos[3].fecha||'â',         done:hitos[3].done,            color:hitos[3].color},
   ];
-  if(dev.fecha_deposito) posHitos.push({pct:85,label:'Depósito',sublabel:dev.fecha_deposito,done:true,color:'#8DC63F'});
+  if(dev.fecha_deposito) posHitos.push({pct:85,label:'DepÃ³sito',sublabel:dev.fecha_deposito,done:true,color:'#8DC63F'});
 
   const svgW=560; const svgH=110;
   const barY=54; const barH=8; const barX=30; const barW=svgW-60;
@@ -2245,7 +2261,7 @@ async function renderDetalleDevolucion(id){
     const textColor=h.done?'#1a1a1a':'#aaa';
 
     svgParts+='<circle cx="'+cx+'" cy="'+(barY+barH/2)+'" r="7" fill="'+dotColor+'" stroke="#fff" stroke-width="2"/>';
-    if(h.done) svgParts+='<text x="'+cx+'" y="'+(barY+barH/2+4)+'" text-anchor="middle" font-size="8" fill="#fff" font-weight="700">✓</text>';
+    if(h.done) svgParts+='<text x="'+cx+'" y="'+(barY+barH/2+4)+'" text-anchor="middle" font-size="8" fill="#fff" font-weight="700">â</text>';
     svgParts+='<line x1="'+cx+'" y1="'+lineY1+'" x2="'+cx+'" y2="'+lineY2+'" stroke="'+dotColor+'" stroke-width="1.5"/>';
     svgParts+='<text x="'+cx+'" y="'+labelY+'" text-anchor="middle" font-size="10" fill="'+textColor+'" font-weight="600">'+h.label+'</text>';
     svgParts+='<text x="'+cx+'" y="'+sublabelY+'" text-anchor="middle" font-size="9" fill="#aaa">'+h.sublabel+'</text>';
@@ -2256,7 +2272,7 @@ async function renderDetalleDevolucion(id){
       svgParts+
     '</svg>'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;flex-wrap:wrap;gap:6px">'+
-      '<div style="font-size:10px;color:#888">'+diasTranscurridos+' días calendario desde el inicio</div>'+
+      '<div style="font-size:10px;color:#888">'+diasTranscurridos+' dÃ­as calendario desde el inicio</div>'+
       '<div style="display:flex;gap:10px">'+
         '<div style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:50%;background:'+progColor+'"></div><span style="font-size:10px;color:#888">Progreso</span></div>'+
         '<div style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:50%;background:#8DC63F"></div><span style="font-size:10px;color:#888">Completado</span></div>'+
@@ -2268,7 +2284,7 @@ async function renderDetalleDevolucion(id){
   // ---- CHECKLIST REQUISITOS ----
   const reqRows=(requisitos||[]).map(r=>'<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid #f0f0ec">'+
     '<div onclick="toggleRequisito(\''+r.id+'\','+r.completado+',\''+id+'\')" style="width:20px;height:20px;border-radius:50%;border:2px solid '+(r.completado?'#8DC63F':'#d1d1d1')+';flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:'+(r.completado?'#8DC63F':'#fff')+'">'+
-      (r.completado?'<span style="color:#fff;font-size:10px;font-weight:700">✓</span>':'')+
+      (r.completado?'<span style="color:#fff;font-size:10px;font-weight:700">â</span>':'')+
     '</div>'+
     '<div style="flex:1;font-size:13px;color:'+(r.completado?'#999':'#1a1a1a')+';'+(r.completado?'text-decoration:line-through':'')+'">'+ escH(r.requisito)+'</div>'+
     (r.fecha_completado?'<div style="font-size:10px;color:#888">'+r.fecha_completado+'</div>':'')+
@@ -2287,9 +2303,9 @@ async function renderDetalleDevolucion(id){
       '</div>'+
       (dev.status==='requerimiento_sat'?'<button class="btn btn-sm" style="font-size:11px" onclick="agregarPuntoRequerimiento(\''+id+'\','+num+')">+ Agregar punto</button>':'')+
     '</div>';
-    if(!items.length)return html+'<div style="font-size:13px;color:#bbb;padding:6px 0">Sin puntos registrados aún.</div>';
+    if(!items.length)return html+'<div style="font-size:13px;color:#bbb;padding:6px 0">Sin puntos registrados aÃºn.</div>';
     html+=items.map((p,i)=>{
-      const subidoPor=p.subido_por_nombre||p.subido_por||'—';
+      const subidoPor=p.subido_por_nombre||p.subido_por||'â';
       return '<div style="background:#fafafa;border:0.5px solid #e5e5e0;border-radius:8px;padding:10px 12px;margin-bottom:8px">'+
         '<div style="display:flex;align-items:flex-start;gap:10px">'+
           '<div onclick="togglePuntoReq(\''+p.id+'\','+p.atendido+',\''+id+'\')" style="width:20px;height:20px;border-radius:4px;border:2px solid '+(p.atendido?'#3B4BC8':'#d1d1d1')+';flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:'+(p.atendido?'#3B4BC8':'#fff')+';margin-top:1px">'+
@@ -2300,8 +2316,8 @@ async function renderDetalleDevolucion(id){
               '<span style="font-size:10px;font-weight:700;color:#888;margin-right:6px">'+(i+1)+'.</span>'+escH(p.punto)+
             '</div>'+
             '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:6px">'+
-              '<div style="font-size:10px;color:#888"><span style="font-weight:600">Registrado:</span> '+(p.fecha_requerimiento||'—')+'</div>'+
-              '<div style="font-size:10px;color:#888"><span style="font-weight:600">Notificado:</span> '+(p.fecha_notificacion||'—')+
+              '<div style="font-size:10px;color:#888"><span style="font-weight:600">Registrado:</span> '+(p.fecha_requerimiento||'â')+'</div>'+
+              '<div style="font-size:10px;color:#888"><span style="font-weight:600">Notificado:</span> '+(p.fecha_notificacion||'â')+
                 (!p.fecha_notificacion?
                   ' <span onclick="registrarNotificacion(\''+p.id+'\',\''+id+'\')" style="color:#3B4BC8;cursor:pointer;font-weight:600">[registrar]</span>':'')+
               '</div>'+
@@ -2313,12 +2329,12 @@ async function renderDetalleDevolucion(id){
                 return '<div style="font-size:10px;font-weight:600;background:'+vencBg+';color:'+vencColor+';padding:1px 8px;border-radius:999px">'+
                   'Vence: '+venc+(dr<0?' (VENCIDO '+Math.abs(dr)+'d)':dr===0?' (HOY)':' ('+dr+'d)')+
                 '</div>';
-              })():'<div style="font-size:10px;color:#bbb">Vencimiento: pendiente notificación</div>')+
+              })():'<div style="font-size:10px;color:#bbb">Vencimiento: pendiente notificaciÃ³n</div>')+
               '<div style="font-size:10px;color:#888"><span style="font-weight:600">Subido por:</span> '+escH(subidoPor)+'</div>'+
               (p.atendido&&p.fecha_atendido?'<div style="font-size:10px;color:#5a8a1a"><span style="font-weight:600">Atendido:</span> '+p.fecha_atendido+'</div>':'')+
             '</div>'+
             '<div style="display:flex;gap:6px">'+
-              '<button class="btn btn-sm" style="font-size:10px;padding:3px 8px" onclick="editarPuntoReq(\''+p.id+'\',\''+id+'\')">✏️ Editar</button>'+
+              '<button class="btn btn-sm" style="font-size:10px;padding:3px 8px" onclick="editarPuntoReq(\''+p.id+'\',\''+id+'\')">âï¸ Editar</button>'+
             '</div>'+
           '</div>'+
         '</div>'+
@@ -2366,20 +2382,20 @@ async function renderDetalleDevolucion(id){
       '<div style="background:#f5f5f3;border-radius:8px;padding:10px;text-align:center">'+
         '<div style="font-size:11px;color:#888;margin-bottom:3px">Diferencia</div>'+
         '<div style="font-size:16px;font-weight:600;color:'+(difMonto===null?'#888':difMonto>=0?'#8DC63F':'#dc2626')+'">'+
-          (difMonto!==null?(difMonto>=0?'+':'')+fmtMXN(difMonto):'—')+
+          (difMonto!==null?(difMonto>=0?'+':'')+fmtMXN(difMonto):'â')+
         '</div>'+
       '</div>'+
     '</div>'+
     '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'+
       devStatusBadge(dev.status)+
-      '<span style="font-size:12px;color:#888">Responsable: '+escH(dev.responsable||'—')+'</span>'+
+      '<span style="font-size:12px;color:#888">Responsable: '+escH(dev.responsable||'â')+'</span>'+
       (dev.folio_fed?'<span style="font-size:12px;color:#888">Folio: '+escH(dev.folio_fed)+'</span>':'')+
     '</div>'+
     (dev.notas?'<div style="font-size:12px;color:#555;margin-top:8px;background:#f5f5f3;padding:8px;border-radius:6px">'+escH(dev.notas)+'</div>':'')+
   '</div>'+
-  // Línea de tiempo
+  // LÃ­nea de tiempo
   '<div class="card" style="margin-bottom:1rem">'+
-    '<div class="sec-label" style="margin-bottom:10px">Línea de tiempo — Art. 22 CFF</div>'+
+    '<div class="sec-label" style="margin-bottom:10px">LÃ­nea de tiempo â Art. 22 CFF</div>'+
     timelineHTML+
   '</div>'+
   // Checklist
@@ -2402,13 +2418,13 @@ async function renderDetalleDevolucion(id){
   '<div class="card" style="margin-bottom:1rem">'+
     '<div class="sec-label" style="margin-bottom:12px">Comentarios ('+(comentarios||[]).length+')</div>'+
     '<div id="dev-comentarios-list" style="max-height:320px;overflow-y:auto;margin-bottom:12px;padding-right:4px">'+
-      (comentariosHTML||'<div style="font-size:13px;color:#bbb;text-align:center;padding:16px 0">Sin comentarios aún. Sé el primero en comentar.</div>')+
+      (comentariosHTML||'<div style="font-size:13px;color:#bbb;text-align:center;padding:16px 0">Sin comentarios aÃºn. SÃ© el primero en comentar.</div>')+
     '</div>'+
     '<div style="display:flex;gap:8px;align-items:flex-end">'+
       '<textarea id="dev-comentario-input" placeholder="Escribe un comentario..." style="flex:1;padding:10px;border:1px solid #e0e0db;border-radius:8px;font-size:13px;font-family:inherit;resize:none;outline:none;line-height:1.5" rows="2" onkeydown="handleCommentKey(event,\''+id+'\')"></textarea>'+
       '<button class="btn btn-primary" style="padding:10px 16px;flex-shrink:0" onclick="agregarComentario(\''+id+'\')">Enviar</button>'+
     '</div>'+
-    '<div style="font-size:10px;color:#bbb;margin-top:4px">Enter para enviar · Shift+Enter para nueva línea</div>'+
+    '<div style="font-size:10px;color:#bbb;margin-top:4px">Enter para enviar Â· Shift+Enter para nueva lÃ­nea</div>'+
   '</div>';
 }
 
@@ -2452,7 +2468,7 @@ async function agregarComentario(devId){
         '</div>'+
       '</div>';
     }).join('');
-    lista.innerHTML=html||'<div style="font-size:13px;color:#bbb;text-align:center;padding:16px 0">Sin comentarios aún.</div>';
+    lista.innerHTML=html||'<div style="font-size:13px;color:#bbb;text-align:center;padding:16px 0">Sin comentarios aÃºn.</div>';
     lista.scrollTop=lista.scrollHeight;
     // Actualizar contador
     const sec=lista.previousElementSibling;
@@ -2467,14 +2483,14 @@ async function editarPuntoReq(puntoId,devId){
   const p=puntos?.[0];
   if(!p)return;
 
-  // Crear modal de edición
+  // Crear modal de ediciÃ³n
   const overlay=document.createElement('div');
   overlay.className='modal-overlay';
   overlay.id='modal-edit-req';
   overlay.innerHTML='<div class="modal-box">'+
     '<div class="modal-title">Editar punto de requerimiento</div>'+
     '<div style="margin-bottom:12px">'+
-      '<div style="font-size:12px;color:#888;margin-bottom:4px">Descripción del punto *</div>'+
+      '<div style="font-size:12px;color:#888;margin-bottom:4px">DescripciÃ³n del punto *</div>'+
       '<textarea id="eq-punto" rows="3" style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box">'+escH(p.punto||'')+'</textarea>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'+
@@ -2512,22 +2528,22 @@ async function guardarEdicionReq(puntoId,devId){
   const fecha_notificacion=document.getElementById('eq-fnot')?.value||null;
   const fecha_atendido=document.getElementById('eq-fat')?.value||null;
   const atendido=document.getElementById('eq-atendido')?.value==='true';
-  if(!punto){alert('El punto no puede estar vacío.');return;}
+  if(!punto){alert('El punto no puede estar vacÃ­o.');return;}
   document.getElementById('modal-edit-req')?.remove();
   await sbPatch('dev_requerimientos','?id=eq.'+puntoId,{punto,fecha_requerimiento,fecha_notificacion,fecha_atendido,atendido});
   renderDetalleDevolucion(devId);
 }
 
 async function registrarNotificacion(puntoId,devId){
-  const fecha=prompt('Fecha de notificación (YYYY-MM-DD):',todayKey());
-  if(!fecha||!fecha.match(/^\d{4}-\d{2}-\d{2}$/)){alert('Fecha inválida.');return;}
+  const fecha=prompt('Fecha de notificaciÃ³n (YYYY-MM-DD):',todayKey());
+  if(!fecha||!fecha.match(/^\d{4}-\d{2}-\d{2}$/)){alert('Fecha invÃ¡lida.');return;}
   await sbPatch('dev_requerimientos','?id=eq.'+puntoId,{fecha_notificacion:fecha});
   renderDetalleDevolucion(devId);
 }
 
 async function deleteDevolucion(id){
   const dev=devCache.find(d=>d.id===id);
-  if(!confirm('¿Eliminar la solicitud de '+( dev?.cliente_nombre||'este cliente')+' — '+(dev?.periodo||'')+' ? Esta acción no se puede deshacer.'))return;
+  if(!confirm('Â¿Eliminar la solicitud de '+( dev?.cliente_nombre||'este cliente')+' â '+(dev?.periodo||'')+' ? Esta acciÃ³n no se puede deshacer.'))return;
   await sbDelete('dev_requisitos','?devolucion_id=eq.'+id);
   await sbDelete('dev_requerimientos','?devolucion_id=eq.'+id);
   await sbDelete('devoluciones_iva','?id=eq.'+id);
@@ -2575,17 +2591,17 @@ async function agregarPuntoRequerimiento(devId,numReq){
 
 
 
-/* ===== PROYECCIÓN FISCAL ANUAL ===== */
+/* ===== PROYECCIÃN FISCAL ANUAL ===== */
 const MESES_NOMBRES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const AJUSTES_BASE=[
-  {concepto:'Depreciación fiscal (LISR Art. 31-38)',tipo:'resta',referencia_legal:'LISR Art. 31-38',importe:0,notas:'Diferencia entre depreciación fiscal y contable'},
-  {concepto:'Ajuste anual por inflación acumulable (LISR Art. 44-46)',tipo:'suma',referencia_legal:'LISR Art. 44-46',importe:0,notas:'Cuando deudas > créditos'},
-  {concepto:'Ajuste anual por inflación deducible (LISR Art. 44-46)',tipo:'resta',referencia_legal:'LISR Art. 44-46',importe:0,notas:'Cuando créditos > deudas'},
+  {concepto:'DepreciaciÃ³n fiscal (LISR Art. 31-38)',tipo:'resta',referencia_legal:'LISR Art. 31-38',importe:0,notas:'Diferencia entre depreciaciÃ³n fiscal y contable'},
+  {concepto:'Ajuste anual por inflaciÃ³n acumulable (LISR Art. 44-46)',tipo:'suma',referencia_legal:'LISR Art. 44-46',importe:0,notas:'Cuando deudas > crÃ©ditos'},
+  {concepto:'Ajuste anual por inflaciÃ³n deducible (LISR Art. 44-46)',tipo:'resta',referencia_legal:'LISR Art. 44-46',importe:0,notas:'Cuando crÃ©ditos > deudas'},
   {concepto:'PTU pagada deducible (LISR Art. 25 Fr. III)',tipo:'resta',referencia_legal:'LISR Art. 25 Fr. III',importe:0,notas:'PTU pagada en el ejercicio'},
-  {concepto:'Utilidad por enajenación de activos (LISR Art. 18)',tipo:'suma',referencia_legal:'LISR Art. 18',importe:0,notas:'MOI fiscal vs precio de venta'},
-  {concepto:'Pérdida por enajenación de activos (LISR Art. 25 Fr. IV)',tipo:'resta',referencia_legal:'LISR Art. 25 Fr. IV',importe:0,notas:''},
+  {concepto:'Utilidad por enajenaciÃ³n de activos (LISR Art. 18)',tipo:'suma',referencia_legal:'LISR Art. 18',importe:0,notas:'MOI fiscal vs precio de venta'},
+  {concepto:'PÃ©rdida por enajenaciÃ³n de activos (LISR Art. 25 Fr. IV)',tipo:'resta',referencia_legal:'LISR Art. 25 Fr. IV',importe:0,notas:''},
   {concepto:'Otros ingresos acumulables (LISR Art. 16)',tipo:'suma',referencia_legal:'LISR Art. 16',importe:0,notas:''},
-  {concepto:'Deducción inmediata (LISR Art. 220)',tipo:'resta',referencia_legal:'LISR Art. 220',importe:0,notas:''},
+  {concepto:'DeducciÃ³n inmediata (LISR Art. 220)',tipo:'resta',referencia_legal:'LISR Art. 220',importe:0,notas:''},
 ];
 
 let pfCache=[];
@@ -2597,7 +2613,7 @@ async function renderProyeccion(){
       <button onclick="renderProyeccion()" style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;color:#3B4BC8;border-bottom:2px solid #3B4BC8;font-weight:600;margin-bottom:-1px">Proyecciones</button>
       <button onclick="renderCierres()" style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-1px">Historial de cierre</button>
     </div>
-    <button class="btn btn-primary btn-sm" onclick="renderNuevaProyeccion()">+ Nueva proyección</button>
+    <button class="btn btn-primary btn-sm" onclick="renderNuevaProyeccion()">+ Nueva proyecciÃ³n</button>
   </div>
   <div class="loading" id="pfl"><span class="spinner"></span>Cargando...</div>
   <div id="pf-body"></div>`;
@@ -2610,7 +2626,7 @@ async function renderProyeccion(){
 function renderPFList(){
   const el=document.getElementById('pf-body');if(!el)return;
   if(!pfCache.length){
-    el.innerHTML='<div class="card"><div style="font-size:14px;color:#888;text-align:center;padding:1rem">Sin proyecciones. Crea la primera con "+ Nueva proyección".</div></div>';
+    el.innerHTML='<div class="card"><div style="font-size:14px;color:#888;text-align:center;padding:1rem">Sin proyecciones. Crea la primera con "+ Nueva proyecciÃ³n".</div></div>';
     return;
   }
   const porEjercicio={};
@@ -2622,7 +2638,7 @@ function renderPFList(){
       html+='<div class="card" style="margin-bottom:10px;cursor:pointer" onclick="renderDetalleProyeccion(\''+p.id+'\')">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'+
           '<div><div style="font-size:14px;font-weight:600">'+escH(p.cliente_nombre)+'</div>'+
-          '<div style="font-size:12px;color:#888;margin-top:2px">Ejercicio '+p.ejercicio+' · Tasa ISR: '+p.tasa_isr+'%'+(p.notas?' · '+escH(p.notas):'')+'</div></div>'+
+          '<div style="font-size:12px;color:#888;margin-top:2px">Ejercicio '+p.ejercicio+' Â· Tasa ISR: '+p.tasa_isr+'%'+(p.notas?' Â· '+escH(p.notas):'')+'</div></div>'+
           '<div style="font-size:11px;color:#888">'+new Date(p.created_at).toLocaleDateString('es-MX',{timeZone:'America/Tijuana'})+'</div>'+
         '</div>'+
       '</div>';
@@ -2638,8 +2654,8 @@ async function renderNuevaProyeccion(id){
   const anioOpts=[anioActual-1,anioActual,anioActual+1].map(y=>'<option value="'+y+'"'+(editing?editing.ejercicio===y?' selected':'':y===anioActual?' selected':'')+'>'+y+'</option>').join('');
   app.innerHTML=renderTopNav('proyeccion')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
-    <button class="btn btn-sm" onclick="renderProyeccion()">← Proyecciones</button>
-    <div style="font-size:15px;font-weight:600">${editing?'Editar proyección':'Nueva proyección fiscal'}</div>
+    <button class="btn btn-sm" onclick="renderProyeccion()">â Proyecciones</button>
+    <div style="font-size:15px;font-weight:600">${editing?'Editar proyecciÃ³n':'Nueva proyecciÃ³n fiscal'}</div>
   </div>
   <div class="card">
     <div class="sec-label" style="margin-bottom:12px">Datos generales</div>
@@ -2654,10 +2670,10 @@ async function renderNuevaProyeccion(id){
         <input id="pf-tasa" type="number" value="${editing?.tasa_isr||30}" min="0" max="100" step="0.01"></div>
     </div>
     <div style="margin-bottom:12px"><div style="font-size:12px;color:#888;margin-bottom:4px">Notas internas</div>
-      <input id="pf-notas" type="text" placeholder="Notas sobre esta proyección" value="${escH(editing?.notas||'')}"></div>
+      <input id="pf-notas" type="text" placeholder="Notas sobre esta proyecciÃ³n" value="${escH(editing?.notas||'')}"></div>
     <input type="hidden" id="pf-editing" value="${editing?.id||''}">
     <div class="err-msg" id="pf-err"></div>
-    <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="saveProyeccion()">${editing?'Actualizar':'Crear proyección'}</button>
+    <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="saveProyeccion()">${editing?'Actualizar':'Crear proyecciÃ³n'}</button>
   </div>`;
 }
 
@@ -2698,13 +2714,13 @@ async function renderDetalleProyeccion(id){
   const proy=pfCache.find(p=>p.id===id);if(!proy)return;
   app.innerHTML=renderTopNav('proyeccion')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
-    <button class="btn btn-sm" onclick="renderProyeccion()">← Proyecciones</button>
-    <div style="font-size:15px;font-weight:600;flex:1">${escH(proy.cliente_nombre)} — ${proy.ejercicio}</div>
-    <button class="btn btn-sm btn-purple" onclick="renderNuevaProyeccion('${id}')">✏️ Editar</button>
-    <button class="btn btn-sm btn-purple" onclick="reporteProyeccionPDF('${id}')">⎙ Reporte PDF</button>
-    <button class="btn btn-sm" style="background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" onclick="guardarEscenarioProyeccion('${id}')">💾 Guardar escenario</button>
-    <button class="btn btn-sm" style="background:#f5f5f3;color:#555" onclick="verEscenariosProyeccion('${id}')">📊 Escenarios anteriores</button>
-    <button class="btn btn-sm btn-danger" onclick="deleteProyeccion('${id}')">🗑 Eliminar</button>
+    <button class="btn btn-sm" onclick="renderProyeccion()">â Proyecciones</button>
+    <div style="font-size:15px;font-weight:600;flex:1">${escH(proy.cliente_nombre)} â ${proy.ejercicio}</div>
+    <button class="btn btn-sm btn-purple" onclick="renderNuevaProyeccion('${id}')">âï¸ Editar</button>
+    <button class="btn btn-sm btn-purple" onclick="reporteProyeccionPDF('${id}')">â Reporte PDF</button>
+    <button class="btn btn-sm" style="background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" onclick="guardarEscenarioProyeccion('${id}')">ð¾ Guardar escenario</button>
+    <button class="btn btn-sm" style="background:#f5f5f3;color:#555" onclick="verEscenariosProyeccion('${id}')">ð Escenarios anteriores</button>
+    <button class="btn btn-sm btn-danger" onclick="deleteProyeccion('${id}')">ð Eliminar</button>
   </div>
   <div class="loading" id="pf-detl"><span class="spinner"></span>Cargando...</div>
   <div id="pf-det-body"></div>`;
@@ -2759,8 +2775,8 @@ async function renderDetalleProyeccion(id){
     '<td style="text-align:right;font-size:12px">'+fmtMXN(m.otros_ingresos)+'</td>'+
     '<td style="text-align:right;font-size:12px">'+fmtMXN(m.otros_gastos)+'</td>'+
     '<td style="text-align:right;font-size:12px;font-weight:600;color:'+(parseFloat(m.utilidad_neta_contable||0)>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(m.utilidad_neta_contable)+'</td>'+
-    '<td style="text-align:right;font-size:12px;color:#888">'+(m.real&&m.pago_provisional?fmtMXN(m.pago_provisional):'—')+'</td>'+
-    '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="abrirCapturaMes(\''+id+'\','+m.mes+',\''+(m.id||'')+'\')">'+( m.real?'✏️':'+ Capturar')+'</button></td>'+
+    '<td style="text-align:right;font-size:12px;color:#888">'+(m.real&&m.pago_provisional?fmtMXN(m.pago_provisional):'â')+'</td>'+
+    '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="abrirCapturaMes(\''+id+'\','+m.mes+',\''+(m.id||'')+'\')">'+( m.real?'âï¸':'+ Capturar')+'</button></td>'+
   '</tr>').join('');
 
   const ajustesSorted=[...ajustesData].sort((a,b)=>a.tipo===b.tipo?0:a.tipo==='suma'?-1:1);
@@ -2770,7 +2786,7 @@ async function renderDetalleProyeccion(id){
     '<td style="text-align:right;font-size:12px;font-weight:600">'+fmtMXN(a.importe)+'</td>'+
     '<td style="font-size:11px;color:#888">'+escH(a.referencia_legal||'')+'</td>'+
     '<td style="font-size:11px;color:#888;font-style:italic">'+escH(a.notas||'')+'</td>'+
-    '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="editarAjuste(\''+a.id+'\',\''+id+'\')">✏️</button></td>'+
+    '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="editarAjuste(\''+a.id+'\',\''+id+'\')">âï¸</button></td>'+
   '</tr>').join('');
 
   document.getElementById('pf-det-body').innerHTML=
@@ -2799,13 +2815,13 @@ async function renderDetalleProyeccion(id){
 
       '<tr style="background:#EEEDFE">'+
       '<td colspan="6" style="padding:10px 8px">'+
-        '<div style="font-size:12px;font-weight:700;color:#3B4BC8;margin-bottom:4px">Coeficiente de Utilidad (CU) — Art. 14 LISR</div>'+
+        '<div style="font-size:12px;font-weight:700;color:#3B4BC8;margin-bottom:4px">Coeficiente de Utilidad (CU) â Art. 14 LISR</div>'+
         '<div style="font-size:11px;color:#555;line-height:1.6">'+
           '<b>Procedimiento:</b><br>'+
           '1. Utilidad fiscal estimada: '+fmtMXN(utilidadFiscal)+'<br>'+
           '2. Ingresos nominales proyectados: '+fmtMXN(totalIngresos)+'<br>'+
-          '3. CU = Utilidad fiscal ÷ Ingresos nominales = '+fmtMXN(utilidadFiscal)+' ÷ '+fmtMXN(totalIngresos)+' = <b>'+cuPct+'%</b><br>'+
-          '<span style="font-size:10px;color:#888">Aplicable para determinación de pagos provisionales del ejercicio siguiente (Art. 14 LISR)</span>'+
+          '3. CU = Utilidad fiscal Ã· Ingresos nominales = '+fmtMXN(utilidadFiscal)+' Ã· '+fmtMXN(totalIngresos)+' = <b>'+cuPct+'%</b><br>'+
+          '<span style="font-size:10px;color:#888">Aplicable para determinaciÃ³n de pagos provisionales del ejercicio siguiente (Art. 14 LISR)</span>'+
         '</div>'+
       '</td>'+
       '<td style="text-align:right;font-size:16px;font-weight:700;color:#3B4BC8;vertical-align:middle">'+cuPct+'%</td>'+
@@ -2815,12 +2831,12 @@ async function renderDetalleProyeccion(id){
   '</div>'+
   '<div class="card" style="margin-bottom:1rem">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
-      '<div class="sec-label">Conciliación contable-fiscal</div>'+
+      '<div class="sec-label">ConciliaciÃ³n contable-fiscal</div>'+
       '<button class="btn btn-sm" style="font-size:11px;background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" id="btn-add-suma" data-proy="'+id+'">+ Ingreso acumulable</button>'+
-      '<button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:4px" id="btn-add-resta" data-proy="'+id+'">+ Deducción</button>'+
+      '<button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:4px" id="btn-add-resta" data-proy="'+id+'">+ DeducciÃ³n</button>'+
     '</div>'+
     '<div class="table-wrap"><table class="data-table">'+
-      '<thead><tr><th>Concepto</th><th>Tipo</th><th style="text-align:right">Importe</th><th>Ref. Legal</th><th>Notas / Identificación</th><th></th></tr></thead>'+
+      '<thead><tr><th>Concepto</th><th>Tipo</th><th style="text-align:right">Importe</th><th>Ref. Legal</th><th>Notas / IdentificaciÃ³n</th><th></th></tr></thead>'+
       '<tbody>'+ajusteRows+'</tbody>'+
       '<tfoot>'+
         '<tr style="background:#f5f5f3"><td colspan="2" style="font-weight:700;font-size:12px">Utilidad contable base</td><td style="text-align:right;font-weight:700;font-size:12px">'+fmtMXN(utilidadContable)+'</td><td colspan="2"></td></tr>'+
@@ -2850,11 +2866,11 @@ async function agregarAjusteFiscal(proyId,tipoDefault){
   overlay.className='modal-overlay';
   overlay.id='modal-ajuste';
   const sugerencias=tipoDefault==='suma'?
-    ['Ingresos acumulables no contabilizados (LISR Art. 16)','Ajuste anual por inflación acumulable (LISR Art. 44-46)','Utilidad por enajenación de activos (LISR Art. 18)','Ganancia cambiaria (LISR Art. 20)','Otros ingresos acumulables']:
-    ['Depreciación fiscal adicional (LISR Art. 31-38)','Ajuste anual por inflación deducible (LISR Art. 44-46)','PTU pagada deducible (LISR Art. 25 Fr. III)','Pérdida por enajenación de activos (LISR Art. 25 Fr. IV)','Deducción inmediata (LISR Art. 220)','Gastos no deducibles a revertir','Otras deducciones autorizadas'];
+    ['Ingresos acumulables no contabilizados (LISR Art. 16)','Ajuste anual por inflaciÃ³n acumulable (LISR Art. 44-46)','Utilidad por enajenaciÃ³n de activos (LISR Art. 18)','Ganancia cambiaria (LISR Art. 20)','Otros ingresos acumulables']:
+    ['DepreciaciÃ³n fiscal adicional (LISR Art. 31-38)','Ajuste anual por inflaciÃ³n deducible (LISR Art. 44-46)','PTU pagada deducible (LISR Art. 25 Fr. III)','PÃ©rdida por enajenaciÃ³n de activos (LISR Art. 25 Fr. IV)','DeducciÃ³n inmediata (LISR Art. 220)','Gastos no deducibles a revertir','Otras deducciones autorizadas'];
   const sugerOpts='<option value="">Elige sugerencia o escribe abajo...</option>'+sugerencias.map(s=>'<option value="'+escH(s)+'">'+escH(s)+'</option>').join('');
   overlay.innerHTML='<div class="modal-box">'+
-    '<div class="modal-title">'+(tipoDefault==='suma'?'Agregar ingreso acumulable':'Agregar deducción adicional')+'</div>'+
+    '<div class="modal-title">'+(tipoDefault==='suma'?'Agregar ingreso acumulable':'Agregar deducciÃ³n adicional')+'</div>'+
     '<div style="margin-bottom:8px"><div style="font-size:11px;color:#888;margin-bottom:3px">Sugerencias frecuentes</div>'+
       '<select id="aj-suger" style="width:100%" onchange="pfFillSuger(this)">'+sugerOpts+'</select></div>'+
     '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto (editable) *</div>'+
@@ -2870,7 +2886,7 @@ async function agregarAjusteFiscal(proyId,tipoDefault){
       '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
         '<input id="aj-ref" type="text" placeholder="LISR Art. ..."></div>'+
     '</div>'+
-    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas / Identificación</div>'+
+    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas / IdentificaciÃ³n</div>'+
       '<input id="aj-notas" type="text" placeholder="Notas adicionales"></div>'+
     '<input type="hidden" id="aj-proy-id" value="'+proyId+'">'+
     '<div style="display:flex;gap:8px">'+
@@ -2918,7 +2934,7 @@ async function editarAjuste(ajusteId,proyId){
       '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Referencia legal</div>'+
         '<input id="eaj-ref" type="text" value="'+escH(a.referencia_legal||'')+'"></div>'+
     '</div>'+
-    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas / Identificación</div>'+
+    '<div style="margin-bottom:12px"><div style="font-size:11px;color:#888;margin-bottom:3px">Notas / IdentificaciÃ³n</div>'+
       '<input id="eaj-notas" type="text" value="'+escH(a.notas||'')+'"></div>'+
     '<input type="hidden" id="eaj-id" value="'+ajusteId+'">'+
     '<input type="hidden" id="eaj-proy-id" value="'+proyId+'">'+
@@ -2946,7 +2962,7 @@ async function actualizarAjuste(){
 }
 
 async function eliminarAjuste(ajusteId,proyId){
-  if(!confirm('¿Eliminar este ajuste?'))return;
+  if(!confirm('Â¿Eliminar este ajuste?'))return;
   document.getElementById('modal-edit-ajuste')?.remove();
   await sbDelete('pf_ajustes','?id=eq.'+ajusteId);
   renderDetalleProyeccion(proyId);
@@ -2954,7 +2970,7 @@ async function eliminarAjuste(ajusteId,proyId){
 
 async function deleteProyeccion(id){
   const p=pfCache.find(x=>x.id===id);
-  if(!confirm('¿Eliminar la proyección de '+(p?.cliente_nombre||'este cliente')+' '+(p?.ejercicio||'')+'? No se puede deshacer.'))return;
+  if(!confirm('Â¿Eliminar la proyecciÃ³n de '+(p?.cliente_nombre||'este cliente')+' '+(p?.ejercicio||'')+'? No se puede deshacer.'))return;
   await sbDelete('pf_meses','?proyeccion_id=eq.'+id);
   await sbDelete('pf_ajustes','?proyeccion_id=eq.'+id);
   await sbDelete('pf_proyecciones','?id=eq.'+id);
@@ -3001,7 +3017,7 @@ async function guardarEscenarioProyeccion(id){
   overlay.className='modal-overlay';
   overlay.id='modal-escenario-save';
   overlay.innerHTML='<div class="modal-box">'+
-    '<div class="modal-title">Guardar escenario de proyección</div>'+
+    '<div class="modal-title">Guardar escenario de proyecciÃ³n</div>'+
     '<div class="modal-sub">Estado actual al '+todayKey()+'</div>'+
     '<div style="background:#f5f5f3;border-radius:8px;padding:12px;margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px">'+
       '<div style="font-size:11px"><span style="color:#888">Meses reales:</span> <strong>'+nMeses+'/12</strong></div>'+
@@ -3011,10 +3027,10 @@ async function guardarEscenarioProyeccion(id){
       '<div style="font-size:11px"><span style="color:#888">CU:</span> <strong>'+cu.toFixed(2)+'%</strong></div>'+
     '</div>'+
     '<div style="margin-bottom:12px"><div style="font-size:12px;color:#888;margin-bottom:4px">Notas del escenario (opcional)</div>'+
-      '<textarea id="esc-notas" rows="2" placeholder="Ej: Proyección al mes de marzo..." style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea></div>'+
+      '<textarea id="esc-notas" rows="2" placeholder="Ej: ProyecciÃ³n al mes de marzo..." style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea></div>'+
     '<div style="display:flex;gap:8px">'+
       '<button class="btn btn-full" onclick="document.getElementById(\'modal-escenario-save\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="confirmarEscenario(\''+id+'\','+totalIngresos+','+totalCosto+','+totalGastosOp+','+utilidadContable+','+totalSumas+','+totalRestas+','+utilidadFiscal+','+isrEstimado+','+totalPP+','+isrACargo+','+cu+','+margenBruto+','+margenNeto+','+nMeses+')" style="flex:1;margin-top:0">💾 Guardar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="confirmarEscenario(\''+id+'\','+totalIngresos+','+totalCosto+','+totalGastosOp+','+utilidadContable+','+totalSumas+','+totalRestas+','+utilidadFiscal+','+isrEstimado+','+totalPP+','+isrACargo+','+cu+','+margenBruto+','+margenNeto+','+nMeses+')" style="flex:1;margin-top:0">ð¾ Guardar</button>'+
     '</div>'+
   '</div>';
   document.body.appendChild(overlay);
@@ -3027,7 +3043,7 @@ async function confirmarEscenario(proyId,ti,tc,tgo,uc,ts,tr,uf,isr,pp,isrC,cu,mb
   await sbPost('pf_reportes',{proyeccion_id:proyId,cliente_nombre:proy.cliente_nombre,ejercicio:proy.ejercicio,fecha_corte:todayKey(),meses_reales:nM,total_ingresos:ti,total_costo:tc,total_gastos_op:tgo,utilidad_contable:uc,total_sumas:ts,total_restas:tr,utilidad_fiscal:uf,isr_estimado:isr,total_pp:pp,isr_a_cargo:isrC,cu,margen_bruto:mb,margen_neto:mn,notas},'return=minimal');
   const msg=document.createElement('div');
   msg.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:10px 20px;border-radius:8px;z-index:9999';
-  msg.textContent='✅ Escenario guardado — '+todayKey();
+  msg.textContent='â Escenario guardado â '+todayKey();
   document.body.appendChild(msg);
   setTimeout(()=>msg.remove(),3000);
 }
@@ -3037,14 +3053,14 @@ async function verEscenariosProyeccion(id){
   document.getElementById('modal-escenarios')?.remove();
   const reportes=await sbGet('pf_reportes','?proyeccion_id=eq.'+id+'&select=*&order=fecha_corte.asc');
   const data=reportes||[];
-  if(!data.length){alert('No hay escenarios guardados. Usa "💾 Guardar escenario" para crear el primero.');return;}
+  if(!data.length){alert('No hay escenarios guardados. Usa "ð¾ Guardar escenario" para crear el primero.');return;}
   const overlay=document.createElement('div');
   overlay.className='modal-overlay';
   overlay.id='modal-escenarios';
   const escRows=data.map((r,i)=>'<div style="border:0.5px solid #e5e5e0;border-radius:8px;padding:12px;margin-bottom:8px">'+
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">'+
       '<div style="flex:1">'+
-        '<div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#3B4BC8">Escenario '+(i+1)+' — '+r.fecha_corte+'</div>'+
+        '<div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#3B4BC8">Escenario '+(i+1)+' â '+r.fecha_corte+'</div>'+
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:6px">'+
           '<div style="font-size:11px;color:#888">Meses: <strong>'+r.meses_reales+'/12</strong></div>'+
           '<div style="font-size:11px;color:#888">Ingresos: <strong>'+fmtMXN(r.total_ingresos)+'</strong></div>'+
@@ -3057,16 +3073,16 @@ async function verEscenariosProyeccion(id){
         '</div>'+
         (r.notas?'<div style="font-size:11px;color:#888;font-style:italic;background:#f5f5f3;padding:6px 8px;border-radius:6px">'+escH(r.notas)+'</div>':'')+
       '</div>'+
-      (session.role==='admin'?'<button id="del-esc-'+r.id+'" data-esc="'+r.id+'" data-proy="'+id+'" class="btn btn-sm btn-danger" style="font-size:10px">🗑</button>':'')+
+      (session.role==='admin'?'<button id="del-esc-'+r.id+'" data-esc="'+r.id+'" data-proy="'+id+'" class="btn btn-sm btn-danger" style="font-size:10px">ð</button>':'')+
     '</div>'+
   '</div>').join('');
   overlay.innerHTML='<div class="modal-box" style="max-width:620px;max-height:80vh;overflow-y:auto">'+
-    '<div class="modal-title">📊 Escenarios anteriores</div>'+
-    '<div class="modal-sub">'+escH(proy.cliente_nombre)+' — Ejercicio '+proy.ejercicio+' · '+data.length+' escenario'+(data.length!==1?'s':'')+'</div>'+
+    '<div class="modal-title">ð Escenarios anteriores</div>'+
+    '<div class="modal-sub">'+escH(proy.cliente_nombre)+' â Ejercicio '+proy.ejercicio+' Â· '+data.length+' escenario'+(data.length!==1?'s':'')+'</div>'+
     '<div style="margin:12px 0">'+escRows+'</div>'+
     '<div style="display:flex;gap:8px">'+
       '<button class="btn btn-full" onclick="document.getElementById(\'modal-escenarios\').remove()" style="flex:1;margin-top:0">Cerrar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="document.getElementById(\'modal-escenarios\').remove();generarComparativoPDF(\''+id+'\')" style="flex:1;margin-top:0">⎙ Reporte PDF comparativo</button>'+
+      '<button class="btn btn-primary btn-full" onclick="document.getElementById(\'modal-escenarios\').remove();generarComparativoPDF(\''+id+'\')" style="flex:1;margin-top:0">â Reporte PDF comparativo</button>'+
     '</div>'+
   '</div>';
   document.body.appendChild(overlay);
@@ -3081,7 +3097,7 @@ async function verEscenariosProyeccion(id){
 }
 
 async function borrarEscenario(escId,proyId){
-  if(!confirm('¿Eliminar este escenario? No se puede deshacer.'))return;
+  if(!confirm('Â¿Eliminar este escenario? No se puede deshacer.'))return;
   await sbDelete('pf_reportes','?id=eq.'+escId);
   document.getElementById('modal-escenarios')?.remove();
   verEscenariosProyeccion(proyId);
@@ -3092,28 +3108,28 @@ async function generarComparativoPDF(id){
   const reportes=await sbGet('pf_reportes','?proyeccion_id=eq.'+id+'&select=*&order=fecha_corte.asc');
   const data=reportes||[];if(!data.length)return;
   const cols=['Fecha corte','Meses reales','Ingresos','Util. contable','Util. fiscal','ISR estimado','PP acumulado','ISR a cargo','CU','Mg. bruto','Mg. neto','Notas'];
-  const rows=data.map(r=>[r.fecha_corte,r.meses_reales+'/12',fmtMXN(r.total_ingresos),fmtMXN(r.utilidad_contable),fmtMXN(r.utilidad_fiscal),fmtMXN(r.isr_estimado),fmtMXN(r.total_pp),fmtMXN(r.isr_a_cargo),parseFloat(r.cu).toFixed(2)+'%',parseFloat(r.margen_bruto).toFixed(2)+'%',parseFloat(r.margen_neto).toFixed(2)+'%',r.notas||'—']);
+  const rows=data.map(r=>[r.fecha_corte,r.meses_reales+'/12',fmtMXN(r.total_ingresos),fmtMXN(r.utilidad_contable),fmtMXN(r.utilidad_fiscal),fmtMXN(r.isr_estimado),fmtMXN(r.total_pp),fmtMXN(r.isr_a_cargo),parseFloat(r.cu).toFixed(2)+'%',parseFloat(r.margen_bruto).toFixed(2)+'%',parseFloat(r.margen_neto).toFixed(2)+'%',r.notas||'â']);
   const primero=data[0];const ultimo=data[data.length-1];
   const tendencias=[];
   if(data.length>1){
     const difIng=parseFloat(ultimo.total_ingresos)-parseFloat(primero.total_ingresos);
     const difFiscal=parseFloat(ultimo.utilidad_fiscal)-parseFloat(primero.utilidad_fiscal);
     const difISR=parseFloat(ultimo.isr_a_cargo)-parseFloat(primero.isr_a_cargo);
-    if(Math.abs(difIng)>0) tendencias.push((difIng>0?'📈':'📉')+' Ingresos: '+(difIng>0?'+':'')+fmtMXN(difIng)+' vs primer escenario');
-    if(Math.abs(difFiscal)>0) tendencias.push((difFiscal>0?'📈':'📉')+' Utilidad fiscal: '+(difFiscal>0?'+':'')+fmtMXN(difFiscal)+' vs primer escenario');
-    if(Math.abs(difISR)>0) tendencias.push((difISR>0?'⚠️':'✅')+' ISR a cargo: '+(difISR>0?'+':'')+fmtMXN(difISR)+' vs primer escenario');
+    if(Math.abs(difIng)>0) tendencias.push((difIng>0?'ð':'ð')+' Ingresos: '+(difIng>0?'+':'')+fmtMXN(difIng)+' vs primer escenario');
+    if(Math.abs(difFiscal)>0) tendencias.push((difFiscal>0?'ð':'ð')+' Utilidad fiscal: '+(difFiscal>0?'+':'')+fmtMXN(difFiscal)+' vs primer escenario');
+    if(Math.abs(difISR)>0) tendencias.push((difISR>0?'â ï¸':'â')+' ISR a cargo: '+(difISR>0?'+':'')+fmtMXN(difISR)+' vs primer escenario');
   }
   const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
   const win=window.open('','_blank');
-  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Escenarios — ${proy.cliente_nombre}</title>
+  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Escenarios â ${proy.cliente_nombre}</title>
   <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;font-size:11px;color:#1a1a1a}.page{max-width:1100px;margin:0 auto;padding:24px 32px}@page{size:A4 landscape;margin:15mm}.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:3px solid #3B4BC8;margin-bottom:18px}.logo{font-size:18px;font-weight:700;color:#3B4BC8}.logo span{color:#8DC63F}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#3B4BC8;color:#fff;padding:6px 8px;text-align:left}th.right{text-align:right}td{padding:6px 8px;border-bottom:1px solid #f0f0ec}td.right{text-align:right}tr:nth-child(even){background:#fafafa}tr:last-child td{background:#f0f4ff;font-weight:700}.tend{background:#f5f5f3;border-radius:8px;padding:12px;margin-bottom:16px}.footer{margin-top:20px;padding-top:10px;border-top:1px solid #e5e5e0;font-size:9px;color:#bbb;text-align:center}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>
   </head><body><div class="page">
-  <div class="header"><div><div class="logo">MSST <span>Consulting</span> SC</div><div style="font-size:10px;color:#888;margin-top:2px">Asesoría Fiscal y Legal</div></div>
-  <div style="text-align:right"><div style="font-size:14px;font-weight:700">Escenarios anteriores — Proyección Fiscal</div><div style="color:#888">${proy.cliente_nombre} · Ejercicio ${proy.ejercicio}</div><div style="color:#EF9F27;font-weight:600;font-size:10px">CONFIDENCIAL</div></div></div>
+  <div class="header"><div><div class="logo">MSST <span>Consulting</span> SC</div><div style="font-size:10px;color:#888;margin-top:2px">AsesorÃ­a Fiscal y Legal</div></div>
+  <div style="text-align:right"><div style="font-size:14px;font-weight:700">Escenarios anteriores â ProyecciÃ³n Fiscal</div><div style="color:#888">${proy.cliente_nombre} Â· Ejercicio ${proy.ejercicio}</div><div style="color:#EF9F27;font-weight:600;font-size:10px">CONFIDENCIAL</div></div></div>
   ${tendencias.length?'<div class="tend"><div style="font-size:11px;font-weight:700;color:#3B4BC8;margin-bottom:8px">Tendencias vs primer escenario</div>'+tendencias.map(t=>'<div style="font-size:11px;color:#444;padding:3px 0;border-bottom:1px solid #eee">'+t+'</div>').join('')+'</div>':''}
   <table><thead><tr>${cols.map((c,i)=>'<th'+(i>1&&i<12?' class="right"':'')+'>'+c+'</th>').join('')}</tr></thead>
   <tbody>${rows.map(r=>'<tr>'+r.map((c,ci)=>'<td'+(ci>1&&ci<12?' class="right"':'')+'>'+c+'</td>').join('')+'</tr>').join('')}</tbody></table>
-  <div class="footer">TaxIA · MSST Consulting SC · ${hoy} · Confidencial</div></div></body></html>`);
+  <div class="footer">TaxIA Â· MSST Consulting SC Â· ${hoy} Â· Confidencial</div></div></body></html>`);
   win.document.close();
   setTimeout(()=>win.print(),600);
 }
@@ -3154,7 +3170,7 @@ function abrirCapturaMes(proyId,mes,mesId){
   overlay.className='modal-overlay';
   overlay.id='modal-mes';
   const html='<div class="modal-box" style="max-width:560px;max-height:90vh;overflow-y:auto">'+
-    '<div class="modal-title">'+MESES_NOMBRES[mes-1]+' — Captura de datos</div>'+
+    '<div class="modal-title">'+MESES_NOMBRES[mes-1]+' â Captura de datos</div>'+
     '<div style="display:flex;gap:0;border-bottom:0.5px solid #e5e5e0;margin-bottom:14px">'+
       '<button id="tab-cifras" onclick="switchMesTab(\'cifras\')" style="padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#3B4BC8;border-bottom:2px solid #3B4BC8;font-weight:600">Cifras</button>'+
       '<button id="tab-docs" onclick="switchMesTab(\'docs\')" style="padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent">Documentos PDF</button>'+
@@ -3163,19 +3179,19 @@ function abrirCapturaMes(proyId,mes,mesId){
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'+
         '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Ingresos</div><input id="ms-ing" type="number" placeholder="0.00"></div>'+
         '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Costo de ventas</div><input id="ms-cv" type="number" placeholder="0.00"></div>'+
-        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Gastos de operación</div><input id="ms-go" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Gastos de operaciÃ³n</div><input id="ms-go" type="number" placeholder="0.00"></div>'+
         '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Otros ingresos</div><input id="ms-oi" type="number" placeholder="0.00"></div>'+
         '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Otros gastos</div><input id="ms-og" type="number" placeholder="0.00"></div>'+
         '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Activo fijo bruto</div><input id="ms-afb" type="number" placeholder="0.00"></div>'+
-        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Depreciación acumulada</div><input id="ms-dac" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">DepreciaciÃ³n acumulada</div><input id="ms-dac" type="number" placeholder="0.00"></div>'+
         '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Pago provisional ISR</div><input id="ms-pp" type="number" placeholder="0.00"></div>'+
       '</div>'+
     '</div>'+
     '<div id="panel-docs" style="display:none">'+
-      '<div style="font-size:12px;color:#888;margin-bottom:10px">Sube los estados financieros. Claude extraerá las cifras automáticamente.</div>'+
+      '<div style="font-size:12px;color:#888;margin-bottom:10px">Sube los estados financieros. Claude extraerÃ¡ las cifras automÃ¡ticamente.</div>'+
       msPDFBox("er","Estado de Resultados")+
       msPDFBox("bg","Balance General")+
-      msPDFBox("bc","Balanza de Comprobación")+
+      msPDFBox("bc","Balanza de ComprobaciÃ³n")+
       '<div id="ms-extract-status" style="font-size:12px;display:none;padding:8px;border-radius:6px;margin-bottom:8px"></div>'+
     '</div>'+
     '<input type="hidden" id="ms-proy-id" value="'+proyId+'">'+
@@ -3329,7 +3345,7 @@ async function mostrarAvisoBienvenida(){
     const d=new Date(sesAnterior.login_at);
     const fecha=d.toLocaleDateString('es-MX',{timeZone:'America/Tijuana',weekday:'short',day:'numeric',month:'short'});
     const hora=d.toLocaleTimeString('es-MX',{timeZone:'America/Tijuana',hour:'2-digit',minute:'2-digit'});
-    return fecha+' · '+hora;
+    return fecha+' Â· '+hora;
   })();
   const durAnterior=sesAnterior&&sesAnterior.duracion_min?(sesAnterior.duracion_min>=60?Math.floor(sesAnterior.duracion_min/60)+'h '+(sesAnterior.duracion_min%60)+'min':sesAnterior.duracion_min+' min'):null;
   const tareasData=tareas||[];
@@ -3355,7 +3371,7 @@ async function mostrarAvisoBienvenida(){
   overlay.id='aviso-bienvenida';
   overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:8000;display:flex;align-items:center;justify-content:center;padding:1rem';
   const hora=new Date().getHours();
-  const saludo=hora<12?'Buenos días':hora<19?'Buenas tardes':'Buenas noches';
+  const saludo=hora<12?'Buenos dÃ­as':hora<19?'Buenas tardes':'Buenas noches';
   const u=usersCache[email]||session;
   const taskRows=prioritarias.map(t=>{
     const fc=t.fecha_creacion||t.created_at?.slice(0,10)||'';
@@ -3365,12 +3381,12 @@ async function mostrarAvisoBienvenida(){
     const badgeStyle=esVencida?'background:#FCEBEB;color:#A32D2D':esHoy?'background:#FAEEDA;color:#854F0B':'background:#E6F1FB;color:#185FA5';
     const badgeLabel=esVencida?'Vencida':esHoy?'Hoy':'Stand By';
     const diasVenc=esVencida&&fc?Math.round((new Date(today)-new Date(fc))/(86400000)):0;
-    const meta=esVencida?'Vencida hace '+diasVenc+' día'+(diasVenc!==1?'s':''):esHoy?'Vence hoy':'Stand By pendiente';
+    const meta=esVencida?'Vencida hace '+diasVenc+' dÃ­a'+(diasVenc!==1?'s':''):esHoy?'Vence hoy':'Stand By pendiente';
     return '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:0.5px solid #e5e5e0">'+
       '<div style="width:7px;height:7px;border-radius:50%;background:'+dotColor+';flex-shrink:0;margin-top:5px"></div>'+
       '<div style="flex:1;min-width:0">'+
         '<div style="font-size:13px;color:#1a1a1a;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escH(t.descripcion)+'</div>'+
-        '<div style="font-size:11px;color:#888;margin-top:2px">'+meta+(t.client_name?' · '+escH(t.client_name):'')+'</div>'+
+        '<div style="font-size:11px;color:#888;margin-top:2px">'+meta+(t.client_name?' Â· '+escH(t.client_name):'')+'</div>'+
       '</div>'+
       '<span style="'+badgeStyle+';padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;flex-shrink:0">'+badgeLabel+'</span>'+
     '</div>';
@@ -3383,20 +3399,20 @@ async function mostrarAvisoBienvenida(){
     '<div style="background:#fff;border-radius:12px;width:100%;max-width:480px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.18)">'+
       '<div style="background:#3B4BC8;padding:16px 20px;display:flex;align-items:flex-start;justify-content:space-between">'+
         '<div>'+
-          '<div style="font-size:12px;color:rgba(255,255,255,.75);margin-bottom:2px">'+saludo+' — '+new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',weekday:'long',day:'numeric',month:'long'})+'</div>'+
+          '<div style="font-size:12px;color:rgba(255,255,255,.75);margin-bottom:2px">'+saludo+' â '+new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',weekday:'long',day:'numeric',month:'long'})+'</div>'+
           '<div style="font-size:17px;font-weight:600;color:#fff">'+escH(u.name||email)+'</div>'+
         '</div>'+
-        '<button id="btn-cerrar-aviso" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.15);border:none;cursor:pointer;color:#fff;font-size:16px">✕</button>'+
+        '<button id="btn-cerrar-aviso" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.15);border:none;cursor:pointer;color:#fff;font-size:16px">â</button>'+
       '</div>'+
       (sesAnterior?
         '<div style="background:#2d3db0;padding:8px 20px;display:flex;gap:20px;flex-wrap:wrap">'+
-          '<div style="font-size:11px;color:rgba(255,255,255,.85)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#8DC63F;margin-right:5px"></span>Última sesión: '+fechaAnterior+'</div>'+
+          '<div style="font-size:11px;color:rgba(255,255,255,.85)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#8DC63F;margin-right:5px"></span>Ãltima sesiÃ³n: '+fechaAnterior+'</div>'+
           (durAnterior?'<div style="font-size:11px;color:rgba(255,255,255,.85)">&#9201; '+durAnterior+'</div>':'')+
         '</div>':'')+
       '<div style="padding:16px 20px">'+
         (pillsHtml?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">'+pillsHtml+'</div>':'')+
         (prioritarias.length?
-          '<div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Tareas que requieren atención</div>'+
+          '<div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Tareas que requieren atenciÃ³n</div>'+
           '<div>'+taskRows+'</div>':
           '<div style="text-align:center;padding:12px 0;color:#888;font-size:13px">Sin tareas pendientes.</div>')+
       '</div>'+
@@ -3479,7 +3495,7 @@ function initReporteGerencial(){
       +'._mcc{background:#fff;border-radius:8px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,.06);}'
       +'._mcc h3{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;margin:0 0 6px;padding-bottom:4px;border-bottom:1px solid #eee;}'
       +'._mfoot{background:#2d4a8a;color:rgba(255,255,255,.65);text-align:center;padding:8px;font-size:10px;}'
-      +'._opinión{background:#fff;border-radius:8px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px;border-left:4px solid #2d4a8a;}'
+      +'._opiniÃ³n{background:#fff;border-radius:8px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px;border-left:4px solid #2d4a8a;}'
       +'._loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:30px;color:#888;font-size:13px;}'
       +'@media print{body *{visibility:hidden!important;}#_msspanel,#_msspanel *{visibility:visible!important;}#_msstor{position:static!important;display:block!important;background:none!important;padding:0!important;}#_msspanel{position:static!important;border-radius:0!important;max-width:100%!important;}._mflt,#_msstbtn,._mcl,._mpdf,._mub{display:none!important;}@page{size:letter;margin:10mm;}}';
     document.head.appendChild(se);
@@ -3493,14 +3509,14 @@ function initReporteGerencial(){
   const USERS=[
     {name:'Yosded Hernandez',init:'YH',role:'Consultora Junior',color:'#f0a500',email:'yhernandez@msstconsulting.com',acId:136,acPrefijos:['YH','AS/YH','AS / YH','AS/PM/YH','AS / PM / YH']},
     {name:'Brenda Lopez',init:'BL',role:'Consultora Junior',color:'#8e5ea2',email:'baudelo@msstconsulting.com',acId:142,acPrefijos:['BA','AS/BA','AS / PM / BA','AS / BA']},
-    {name:'CP Alberto Smith',init:'CA',role:'Líder Fiscal',color:'#2e7d52',email:'asmith@msstconsulting.com',acId:3,acPrefijos:['AS','AS/PM','AS / PM','1 / MS / PM']},
+    {name:'CP Alberto Smith',init:'CA',role:'LÃ­der Fiscal',color:'#2e7d52',email:'asmith@msstconsulting.com',acId:3,acPrefijos:['AS','AS/PM','AS / PM','1 / MS / PM']},
     {name:'CPC Manuel Santana',init:'CM',role:'Director',color:'#2d4a8a',email:'msantana@msstconsulting.com',acId:2,acPrefijos:['1 / MS','MS','MSST']}
   ];
-  // Mapeo de proyectos por usuario (basado en análisis de Active Collab)
+  // Mapeo de proyectos por usuario (basado en anÃ¡lisis de Active Collab)
   const AC_PROYECTOS_POR_USUARIO={
-    136:[15,83,419,122,23,19,251,104,18,433,69],  // Yosded: DELA, STM, Packforce, KM Ortopédica, etc.
+    136:[15,83,419,122,23,19,251,104,18,433,69],  // Yosded: DELA, STM, Packforce, KM OrtopÃ©dica, etc.
     3:[347,409,117,19,424,29,114,349],             // Alberto: MERGE, ARMANDO LEON, VCORP, etc.
-    142:[109,15,37,117,65],                        // Brenda: SEICA Logística, DELA, CBD, etc.
+    142:[109,15,37,117,65],                        // Brenda: SEICA LogÃ­stica, DELA, CBD, etc.
     2:[29,81,424,100,81,102,435,425]               // Manuel: MSST, SEICA Grupo, MITOSIS, etc.
   };
 
@@ -3544,7 +3560,7 @@ function initReporteGerencial(){
       .finally(()=>clearTimeout(timer));
   }
 
-  // Cargar tareas de ActiveCollab para un usuario en el período
+  // Cargar tareas de ActiveCollab para un usuario en el perÃ­odo
   async function cargarTareasAC(usuario,d0,d1){
     const proyIds=AC_PROYECTOS_POR_USUARIO[usuario.acId]||[];
     if(!proyIds.length) return {abiertas:[],completadas:[]};
@@ -3614,7 +3630,7 @@ function initReporteGerencial(){
     ov.innerHTML='<div style="background:#fff;border-radius:12px;padding:40px;text-align:center;width:400px;margin:auto"><div class="_loading"><div class="spinner"></div>Cargando datos...</div></div>';
     ov.onclick=e=>{if(e.target===ov)ov.style.display='none';};
 
-    // Filtrar usuarios seleccionados (excluir Director del análisis de tareas)
+    // Filtrar usuarios seleccionados (excluir Director del anÃ¡lisis de tareas)
     const usuarios=USERS.filter(u=>sel.includes(u.name));
     if(!usuarios.length){ov.innerHTML='<div style="color:#fff;padding:40px">Selecciona al menos un colaborador.</div>';return;}
 
@@ -3622,7 +3638,7 @@ function initReporteGerencial(){
     const todasTareas=await cargarTareas(emails,d0,d1);
 
     const todayStr=todayKey();
-    // Organizar por usuario — TaxIA
+    // Organizar por usuario â TaxIA
     const porUsuarioBase=usuarios.map(u=>{
       const uT=todasTareas.filter(t=>t.email===u.email);
       const registradas=uT.filter(t=>t.fecha_creacion>=d0&&t.fecha_creacion<=d1);
@@ -3666,7 +3682,7 @@ function initReporteGerencial(){
     const taTotal=porUsuario.reduce((s,u)=>s+u.registradas.length,0);
     const pct=taTotal?Math.round(tcTotal/taTotal*100):0;
 
-    // Función para badge de importancia
+    // FunciÃ³n para badge de importancia
     function impBadge(id){
       const nivel=importancias[id]||'NORMAL';
       const cls={CRITICA:'_mic',ALTA:'_mia',MEDIA:'_mim',NORMAL:'_min'}[nivel]||'_min';
@@ -3689,15 +3705,15 @@ function initReporteGerencial(){
       const rowsConcluidas=u.concluidas.map(t=>'<tr>'+
         '<td style="white-space:nowrap">'+fuenteBadge(t)+' '+impBadge(t.id)+compBadge(t.id)+'</td>'+
         '<td style="max-width:170px">'+escH(t.descripcion)+'</td>'+
-        '<td style="font-size:10px;color:#888">'+escH(t.client_name||'—')+'</td>'+
-        '<td style="font-size:10px;color:#888;white-space:nowrap">'+escH(t.fecha_creacion||'—')+'</td>'+
-        '<td style="font-size:10px;color:#5a8a1a;white-space:nowrap;font-weight:600">'+(t.fecha_conclusion?.slice(0,10)||'—')+'</td>'+
+        '<td style="font-size:10px;color:#888">'+escH(t.client_name||'â')+'</td>'+
+        '<td style="font-size:10px;color:#888;white-space:nowrap">'+escH(t.fecha_creacion||'â')+'</td>'+
+        '<td style="font-size:10px;color:#5a8a1a;white-space:nowrap;font-weight:600">'+(t.fecha_conclusion?.slice(0,10)||'â')+'</td>'+
       '</tr>').join('');
       const rowsPendientes=u.registradas.filter(t=>t.status==='pendiente').slice(0,5).map(t=>'<tr>'+
         '<td style="white-space:nowrap">'+fuenteBadge(t)+' '+impBadge(t.id)+compBadge(t.id)+'</td>'+
         '<td style="max-width:170px;color:#555">'+escH(t.descripcion)+'</td>'+
-        '<td style="font-size:10px;color:#888">'+escH(t.client_name||'—')+'</td>'+
-        '<td style="font-size:10px;color:#888;white-space:nowrap">'+escH(t.fecha_creacion||'—')+'</td>'+
+        '<td style="font-size:10px;color:#888">'+escH(t.client_name||'â')+'</td>'+
+        '<td style="font-size:10px;color:#888;white-space:nowrap">'+escH(t.fecha_creacion||'â')+'</td>'+
         '<td style="font-size:10px;color:#EF9F27">Pendiente</td>'+
       '</tr>').join('');
 
@@ -3716,14 +3732,14 @@ function initReporteGerencial(){
           '<div><div class="_mpn" style="color:#2e7d52">'+u.concluidas.length+'</div><div class="_mpl">Concluidas</div></div>'+
           '<div><div class="_mpn" style="color:#c0392b">'+u.vencidas.length+'</div><div class="_mpl">Vencidas</div></div>'+
         '</div>'+
-        ((u.ac_abiertas||u.ac_completadas)?'<div style="font-size:9px;color:#1a73e8;margin:3px 0 5px"><span style="background:#e8f4fd;padding:1px 4px;border-radius:3px;font-weight:700">AC</span> '+(u.ac_abiertas||0)+' abiertas · '+(u.ac_completadas||0)+' concluidas en el período</div>':'')+
+        ((u.ac_abiertas||u.ac_completadas)?'<div style="font-size:9px;color:#1a73e8;margin:3px 0 5px"><span style="background:#e8f4fd;padding:1px 4px;border-radius:3px;font-weight:700">AC</span> '+(u.ac_abiertas||0)+' abiertas Â· '+(u.ac_completadas||0)+' concluidas en el perÃ­odo</div>':'')+
         (u.concluidas.length?
-          '<div style="font-size:9px;font-weight:700;color:#2e7d52;text-transform:uppercase;margin-bottom:4px">Concluidas en el período</div>'+
-          '<table class="_mt"><thead><tr><th>Imp./Compl.</th><th>Descripción</th><th>Cliente</th><th>Registro</th><th>Conclusión</th></tr></thead>'+
-          '<tbody>'+rowsConcluidas+'</tbody></table>':'<div style="font-size:11px;color:#bbb;padding:6px 0">Sin tareas concluidas en el período.</div>')+
+          '<div style="font-size:9px;font-weight:700;color:#2e7d52;text-transform:uppercase;margin-bottom:4px">Concluidas en el perÃ­odo</div>'+
+          '<table class="_mt"><thead><tr><th>Imp./Compl.</th><th>DescripciÃ³n</th><th>Cliente</th><th>Registro</th><th>ConclusiÃ³n</th></tr></thead>'+
+          '<tbody>'+rowsConcluidas+'</tbody></table>':'<div style="font-size:11px;color:#bbb;padding:6px 0">Sin tareas concluidas en el perÃ­odo.</div>')+
         (rowsPendientes?
-          '<div style="font-size:9px;font-weight:700;color:#EF9F27;text-transform:uppercase;margin:8px 0 4px">Pendientes del período (primeras 3)</div>'+
-          '<table class="_mt"><thead><tr><th>Imp./Compl.</th><th>Descripción</th><th>Cliente</th><th>Registro</th><th>Status</th></tr></thead>'+
+          '<div style="font-size:9px;font-weight:700;color:#EF9F27;text-transform:uppercase;margin:8px 0 4px">Pendientes del perÃ­odo (primeras 3)</div>'+
+          '<table class="_mt"><thead><tr><th>Imp./Compl.</th><th>DescripciÃ³n</th><th>Cliente</th><th>Registro</th><th>Status</th></tr></thead>'+
           '<tbody>'+rowsPendientes+'</tbody></table>':'')+
       '</div>';
     }).join('');
@@ -3736,18 +3752,18 @@ function initReporteGerencial(){
       return '<tr>'+
         '<td><strong>'+escH(v.descripcion)+'</strong>'+(v.client_name?'<br><span style="font-size:10px;color:#888">'+escH(v.client_name)+'</span>':'')+'</td>'+
         '<td><span class="_mav" style="background:'+v.color+';width:20px;height:20px;font-size:9px">'+v.init+'</span></td>'+
-        '<td style="white-space:nowrap">'+escH(v.fecha_creacion||'—')+'</td>'+
-        '<td><span class="_mdb '+cls+'">'+v.dias+' días</span></td>'+
+        '<td style="white-space:nowrap">'+escH(v.fecha_creacion||'â')+'</td>'+
+        '<td><span class="_mdb '+cls+'">'+v.dias+' dÃ­as</span></td>'+
         '<td><span class="_mi '+nc+'">'+ni+'</span></td>'+
       '</tr>';
-    }).join(''):'<tr><td colspan="5" style="text-align:center;padding:12px;color:#2e7d52;font-weight:700">✅ Sin tareas vencidas</td></tr>';
+    }).join(''):'<tr><td colspan="5" style="text-align:center;padding:12px;color:#2e7d52;font-weight:700">â Sin tareas vencidas</td></tr>';
 
-    // Opinión profesional
+    // OpiniÃ³n profesional
     const calidadHtml='';
 
     const opHtml='';
 
-    // Gráficas SVG simples (sin Chart.js)
+    // GrÃ¡ficas SVG simples (sin Chart.js)
     function svgBarras(){
       const maxVal=Math.max(...porUsuario.map(u=>u.registradas.length),1);
       const w=460,h=120,barW=50,gap=20,x0=40;
@@ -3797,29 +3813,29 @@ function initReporteGerencial(){
 
     ov.innerHTML='<div id="_msspanel">'+
       '<div class="_mh">'+
-        '<div><h2>📊 Reporte Gerencial — MSST Consulting SC</h2><p>'+dr+' · Solo para: CPC Manuel Santana</p></div>'+
+        '<div><h2>ð Reporte Gerencial â MSST Consulting SC</h2><p>'+dr+' Â· Solo para: CPC Manuel Santana</p></div>'+
         '<div class="_mhright">'+
           '<div style="font-size:9px;color:rgba(255,255,255,.75);margin-right:8px"><span style="background:#1a73e8;padding:1px 5px;border-radius:3px;font-weight:700">AC</span> ActiveCollab &nbsp; <span style="background:#3B4BC8;padding:1px 5px;border-radius:3px;font-weight:700">TX</span> TaxIA</div>'+
-          '<button class="_mpdf" onclick="window.print()">🖨️ PDF</button>'+
-          '<button class="_mcl" onclick="document.getElementById(\'_msstor\').style.display=\'none\'">✕</button>'+
+          '<button class="_mpdf" onclick="window.print()">ð¨ï¸ PDF</button>'+
+          '<button class="_mcl" onclick="document.getElementById(\'_msstor\').style.display=\'none\'">â</button>'+
         '</div>'+
       '</div>'+
       '<div class="_mflt">'+
         '<label>Desde <input type="date" id="_msd0" value="'+d0+'"></label>'+
         '<label>Hasta <input type="date" id="_msd1" value="'+d1+'"></label>'+
-        '<button class="_mub grn" onclick="applyDR()">✅ Aplicar</button>'+
-        '<button class="_mub" onclick="navW(-1)">← Anterior</button>'+
-        '<button class="_mub" onclick="navW(1)">Siguiente →</button>'+
+        '<button class="_mub grn" onclick="applyDR()">â Aplicar</button>'+
+        '<button class="_mub" onclick="navW(-1)">â Anterior</button>'+
+        '<button class="_mub" onclick="navW(1)">Siguiente â</button>'+
         '<span style="width:1px;height:18px;background:#ddd;display:inline-block;margin:0 2px"></span>'+
         allU+
-        '<button class="_mub" onclick="refreshReporteG()">🔄 Actualizar</button>'+
+        '<button class="_mub" onclick="refreshReporteG()">ð Actualizar</button>'+
         '<span style="width:1px;height:18px;background:#ddd;display:inline-block;margin:0 2px"></span>'+
-        '<button id="_btn_ac" class="_mub" style="background:#1a73e8" onclick="cargarACtahora()">📥 Cargar Active Collab</button>'+
+        '<button id="_btn_ac" class="_mub" style="background:#1a73e8" onclick="cargarACtahora()">ð¥ Cargar Active Collab</button>'+
         '<span id="_ac_status" style="font-size:10px;color:#888"></span>'+
       '</div>'+
       '<div class="_mbd">'+
         '<div class="_mkpi">'+
-          '<div class="_mkc"><div class="_mkn b">'+tcTotal+'</div><div class="_mkl">Tareas concluidas en el período</div></div>'+
+          '<div class="_mkc"><div class="_mkn b">'+tcTotal+'</div><div class="_mkl">Tareas concluidas en el perÃ­odo</div></div>'+
           '<div class="_mkc g"><div class="_mkn g">'+pct+'%</div><div class="_mkl">Tasa de cumplimiento del equipo</div></div>'+
           '<div class="_mkc r"><div class="_mkn r">'+vencidas.length+'</div><div class="_mkl">Tareas vencidas</div></div>'+
           '<div class="_mkc o"><div class="_mkn o">'+taTotal+'</div><div class="_mkl">Tareas registradas</div></div>'+
@@ -3828,15 +3844,15 @@ function initReporteGerencial(){
           '<div class="_mcc"><h3>Tareas registradas vs concluidas por persona</h3>'+svgBarras()+'</div>'+
           '<div class="_mcc"><h3>% Cumplimiento por persona</h3>'+svgCumplimiento()+'</div>'+
         '</div>'+
-        '<div class="_msec">👥 Análisis por Colaborador</div>'+
+        '<div class="_msec">ð¥ AnÃ¡lisis por Colaborador</div>'+
         '<div class="_mug">'+uCards+'</div>'+
-        '<div class="_msec">⚠️ Tareas Vencidas</div>'+
+        '<div class="_msec">â ï¸ Tareas Vencidas</div>'+
         '<table class="_mvt"><thead><tr><th>Tarea / Cliente</th><th>Resp.</th><th>Fecha alta</th><th>Atraso</th><th>Prioridad</th></tr></thead>'+
         '<tbody>'+vHtml+'</tbody></table>'+
         calidadHtml+
         opHtml+
       '</div>'+
-      '<div class="_mfoot">TaxIA · MSST Consulting SC · '+today2+' · Confidencial — Solo para CPC Manuel Santana</div>'+
+      '<div class="_mfoot">TaxIA Â· MSST Consulting SC Â· '+today2+' Â· Confidencial â Solo para CPC Manuel Santana</div>'+
     '</div>';
 
     ov.onclick=e=>{if(e.target===ov)ov.style.display='none';};
@@ -3872,10 +3888,10 @@ function initReporteGerencial(){
     }
 
     if(status){
-      if(ok>0) status.innerHTML=' <span style="color:#2e7d52">✓ AC cargado ('+ok+' usuarios)</span>'+(err?' <span style="color:#c0392b">'+err+' errores</span>':'');
-      else status.innerHTML=' <span style="color:#c0392b">✗ No se pudo conectar con AC</span>';
+      if(ok>0) status.innerHTML=' <span style="color:#2e7d52">â AC cargado ('+ok+' usuarios)</span>'+(err?' <span style="color:#c0392b">'+err+' errores</span>':'');
+      else status.innerHTML=' <span style="color:#c0392b">â No se pudo conectar con AC</span>';
     }
-    if(btn){btn.disabled=false;btn.textContent='🔄 Recargar AC';}
+    if(btn){btn.disabled=false;btn.textContent='ð Recargar AC';}
 
     // Refrescar el reporte con los datos de AC
     if(ok>0) renderGconAC(sel,d0,d1);
@@ -3924,8 +3940,8 @@ function initReporteGerencial(){
 
   const btn=document.createElement('button');
   btn.id='_msstbtn';
-  btn.innerHTML='📊 Mi Reporte';
-  btn.title='Reporte Gerencial — Solo CPC Manuel Santana';
+  btn.innerHTML='ð Mi Reporte';
+  btn.title='Reporte Gerencial â Solo CPC Manuel Santana';
   btn.onclick=()=>renderG(USERS.map(u=>u.name),d0val,d1val);
 
   const ov=document.createElement('div');
@@ -3973,7 +3989,7 @@ async function reporteProyeccionPDF(id){
   const cuPDF=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
   const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
 
-  // Gráficas SVG
+  // GrÃ¡ficas SVG
   const labelsM=MESES_NOMBRES.map(m=>m.slice(0,3));
   const gW=920,gH=180,gX=60,gY=20,gBW=gW-80,gBH=gH-50;
   const barPairP=Math.floor(gBW/12);
@@ -4005,10 +4021,10 @@ async function reporteProyeccionPDF(id){
     '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.otros_ingresos)+'</td>'+
     '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec">'+fmtMXN(m.otros_gastos)+'</td>'+
     '<td style="padding:5px 8px;font-size:11px;text-align:right;font-weight:700;border-bottom:1px solid #f0f0ec;color:'+(parseFloat(m.utilidad_neta_contable||0)>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(m.utilidad_neta_contable)+'</td>'+
-    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;color:#888">'+(m.pago_provisional?fmtMXN(m.pago_provisional)+(m.real?'':' <span style="font-size:8px;color:#8DC63F">p</span>'):'—')+'</td>'+
+    '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;color:#888">'+(m.pago_provisional?fmtMXN(m.pago_provisional)+(m.real?'':' <span style="font-size:8px;color:#8DC63F">p</span>'):'â')+'</td>'+
   '</tr>').join('');
 
-  // Conciliación
+  // ConciliaciÃ³n
   const ajustesSortedPDF=[...ajustesData].sort((a,b)=>a.tipo===b.tipo?0:a.tipo==='suma'?-1:1);
   const concilRows=ajustesSortedPDF.map(a=>'<tr>'+
     '<td style="padding:5px 8px;font-size:11px;border-bottom:1px solid #f0f0ec;font-weight:500">'+escH(a.concepto)+'</td>'+
@@ -4018,7 +4034,7 @@ async function reporteProyeccionPDF(id){
     '<td style="padding:5px 8px;font-size:10px;color:#888;font-style:italic;border-bottom:1px solid #f0f0ec">'+escH(a.notas||'')+'</td>'+
   '</tr>').join('');
 
-  // Notas automáticas
+  // Notas automÃ¡ticas
   const margenBruto=totalIngresos>0?((totalIngresos-totalCosto)/totalIngresos*100):0;
   const margenNeto=totalIngresos>0?(utilidadContable/totalIngresos*100):0;
   const margenOperacion=totalIngresos>0?((totalIngresos-totalCosto-totalGastosOp)/totalIngresos*100):0;
@@ -4038,26 +4054,26 @@ async function reporteProyeccionPDF(id){
     '</div>';
   }
 
-  const notasBase=['La proyección se basa en '+nMeses+' mes'+(nMeses!==1?'es':'')+(nMeses<12?' real'+(nMeses!==1?'es':'')+' y '+(12-nMeses)+' meses proyectados por promedio.':' reales.')];
-  if(nMeses<6) notasBase.push('Con solo '+nMeses+' mes'+(nMeses!==1?'es':'')+' real'+(nMeses!==1?'es':'')+', la proyección tiene margen de variabilidad elevado.');
+  const notasBase=['La proyecciÃ³n se basa en '+nMeses+' mes'+(nMeses!==1?'es':'')+(nMeses<12?' real'+(nMeses!==1?'es':'')+' y '+(12-nMeses)+' meses proyectados por promedio.':' reales.')];
+  if(nMeses<6) notasBase.push('Con solo '+nMeses+' mes'+(nMeses!==1?'es':'')+' real'+(nMeses!==1?'es':'')+', la proyecciÃ³n tiene margen de variabilidad elevado.');
 
   const notasRazones=[];
-  notasRazones.push('Margen bruto: '+margenBruto.toFixed(2)+'% — '+(margenBruto<20?'Bajo. Revisar estructura de costos.':margenBruto<40?'Aceptable, con oportunidad de mejora.':'Saludable.'));
-  notasRazones.push('Margen de operación: '+margenOperacion.toFixed(2)+'% — '+(margenOperacion<10?'Bajo. Gastos operativos absorben utilidad bruta.':margenOperacion<20?'Moderado, optimizar gastos.':'Robusto.'));
-  notasRazones.push('Costo de ventas / Ingresos: '+pesoCosto.toFixed(2)+'% — '+(pesoCosto>70?'Elevado. Revisar proveedores y procesos.':pesoCosto>50?'Manejable, vigilar incrementos.':'Bien controlado.'));
-  notasRazones.push('Gastos operativos / Ingresos: '+rotacionGastos.toFixed(2)+'% — '+(rotacionGastos>30?'Elevado. Analizar gastos administrativos.':rotacionGastos>20?'Moderado.':'Bien alineado.'));
-  notasRazones.push('Margen neto contable: '+margenNeto.toFixed(2)+'% — '+(margenNeto<0?'Pérdida neta. Medidas correctivas inmediatas.':margenNeto<5?'Muy reducido. Alta sensibilidad ante variaciones.':margenNeto<15?'Aceptable.':'Sólido.'));
+  notasRazones.push('Margen bruto: '+margenBruto.toFixed(2)+'% â '+(margenBruto<20?'Bajo. Revisar estructura de costos.':margenBruto<40?'Aceptable, con oportunidad de mejora.':'Saludable.'));
+  notasRazones.push('Margen de operaciÃ³n: '+margenOperacion.toFixed(2)+'% â '+(margenOperacion<10?'Bajo. Gastos operativos absorben utilidad bruta.':margenOperacion<20?'Moderado, optimizar gastos.':'Robusto.'));
+  notasRazones.push('Costo de ventas / Ingresos: '+pesoCosto.toFixed(2)+'% â '+(pesoCosto>70?'Elevado. Revisar proveedores y procesos.':pesoCosto>50?'Manejable, vigilar incrementos.':'Bien controlado.'));
+  notasRazones.push('Gastos operativos / Ingresos: '+rotacionGastos.toFixed(2)+'% â '+(rotacionGastos>30?'Elevado. Analizar gastos administrativos.':rotacionGastos>20?'Moderado.':'Bien alineado.'));
+  notasRazones.push('Margen neto contable: '+margenNeto.toFixed(2)+'% â '+(margenNeto<0?'PÃ©rdida neta. Medidas correctivas inmediatas.':margenNeto<5?'Muy reducido. Alta sensibilidad ante variaciones.':margenNeto<15?'Aceptable.':'SÃ³lido.'));
 
   const notasFiscales=[];
-  if(utilidadFiscal<0) notasFiscales.push('Pérdida fiscal estimada de '+fmtMXN(Math.abs(utilidadFiscal))+'. Evaluar aplicación conforme Art. 57 LISR.');
+  if(utilidadFiscal<0) notasFiscales.push('PÃ©rdida fiscal estimada de '+fmtMXN(Math.abs(utilidadFiscal))+'. Evaluar aplicaciÃ³n conforme Art. 57 LISR.');
   if(utilidadFiscal>0&&utilidadFiscal>utilidadContable) notasFiscales.push('Utilidad fiscal ('+fmtMXN(utilidadFiscal)+') mayor a contable ('+fmtMXN(utilidadContable)+'). Diferencia temporal de '+fmtMXN(difFiscalContable)+'.');
-  if(utilidadFiscal>0&&utilidadFiscal<utilidadContable) notasFiscales.push('Ajustes fiscales reducen base gravable en '+fmtMXN(Math.abs(difFiscalContable))+'. Gestión fiscal eficiente.');
+  if(utilidadFiscal>0&&utilidadFiscal<utilidadContable) notasFiscales.push('Ajustes fiscales reducen base gravable en '+fmtMXN(Math.abs(difFiscalContable))+'. GestiÃ³n fiscal eficiente.');
   if(isrEstimado>0){
     notasFiscales.push('ISR estimado: '+fmtMXN(isrEstimado)+' ('+proy.tasa_isr+'%). PP acumulados: '+fmtMXN(totalPP2)+'. '+(isrACargoP>0?'ISR a cargo: '+fmtMXN(isrACargoP)+'. Evaluar incrementar PP restantes.':'Saldo a favor: '+fmtMXN(saldoFavorP)+'.'));
     if(totalPP2>0) notasFiscales.push('Cobertura PP: '+relacionPP.toFixed(1)+'% del ISR estimado.'+(relacionPP<70?' Cobertura baja. Revisar CU aplicado.':relacionPP>100?' PP superan ISR estimado; saldo a favor esperado.':' Adecuada.'));
   }
   notasFiscales.push('CU determinado: '+cuPDF.toFixed(2)+'%. Aplicable para pagos provisionales '+( proy.ejercicio+1)+' conforme Art. 14 LISR.');
-  notasFiscales.push('Cifras estimadas sujetas a revisión definitiva al cierre del ejercicio '+proy.ejercicio+'. MSST Consulting SC.');
+  notasFiscales.push('Cifras estimadas sujetas a revisiÃ³n definitiva al cierre del ejercicio '+proy.ejercicio+'. MSST Consulting SC.');
 
   const notasHTML=seccionNotas('I. Bases y alcance','#888',notasBase)+seccionNotas('II. Razones financieras','#3B4BC8',notasRazones)+seccionNotas('III. Consideraciones fiscales','#8DC63F',notasFiscales);
 
@@ -4077,10 +4093,10 @@ async function reporteProyeccionPDF(id){
         '<td style="padding:5px 8px;font-size:11px;text-align:right;border-bottom:1px solid #f0f0ec;color:#3B4BC8">'+parseFloat(c.cu||0).toFixed(2)+'%</td>'+
       '</tr>';
     }).join('');
-    return '<div class="section"><div class="section-title">Historial fiscal de cierres anteriores — '+escH(proy.cliente_nombre)+'</div>'+
+    return '<div class="section"><div class="section-title">Historial fiscal de cierres anteriores â '+escH(proy.cliente_nombre)+'</div>'+
       '<table><thead><tr><th>Ejercicio</th><th class="right">Ingresos acumulables</th><th class="right">Util. contable</th><th class="right">Util. fiscal</th><th class="right">ISR causado</th><th class="right">PP pagados</th><th class="right">ISR a cargo / (S.Favor)</th><th class="right">CU</th></tr></thead>'+
       '<tbody>'+filas+
-      '<tr style="background:#f0f4ff"><td style="padding:6px 8px;font-size:11px;font-weight:700;color:#3B4BC8" colspan="3">Proyección '+proy.ejercicio+' (estimado)</td>'+
+      '<tr style="background:#f0f4ff"><td style="padding:6px 8px;font-size:11px;font-weight:700;color:#3B4BC8" colspan="3">ProyecciÃ³n '+proy.ejercicio+' (estimado)</td>'+
       '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#3B4BC8">'+fmtMXN(utilidadFiscal)+'</td>'+
       '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#dc2626">'+fmtMXN(isrEstimado)+'</td>'+
       '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#3B4BC8">'+fmtMXN(totalPP2)+'</td>'+
@@ -4091,7 +4107,7 @@ async function reporteProyeccionPDF(id){
 
   const win=window.open('','_blank');
   win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-<title>Proyección Fiscal ${proy.ejercicio} — ${proy.cliente_nombre}</title>
+<title>ProyecciÃ³n Fiscal ${proy.ejercicio} â ${proy.cliente_nombre}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:11px;color:#1a1a1a;background:#fff}
@@ -4129,30 +4145,30 @@ tr:last-child td{border-bottom:none}
 </style></head><body><div class="page">
 
 <div class="header">
-  <div><div class="logo-mark">MSST <span>Consulting</span> SC</div><div class="firma">Asesoría Fiscal y Legal · Tijuana, B.C.</div></div>
+  <div><div class="logo-mark">MSST <span>Consulting</span> SC</div><div class="firma">AsesorÃ­a Fiscal y Legal Â· Tijuana, B.C.</div></div>
   <div style="text-align:right">
-    <div style="font-size:16px;font-weight:700;margin-bottom:4px">Proyección de Resultado Fiscal</div>
-    <div style="font-size:11px;color:#888">Ejercicio ${proy.ejercicio} · ${escH(proy.cliente_nombre)}</div>
-    <div style="font-size:11px;color:#888;margin-top:3px">Tasa ISR: ${proy.tasa_isr}% · ${hoy}</div>
-    <div style="font-size:11px;color:#EF9F27;font-weight:600;margin-top:3px">INFORMACIÓN CONFIDENCIAL Y PRIVILEGIADA</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">ProyecciÃ³n de Resultado Fiscal</div>
+    <div style="font-size:11px;color:#888">Ejercicio ${proy.ejercicio} Â· ${escH(proy.cliente_nombre)}</div>
+    <div style="font-size:11px;color:#888;margin-top:3px">Tasa ISR: ${proy.tasa_isr}% Â· ${hoy}</div>
+    <div style="font-size:11px;color:#EF9F27;font-weight:600;margin-top:3px">INFORMACIÃN CONFIDENCIAL Y PRIVILEGIADA</div>
   </div>
 </div>
 
 <div class="kpi-grid">
-  <div class="kpi"><div class="kpi-label">Ingresos proyectados</div><div class="kpi-val">${fmtMXN(totalIngresos)}</div><div class="kpi-sub">${nMeses} reales · ${12-nMeses} proyectados</div></div>
+  <div class="kpi"><div class="kpi-label">Ingresos proyectados</div><div class="kpi-val">${fmtMXN(totalIngresos)}</div><div class="kpi-sub">${nMeses} reales Â· ${12-nMeses} proyectados</div></div>
   <div class="kpi naranja"><div class="kpi-label">Utilidad contable</div><div class="kpi-val" style="color:${utilidadContable>=0?'#92400E':'#dc2626'}">${fmtMXN(utilidadContable)}</div><div class="kpi-sub">Margen ${(totalIngresos>0?(utilidadContable/totalIngresos*100):0).toFixed(1)}%</div></div>
   <div class="kpi ${utilidadFiscal>=0?'verde':'rojo'}"><div class="kpi-label">Utilidad fiscal estimada</div><div class="kpi-val">${fmtMXN(utilidadFiscal)}</div><div class="kpi-sub">Ajustes: ${fmtMXN(totalSumas-totalRestas)}</div></div>
   <div class="kpi ${isrACargoP>0?'rojo':'verde'}"><div class="kpi-label">${isrACargoP>0?'ISR a cargo':'Saldo a favor'}</div><div class="kpi-val">${isrACargoP>0?fmtMXN(isrACargoP):fmtMXN(saldoFavorP)}</div><div class="kpi-sub">ISR estimado: ${fmtMXN(isrEstimado)}</div></div>
-  <div class="kpi"><div class="kpi-label">Coeficiente de utilidad</div><div class="kpi-val">${cuPDF.toFixed(2)}%</div><div class="kpi-sub">Art. 14 LISR · Para ${proy.ejercicio+1}</div></div>
+  <div class="kpi"><div class="kpi-label">Coeficiente de utilidad</div><div class="kpi-val">${cuPDF.toFixed(2)}%</div><div class="kpi-sub">Art. 14 LISR Â· Para ${proy.ejercicio+1}</div></div>
 </div>
 
 <div class="section">
-  <div class="section-title">Evolución mensual — Ingresos vs Egresos</div>
+  <div class="section-title">EvoluciÃ³n mensual â Ingresos vs Egresos</div>
   <div class="graf-box"><div class="graf-title">Comparativo mensual (MXN)</div>${svg1}</div>
 </div>
 
 <div class="section">
-  <div class="section-title">Estado de Resultados proyectado — Ejercicio ${proy.ejercicio}</div>
+  <div class="section-title">Estado de Resultados proyectado â Ejercicio ${proy.ejercicio}</div>
   <table>
     <thead><tr><th>Mes</th><th class="right">Ingresos</th><th class="right">Costo venta</th><th class="right">Gastos op.</th><th class="right">Otros ing.</th><th class="right">Otros gas.</th><th class="right">Util. neta</th><th class="right">Pago prov.</th></tr></thead>
     <tbody>${mesRowsHTML}
@@ -4162,11 +4178,11 @@ tr:last-child td{border-bottom:none}
 </div>
 
 <div class="section">
-  <div class="section-title">Conciliación contable-fiscal — Art. 9 LISR</div>
+  <div class="section-title">ConciliaciÃ³n contable-fiscal â Art. 9 LISR</div>
   <table>
-    <thead><tr><th>Concepto</th><th>Tipo</th><th class="right">Importe</th><th>Ref. Legal</th><th>Notas / Identificación</th></tr></thead>
+    <thead><tr><th>Concepto</th><th>Tipo</th><th class="right">Importe</th><th>Ref. Legal</th><th>Notas / IdentificaciÃ³n</th></tr></thead>
     <tbody>
-      <tr style="background:#f8f9ff"><td style="font-weight:700">Utilidad contable base</td><td>—</td><td style="text-align:right;font-weight:700">${fmtMXN(utilidadContable)}</td><td>—</td><td>—</td></tr>
+      <tr style="background:#f8f9ff"><td style="font-weight:700">Utilidad contable base</td><td>â</td><td style="text-align:right;font-weight:700">${fmtMXN(utilidadContable)}</td><td>â</td><td>â</td></tr>
       ${concilRows}
       <tr style="background:#e8f5e9"><td style="color:#5a8a1a">+ Total ajustes acumulables</td><td></td><td style="text-align:right;color:#5a8a1a;font-weight:700">${fmtMXN(totalSumas)}</td><td></td><td></td></tr>
       <tr style="background:#fef2f2"><td style="color:#dc2626">- Total ajustes deducibles</td><td></td><td style="text-align:right;color:#dc2626;font-weight:700">(${fmtMXN(totalRestas)})</td><td></td><td></td></tr>
@@ -4176,7 +4192,7 @@ tr:last-child td{border-bottom:none}
       <tr class="${isrEstimado>0?'isr-row':'isr-row favor'}"><td colspan="2">ISR estimado (${proy.tasa_isr}%)</td><td style="text-align:right">${fmtMXN(isrEstimado)}</td><td></td><td></td></tr>
       <tr style="background:#f5f5f3"><td colspan="2" style="color:#888;font-size:10px">- Pagos provisionales realizados + proyectados</td><td style="text-align:right;color:#888;font-weight:600">(${fmtMXN(totalPP2)})</td><td></td><td></td></tr>
       <tr style="background:${isrACargoP>0?'#fef2f2':'#f0f7d4'}"><td colspan="2" style="font-weight:700;font-size:13px;color:${isrACargoP>0?'#dc2626':'#5a8a1a'}">${isrACargoP>0?'ISR a cargo del ejercicio':'Saldo a favor del contribuyente'}</td><td style="text-align:right;font-weight:700;font-size:13px;color:${isrACargoP>0?'#dc2626':'#5a8a1a'}">${isrACargoP>0?fmtMXN(isrACargoP):fmtMXN(saldoFavorP)}</td><td></td><td></td></tr>
-      <tr style="background:#f0f4ff"><td colspan="4" style="font-size:10px;color:#3B4BC8;padding:8px"><strong>CU = ${fmtMXN(utilidadFiscal)} ÷ ${fmtMXN(totalIngresos)} = ${cuPDF.toFixed(2)}%</strong> · Aplicable ejercicio ${proy.ejercicio+1} (Art. 14 LISR)</td><td></td></tr>
+      <tr style="background:#f0f4ff"><td colspan="4" style="font-size:10px;color:#3B4BC8;padding:8px"><strong>CU = ${fmtMXN(utilidadFiscal)} Ã· ${fmtMXN(totalIngresos)} = ${cuPDF.toFixed(2)}%</strong> Â· Aplicable ejercicio ${proy.ejercicio+1} (Art. 14 LISR)</td><td></td></tr>
     </tfoot>
   </table>
 </div>
@@ -4189,8 +4205,8 @@ tr:last-child td{border-bottom:none}
 ${histHTML}
 
 <div class="footer">
-  <div class="footer-left"><div><strong>MSST Consulting SC</strong></div><div>Asesoría Fiscal y Legal · Tijuana, Baja California</div><div>TaxIA día a día · ${hoy}</div></div>
-  <div style="text-align:right"><div class="conf-badge">CONFIDENCIAL</div><div class="disclaimer">Reporte estimativo. Sujeto a revisión al cierre del ejercicio.</div></div>
+  <div class="footer-left"><div><strong>MSST Consulting SC</strong></div><div>AsesorÃ­a Fiscal y Legal Â· Tijuana, Baja California</div><div>TaxIA dÃ­a a dÃ­a Â· ${hoy}</div></div>
+  <div style="text-align:right"><div class="conf-badge">CONFIDENCIAL</div><div class="disclaimer">Reporte estimativo. Sujeto a revisiÃ³n al cierre del ejercicio.</div></div>
 </div>
 
 </div></body></html>`);
@@ -4255,7 +4271,7 @@ async function renderNuevoCierre(id){
   const anioOpts=anios.map(y=>'<option value="'+y+'"'+(editing?editing.ejercicio===y?' selected':'':y===anioActual-1?' selected':'')+'>'+y+'</option>').join('');
   app.innerHTML=renderTopNav('proyeccion')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
-    <button class="btn btn-sm" onclick="renderCierres()">← Cierres</button>
+    <button class="btn btn-sm" onclick="renderCierres()">â Cierres</button>
     <div style="font-size:15px;font-weight:600">${editing?'Editar cierre fiscal':'Nuevo cierre fiscal'}</div>
   </div>
   <div class="card">
@@ -4269,11 +4285,11 @@ async function renderNuevoCierre(id){
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Tasa ISR (%)</div>
         <input id="cf-tasa" type="number" value="${editing?.tasa_isr||30}" min="0" max="100" step="0.01"></div>
     </div>
-    <div class="sec-label" style="margin-bottom:10px">Estado de Resultados — Cifras anuales</div>
+    <div class="sec-label" style="margin-bottom:10px">Estado de Resultados â Cifras anuales</div>
     <div class="grid2" style="margin-bottom:12px">
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Ingresos acumulables</div><input id="cf-ing" type="number" placeholder="0.00" value="${editing?.ingresos_acumulables||''}"></div>
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Costo de ventas</div><input id="cf-cv" type="number" placeholder="0.00" value="${editing?.costo_ventas||''}"></div>
-      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Gastos de operación</div><input id="cf-go" type="number" placeholder="0.00" value="${editing?.gastos_operacion||''}"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Gastos de operaciÃ³n</div><input id="cf-go" type="number" placeholder="0.00" value="${editing?.gastos_operacion||''}"></div>
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Otros ingresos</div><input id="cf-oi" type="number" placeholder="0.00" value="${editing?.otros_ingresos||''}"></div>
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Otros gastos</div><input id="cf-og" type="number" placeholder="0.00" value="${editing?.otros_gastos||''}"></div>
     </div>
@@ -4337,12 +4353,12 @@ async function renderDetalleCierre(id){
   const cierre=cierresCache.find(c=>c.id===id);if(!cierre)return;
   app.innerHTML=renderTopNav('proyeccion')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
-    <button class="btn btn-sm" onclick="renderCierres()">← Cierres</button>
-    <div style="font-size:15px;font-weight:600;flex:1">${escH(cierre.cliente_nombre)} — Ejercicio ${cierre.ejercicio}</div>
-    <button class="btn btn-sm btn-purple" onclick="renderNuevoCierre('${id}')">✏️ Editar</button>
+    <button class="btn btn-sm" onclick="renderCierres()">â Cierres</button>
+    <div style="font-size:15px;font-weight:600;flex:1">${escH(cierre.cliente_nombre)} â Ejercicio ${cierre.ejercicio}</div>
+    <button class="btn btn-sm btn-purple" onclick="renderNuevoCierre('${id}')">âï¸ Editar</button>
     <button id="btn-add-suma-cierre" class="btn btn-sm" style="background:#f0f7d4;color:#5a8a1a;border-color:#c5e0a0;font-size:11px">+ Ingreso acumulable</button>
-    <button id="btn-add-resta-cierre" class="btn btn-sm btn-danger" style="font-size:11px">+ Deducción</button>
-    <button class="btn btn-sm btn-danger" onclick="deleteCierre('${id}')">🗑</button>
+    <button id="btn-add-resta-cierre" class="btn btn-sm btn-danger" style="font-size:11px">+ DeducciÃ³n</button>
+    <button class="btn btn-sm btn-danger" onclick="deleteCierre('${id}')">ð</button>
   </div>
   <div class="loading" id="cfd-l"><span class="spinner"></span>Cargando...</div>
   <div id="cfd-body"></div>`;
@@ -4369,7 +4385,7 @@ async function renderDetalleCierre(id){
     '<div style="font-size:10px;color:#888">'+escH(a.referencia_legal||'')+'</div>'+
     (a.notas?'<div style="font-size:10px;color:#888;font-style:italic">'+escH(a.notas)+'</div>':'')+
     '<div style="font-size:12px;font-weight:600;color:'+(a.tipo==='suma'?'#3B6D11':'#A32D2D')+';min-width:80px;text-align:right">'+fmtMXN(a.importe)+'</div>'+
-    '<button class="btn btn-sm" style="font-size:10px;padding:2px 6px" id="edit-ajc-'+a.id+'" data-id="'+a.id+'" data-cierre="'+id+'">✏️</button>'+
+    '<button class="btn btn-sm" style="font-size:10px;padding:2px 6px" id="edit-ajc-'+a.id+'" data-id="'+a.id+'" data-cierre="'+id+'">âï¸</button>'+
   '</div>').join(''):'<div style="font-size:13px;color:#bbb;padding:8px 0">Sin ajustes registrados.</div>';
 
   const barPP='<div style="background:var(--color-background-secondary);border-radius:8px;padding:12px;margin-bottom:12px">'+
@@ -4401,18 +4417,18 @@ async function renderDetalleCierre(id){
     '<div class="metric" style="border-left:3px solid '+(isr_a_cargo>0?'#dc2626':'#8DC63F')+'"><div class="metric-label">'+(isr_a_cargo>0?'ISR a cargo':'Saldo a favor')+'</div><div class="metric-val" style="font-size:13px;color:'+(isr_a_cargo>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isr_a_cargo>0?isr_a_cargo:saldo_favor)+'</div></div>'+
   '</div>'+
   '<div class="card" style="margin-bottom:1rem">'+
-    '<div class="sec-label" style="margin-bottom:10px">Estado de Resultados — Ejercicio '+cierre.ejercicio+'</div>'+
+    '<div class="sec-label" style="margin-bottom:10px">Estado de Resultados â Ejercicio '+cierre.ejercicio+'</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
       '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Ingresos acumulables</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.ingresos_acumulables)+'</div></div>'+
       '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Costo de ventas</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.costo_ventas)+'</div></div>'+
-      '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Gastos de operación</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.gastos_operacion)+'</div></div>'+
+      '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Gastos de operaciÃ³n</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.gastos_operacion)+'</div></div>'+
       '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Otros ingresos</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.otros_ingresos)+'</div></div>'+
       '<div style="background:#f5f5f3;border-radius:6px;padding:8px"><div style="font-size:11px;color:#888">Otros gastos</div><div style="font-size:13px;font-weight:600">'+fmtMXN(cierre.otros_gastos)+'</div></div>'+
       '<div style="background:#EEEDFE;border-radius:6px;padding:8px"><div style="font-size:11px;color:#3B4BC8">Utilidad neta contable</div><div style="font-size:14px;font-weight:600;color:#3B4BC8">'+fmtMXN(uc)+'</div></div>'+
     '</div>'+
   '</div>'+
   '<div class="card" style="margin-bottom:1rem">'+
-    '<div class="sec-label" style="margin-bottom:10px">Conciliación contable-fiscal — Art. 9 LISR</div>'+
+    '<div class="sec-label" style="margin-bottom:10px">ConciliaciÃ³n contable-fiscal â Art. 9 LISR</div>'+
     ajRows+
     '<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid #e5e5e0">'+
       '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px"><span style="color:#888">Utilidad contable base</span><span style="font-weight:600">'+fmtMXN(uc)+'</span></div>'+
@@ -4429,13 +4445,13 @@ async function renderDetalleCierre(id){
     '</div>'+
   '</div>'+
   '<div class="card">'+
-    '<div class="sec-label" style="margin-bottom:10px">Coeficiente de utilidad — Art. 14 LISR</div>'+
+    '<div class="sec-label" style="margin-bottom:10px">Coeficiente de utilidad â Art. 14 LISR</div>'+
     '<div style="background:#EEEDFE;border-radius:8px;padding:14px">'+
       '<div style="font-size:12px;color:#3B4BC8;line-height:1.8">'+
         '<strong>Procedimiento:</strong><br>'+
         '1. Utilidad fiscal del ejercicio '+cierre.ejercicio+': '+fmtMXN(uf)+'<br>'+
         '2. Ingresos nominales del ejercicio '+cierre.ejercicio+': '+fmtMXN(cierre.ingresos_acumulables)+'<br>'+
-        '3. CU = '+fmtMXN(uf)+' ÷ '+fmtMXN(cierre.ingresos_acumulables)+' = <strong>'+cu.toFixed(2)+'%</strong><br>'+
+        '3. CU = '+fmtMXN(uf)+' Ã· '+fmtMXN(cierre.ingresos_acumulables)+' = <strong>'+cu.toFixed(2)+'%</strong><br>'+
         '<span style="font-size:11px;opacity:.8">Aplicable para pagos provisionales del ejercicio '+(cierre.ejercicio+1)+' (Art. 14 LISR)</span>'+
       '</div>'+
       '<div style="font-size:28px;font-weight:700;color:#3B4BC8;margin-top:8px">'+cu.toFixed(2)+'%</div>'+
@@ -4458,13 +4474,13 @@ async function renderDetalleCierre(id){
 async function agregarAjusteCierre(cierreId,tipoDefault){
   document.getElementById('modal-ajuste-cierre')?.remove();
   const sugerencias=tipoDefault==='suma'?
-    ['Ingresos acumulables no contabilizados (LISR Art. 16)','Ajuste anual por inflación acumulable (LISR Art. 44-46)','Utilidad por enajenación de activos (LISR Art. 18)','Ganancia cambiaria (LISR Art. 20)','Otros ingresos acumulables']:
-    ['Depreciación fiscal adicional (LISR Art. 31-38)','Ajuste anual por inflación deducible (LISR Art. 44-46)','PTU pagada deducible (LISR Art. 25 Fr. III)','Pérdida por enajenación de activos (LISR Art. 25 Fr. IV)','Deducción inmediata (LISR Art. 220)','Gastos no deducibles a revertir'];
+    ['Ingresos acumulables no contabilizados (LISR Art. 16)','Ajuste anual por inflaciÃ³n acumulable (LISR Art. 44-46)','Utilidad por enajenaciÃ³n de activos (LISR Art. 18)','Ganancia cambiaria (LISR Art. 20)','Otros ingresos acumulables']:
+    ['DepreciaciÃ³n fiscal adicional (LISR Art. 31-38)','Ajuste anual por inflaciÃ³n deducible (LISR Art. 44-46)','PTU pagada deducible (LISR Art. 25 Fr. III)','PÃ©rdida por enajenaciÃ³n de activos (LISR Art. 25 Fr. IV)','DeducciÃ³n inmediata (LISR Art. 220)','Gastos no deducibles a revertir'];
   const sugerOpts='<option value="">Elige sugerencia o escribe abajo...</option>'+sugerencias.map(s=>'<option value="'+escH(s)+'">'+escH(s)+'</option>').join('');
   const overlay=document.createElement('div');
   overlay.className='modal-overlay';overlay.id='modal-ajuste-cierre';
   overlay.innerHTML='<div class="modal-box">'+
-    '<div class="modal-title">'+(tipoDefault==='suma'?'Agregar ingreso acumulable':'Agregar deducción')+'</div>'+
+    '<div class="modal-title">'+(tipoDefault==='suma'?'Agregar ingreso acumulable':'Agregar deducciÃ³n')+'</div>'+
     '<div style="margin-bottom:8px"><div style="font-size:11px;color:#888;margin-bottom:3px">Sugerencias</div>'+
       '<select id="ajc-suger" style="width:100%" onchange="cfFillSuger(this)">'+sugerOpts+'</select></div>'+
     '<div style="margin-bottom:10px"><div style="font-size:11px;color:#888;margin-bottom:3px">Concepto *</div>'+
@@ -4543,7 +4559,7 @@ async function actualizarAjusteCierre(){
 }
 
 async function eliminarAjusteCierre(ajusteId,cierreId){
-  if(!confirm('¿Eliminar este ajuste?'))return;
+  if(!confirm('Â¿Eliminar este ajuste?'))return;
   document.getElementById('modal-ajuste-cierre')?.remove();
   await sbDelete('pf_cierres_ajustes','?id=eq.'+ajusteId);
   await recalcularCierre(cierreId);
@@ -4569,7 +4585,7 @@ async function recalcularCierre(cierreId){
 
 async function deleteCierre(id){
   const c=cierresCache.find(x=>x.id===id);
-  if(!confirm('¿Eliminar el cierre de '+(c?.cliente_nombre||'')+ ' '+(c?.ejercicio||'')+'?'))return;
+  if(!confirm('Â¿Eliminar el cierre de '+(c?.cliente_nombre||'')+ ' '+(c?.ejercicio||'')+'?'))return;
   await sbDelete('pf_cierres_ajustes','?cierre_id=eq.'+id);
   await sbDelete('pf_cierres','?id=eq.'+id);
   cierresCache=cierresCache.filter(x=>x.id!==id);
