@@ -366,7 +366,7 @@ function renderNewsCards() {
       </div>
       <div class="news-titulo">${escH(n.titulo||'')}</div>
       <div class="news-resumen">${escH(n.resumen||'')}</div>
-      <div class="news-link">Leer más â</div>
+      <div class="news-link">Leer más →</div>
     </a>`).join('');
 }
 
@@ -453,7 +453,7 @@ async function renderLogin(){
         </div>
         <div>
           <label class="login-label">Contraseña</label>
-          <input class="login-input" id="lpass" type="password" placeholder="â¢â¢â¢â¢â¢â¢â¢â¢" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+          <input class="login-input" id="lpass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
         </div>
         <div class="login-err" id="lerr">Correo o contraseña incorrectos.</div>
         <button class="login-btn-main" onclick="doLogin()" id="lbtn">Entrar</button>
@@ -985,7 +985,7 @@ async function renderDashboard(date){
   <div class="card" style="margin-bottom:1rem">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div class="sec-label">Devoluciones IVA activas</div>
-      <button class="btn btn-sm btn-purple" onclick="nav(\'devoluciones\')" style="font-size:11px">Ver todas â</button>
+      <button class="btn btn-sm btn-purple" onclick="nav(\'devoluciones\')" style="font-size:11px">Ver todas →</button>
     </div>
     <div class="table-wrap">
       <table class="data-table">
@@ -3863,7 +3863,7 @@ function initReporteGerencial(){
         '<label>Hasta <input type="date" id="_msd1" value="'+d1+'"></label>'+
         '<button class="_mub grn" onclick="applyDR()">â Aplicar</button>'+
         '<button class="_mub" onclick="navW(-1)">â Anterior</button>'+
-        '<button class="_mub" onclick="navW(1)">Siguiente â</button>'+
+        '<button class="_mub" onclick="navW(1)">Siguiente →</button>'+
         '<span style="width:1px;height:18px;background:#ddd;display:inline-block;margin:0 2px"></span>'+
         allU+
         '<button class="_mub" onclick="refreshReporteG()">ð Actualizar</button>'+
