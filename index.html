@@ -324,9 +324,25 @@ async function fetchNoticias() {
     const data = await res.json();
     if (data.noticias && Array.isArray(data.noticias)) {
       noticiasCache = data.noticias;
+      return;
     }
   } catch(e) {
-    console.warn('No se pudieron cargar noticias:', e);
+    console.warn('No se pudieron cargar noticias remotas, usando pool local:', e);
+  }
+  // Fallback: usar NEWS_POOL local
+  if (typeof NEWS_POOL !== 'undefined' && NEWS_POOL.length > 0) {
+    const today = new Date();
+    const dayIndex = today.getDay();
+    const start = (dayIndex * 2) % NEWS_POOL.length;
+    noticiasCache = NEWS_POOL.slice(start, start + 2).concat(
+      start + 2 > NEWS_POOL.length ? NEWS_POOL.slice(0, (start + 2) - NEWS_POOL.length) : []
+    ).map(n => ({
+      titulo: n.title,
+      resumen: n.summary,
+      fuente: n.src,
+      fecha: n.date,
+      url: n.url
+    }));
   }
 }
 
