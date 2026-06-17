@@ -452,12 +452,25 @@ async function renderLogin(){
     </div>
   </div>`;
   // Cargar noticias después de que el DOM esté listo
-  setTimeout(()=>{
-    fetchNoticias().then(()=>{
-      const newsEl=document.getElementById('news-container');
-      if(newsEl) newsEl.innerHTML=renderNewsCards();
+  // Mostrar noticias inmediatamente desde NEWS_POOL
+  if (typeof NEWS_POOL !== 'undefined' && NEWS_POOL.length > 0) {
+    var _d2 = new Date();
+    var _s2 = (_d2.getDay() * 2) % NEWS_POOL.length;
+    noticiasCache = NEWS_POOL.slice(_s2, _s2 + 3).map(function(n) {
+      return {titulo:n.title, resumen:n.summary, fuente:n.src, fecha:n.date, url:n.url};
     });
-  }, 100);
+    var _el2 = document.getElementById('news-container');
+    if (_el2) _el2.innerHTML = renderNewsCards();
+  }
+  // Luego intentar actualizar desde API (sin bloquear)
+  setTimeout(function(){
+    fetchNoticias().then(function(){
+      if (noticiasCache.length > 0) {
+        var newsEl = document.getElementById('news-container');
+        if (newsEl) newsEl.innerHTML = renderNewsCards();
+      }
+    }).catch(function(){});
+  }, 2000);
 }
 
 
