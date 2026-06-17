@@ -313,6 +313,14 @@ function nav(s){
 
 // Noticias dinámicas desde fiscalia.com vía Edge Function
 let noticiasCache = [];
+// Pre-cargar noticias desde NEWS_POOL local
+if (typeof NEWS_POOL !== 'undefined' && NEWS_POOL.length > 0) {
+  const today = new Date();
+  const start = (today.getDay() * 2) % NEWS_POOL.length;
+  noticiasCache = NEWS_POOL.slice(start, start + 3).map(n => ({
+    titulo: n.title, resumen: n.summary, fuente: n.src, fecha: n.date, url: n.url
+  }));
+}
 
 async function fetchNoticias() {
   try {
