@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TaxIA día a día</title>
-<!-- build: 20260406 -->
+<!-- build: 20260617 -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -117,6 +117,12 @@ table.data-table tr:hover td{background:#fafaf8}
 .slot-empty{background:#fafaf8;border:1.5px dashed #e0e0db;border-radius:10px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
 .slot-num{font-size:12px;color:#bbb;min-width:20px;text-align:center}
 @media(max-width:520px){.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.grid2{grid-template-columns:1fr}.bottom-nav{gap:4px}.bnav-item{padding:7px 10px;font-size:12px}.new-tarea-row{flex-direction:column}}
+
+/* ===== PORTADA MÓDULOS ===== */
+.mod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.mod-card{background:#fff;border:1.5px solid #e5e5e0;border-radius:14px;padding:20px 16px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.mod-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);transform:translateY(-2px)}
+@media(max-width:480px){.mod-grid{grid-template-columns:repeat(2,1fr)}.mod-card{padding:14px 12px}}
 </style>
 </head>
 <body>
@@ -143,6 +149,44 @@ const SB_KEY='sb_publishable_t3OG3DkHfRGxVA1hrnJUbg_kRZ6hbM8';
 const RESEND_KEY='re_af8ioNRf_PL4mNcXJTDq7eRk6t8HM7DZr';
 const FROM_EMAIL='onboarding@resend.dev';
 let session=null,usersCache={},clientesCache=[],gruposCache=[];
+
+// ===== MÓDULOS DEL SISTEMA =====
+const ALL_MODULES=[
+  {id:'plan',       label:'Mis Tareas',            icon:'✅', desc:'Planeación diaria y seguimiento de tareas',       color:'#3B4BC8', bg:'#EEEDFE'},
+  {id:'devoluciones',label:'Devoluciones IVA',     icon:'🔄', desc:'Gestión de trámites de devolución ante el SAT',  color:'#0C447C', bg:'#E6F1FB'},
+  {id:'proyeccion', label:'Proyección Fiscal',     icon:'📊', desc:'Estimación de ISR y escenarios fiscales',        color:'#5a8a1a', bg:'#EAF3DE'},
+  {id:'da_pm',      label:'Declaración Anual',     icon:'📋', desc:'Papeles de trabajo Declaración Anual PM',        color:'#633806', bg:'#FAEEDA'},
+  {id:'pp',         label:'Pagos Provisionales',   icon:'💳', desc:'Cálculo y control de pagos provisionales',       color:'#72243E', bg:'#FBEAF0'},
+  {id:'dashboard',  label:'Dashboard',             icon:'📈', desc:'Métricas y resumen general del despacho',        color:'#1a1a1a', bg:'#f5f5f3'},
+  {id:'clientes',   label:'Clientes',              icon:'🏢', desc:'Directorio de clientes y grupos',               color:'#374151', bg:'#f3f4f6'},
+  {id:'historial',  label:'Historial',             icon:'📅', desc:'Registro histórico de actividades',             color:'#374151', bg:'#f3f4f6'},
+  {id:'admin',      label:'Usuarios',              icon:'👥', desc:'Administración de usuarios y accesos',           color:'#374151', bg:'#f3f4f6'},
+  {id:'permisos',   label:'Permisos',              icon:'🔑', desc:'Control de acceso a módulos por usuario',       color:'#374151', bg:'#f3f4f6'},
+];
+// Módulos que el admin SIEMPRE tiene (no configurables)
+const ADMIN_ALWAYS=['plan','devoluciones','proyeccion','da_pm','pp','dashboard','clientes','historial','admin','permisos'];
+// Módulos por defecto para nuevos usuarios
+const DEFAULT_MODULES_BY_ROLE={
+  admin: ADMIN_ALWAYS,
+  manager: ['plan','devoluciones','proyeccion','dashboard','clientes','historial'],
+  assistant: ['plan','devoluciones','historial'],
+};
+
+function getUserModules(email){
+  const u=usersCache[email]||session;
+  if(!u) return [];
+  if(u.role==='admin') return ADMIN_ALWAYS;
+  // leer campo modulos del usuario (array guardado en Supabase)
+  if(u.modulos&&u.modulos.length) return u.modulos;
+  return DEFAULT_MODULES_BY_ROLE[u.role]||['plan'];
+}
+
+function userCanAccess(email,moduleId){
+  const u=usersCache[email]||session;
+  if(!u) return false;
+  if(u.role==='admin') return true;
+  return getUserModules(email).includes(moduleId);
+}
 const COLORS={'av-m':'#7F77DD','av-a':'#8DC63F','av-y':'#EF9F27','av-b':'#D4537E','av-x':'#378ADD'};
 const app=document.getElementById('app');
 
@@ -206,27 +250,22 @@ async function ensureArrastre(email){
 }
 
 function renderTopNav(active){
-  const items=[
-    {id:'dashboard',label:'Dashboard',roles:['admin','manager']},
-    {id:'plan',label:'Mis tareas',roles:['admin','manager','assistant']},
-    {id:'clientes',label:'Clientes',roles:['admin','manager','assistant']},
-    {id:'historial',label:'Historial',roles:['admin','manager','assistant']},
-    {id:'devoluciones',label:'Devoluciones IVA',roles:['admin','manager','assistant']},
-    {id:'proyeccion',label:'Proyección Fiscal',roles:['admin','manager']},
-    {id:'admin',label:'Usuarios',roles:['admin']}
-  ];
+  const navOrder=['dashboard','plan','clientes','historial','devoluciones','proyeccion','da_pm','pp','admin','permisos'];
+  const navLabels={dashboard:'Dashboard',plan:'Mis Tareas',clientes:'Clientes',historial:'Historial',devoluciones:'Devoluciones IVA',proyeccion:'Proyección Fiscal',da_pm:'Dec. Anual',pp:'Pagos Prov.',admin:'Usuarios',permisos:'Permisos'};
+  const items=navOrder.filter(id=>userCanAccess(session.email,id)).map(id=>({id,label:navLabels[id]||id}));
   return `<div class="nav">
     <div style="display:flex;align-items:center;gap:10px">
       <div style="font-size:16px;font-weight:700;color:#3B4BC8">T<span style="color:#8DC63F">a</span><span style="color:#8DC63F">x</span>IA <span style="color:#8DC63F">día a día</span></div>
       <div style="font-size:13px;color:#888">${formatDate(todayKey())}</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
-      <div class="avatar ${av(session.av)}" style="width:32px;height:32px;font-size:12px">${session.initials||'??'}</div>
+      <div class="avatar ${av(session.av)}" style="width:32px;height:32px;font-size:12px" onclick="renderPortada()" title="Portada de módulos" style="cursor:pointer">${session.initials||'??'}</div>
+      <button class="btn btn-sm btn-purple" onclick="renderPortada()" style="font-size:11px">⬡ Módulos</button>
       <button class="btn btn-sm" onclick="doLogout()">Salir</button>
     </div>
   </div>
   <div class="bottom-nav">
-    ${items.filter(i=>i.roles.includes(session.role)).map(i=>`<div class="bnav-item${active===i.id?' on':''}" onclick="nav('${i.id}')">${i.label}</div>`).join('')}
+    ${items.map(i=>`<div class="bnav-item${active===i.id?' on':''}" onclick="nav('${i.id}')">${i.label}</div>`).join('')}
   </div>`;
 }
 
@@ -298,6 +337,7 @@ function startInactivityWatcher(){
   resetInactivityTimer();
 }
 function nav(s){
+  if(!userCanAccess(session.email,s)&&s!=='cierres'){renderPortada();return;}
   const t=todayKey();
   if(s==='dashboard') renderDashboard(t);
   else if(s==='plan') renderMisPlan(null);
@@ -307,6 +347,10 @@ function nav(s){
   else if(s==='proyeccion') renderProyeccion();
   else if(s==='cierres') renderCierres();
   else if(s==='admin') renderAdmin();
+  else if(s==='permisos') renderPermisos();
+  else if(s==='da_pm') renderDecAnual();
+  else if(s==='pp') renderPagosProv();
+  else if(s==='portada') renderPortada();
 }
 
 
@@ -487,8 +531,8 @@ async function doLogin(){
     allU.forEach(u=>{usersCache[u.email]=u;});
     await registrarLogin(session.email);
     startInactivityWatcher();
-    await mostrarAvisoBienvenida();
     initReporteGerencial();
+    renderPortada();
   }catch(e){
     console.error('doLogin error:',e.message,e.stack);
     document.getElementById('lerr').textContent='Error: '+e.message;document.getElementById('lerr').style.display='block';btn.innerHTML='Entrar';btn.disabled=false;
@@ -4610,6 +4654,317 @@ async function deleteCierre(id){
   await sbDelete('pf_cierres','?id=eq.'+id);
   cierresCache=cierresCache.filter(x=>x.id!==id);
   renderCierres();
+}
+
+
+// ===== PORTADA DE MÓDULOS =====
+function renderPortada(){
+  if(!session){renderLogin();return;}
+  const mods=getUserModules(session.email);
+  const hora=new Date().getHours();
+  const saludo=hora<12?'Buenos días':hora<19?'Buenas tardes':'Buenas noches';
+  const u=usersCache[session.email]||session;
+  const nombre=u.name?u.name.split(' ')[0]:session.email;
+  const modItems=ALL_MODULES.filter(m=>mods.includes(m.id));
+  const grid=modItems.map(m=>`
+    <div onclick="nav('${m.id}')" style="background:#fff;border:1.5px solid #e5e5e0;border-radius:14px;padding:20px 16px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;align-items:flex-start;gap:6px"
+      onmouseover="this.style.borderColor='${m.color}';this.style.boxShadow='0 4px 16px rgba(0,0,0,.08)'"
+      onmouseout="this.style.borderColor='#e5e5e0';this.style.boxShadow='none'">
+      <div style="width:40px;height:40px;border-radius:10px;background:${m.bg};display:flex;align-items:center;justify-content:center;font-size:20px">${m.icon}</div>
+      <div style="font-size:14px;font-weight:700;color:#1a1a1a;margin-top:4px">${m.label}</div>
+      <div style="font-size:11px;color:#888;line-height:1.4">${m.desc}</div>
+    </div>`).join('');
+  app.innerHTML=`
+    <div style="max-width:900px;margin:0 auto;padding:2rem 1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:12px;color:#888;margin-bottom:2px">${saludo} — ${new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',weekday:'long',day:'numeric',month:'long'})}</div>
+          <div style="font-size:24px;font-weight:700;color:#1a1a1a">Hola, ${escH(nombre)} 👋</div>
+          <div style="font-size:13px;color:#888;margin-top:4px">TaxIA · MSST Consulting SC</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="avatar ${av(session.av)}" style="width:42px;height:42px;font-size:14px">${session.initials||'??'}</div>
+          <button class="btn btn-sm" onclick="doLogout()">Salir</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+        ${grid}
+      </div>
+      <div style="margin-top:2rem;text-align:center;font-size:11px;color:#bbb">TaxIA día a día · MSST Consulting SC · v2.0</div>
+    </div>`;
+}
+
+// ===== PERMISOS DE MÓDULOS (solo admin) =====
+async function renderPermisos(){
+  if(session.role!=='admin'){renderPortada();return;}
+  app.innerHTML=renderTopNav('permisos')+`<div class="loading" id="perm-load"><span class="spinner"></span>Cargando usuarios...</div><div id="perm-content"></div>`;
+  const users=await sbGet('users','?select=*&order=role.asc');
+  (users||[]).forEach(u=>{usersCache[u.email]=u;});
+  document.getElementById('perm-load').style.display='none';
+  const nonAdmin=(users||[]).filter(u=>u.role!=='admin');
+  if(!nonAdmin.length){
+    document.getElementById('perm-content').innerHTML='<div class="card" style="text-align:center;color:#888;padding:2rem">No hay colaboradores configurados aún.</div>';
+    return;
+  }
+  const availMods=ALL_MODULES.filter(m=>!['admin','permisos'].includes(m.id));
+  const cards=nonAdmin.map(u=>{
+    const mods=u.modulos&&u.modulos.length?u.modulos:DEFAULT_MODULES_BY_ROLE[u.role]||['plan'];
+    const checks=availMods.map(m=>`
+      <label style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;cursor:pointer;background:#fafafa;border:1px solid #f0f0ec;font-size:12px">
+        <input type="checkbox" data-email="${escH(u.email)}" data-mod="${m.id}" ${mods.includes(m.id)?'checked':''} onchange="permToggle(this)">
+        <span>${m.icon} ${m.label}</span>
+      </label>`).join('');
+    return `<div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div class="avatar ${av(u.av)}" style="width:36px;height:36px;font-size:12px">${u.initials||'??'}</div>
+        <div>
+          <div style="font-size:14px;font-weight:600">${escH(u.name)}</div>
+          <div style="font-size:11px;color:#888">${escH(u.email)} · ${u.role==='manager'?'Líder':'Consultor'}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px">
+        ${checks}
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('perm-content').innerHTML=`
+    <div class="card" style="background:#3B4BC8;color:#fff;border-color:#3B4BC8;margin-bottom:0">
+      <div style="font-size:13px;font-weight:600">🔑 Control de acceso a módulos</div>
+      <div style="font-size:11px;opacity:.8;margin-top:2px">Los cambios se guardan automáticamente. Solo tú (Director) ves esta sección.</div>
+    </div>
+    ${cards}`;
+}
+
+async function permToggle(checkbox){
+  const email=checkbox.dataset.email;
+  const mod=checkbox.dataset.mod;
+  const u=usersCache[email];
+  if(!u) return;
+  let mods=u.modulos&&u.modulos.length?[...u.modulos]:[...(DEFAULT_MODULES_BY_ROLE[u.role]||['plan'])];
+  if(checkbox.checked){if(!mods.includes(mod))mods.push(mod);}
+  else{mods=mods.filter(m=>m!==mod);}
+  u.modulos=mods;
+  usersCache[email]=u;
+  await sbPatch('users','?email=eq.'+encodeURIComponent(email),{modulos:JSON.stringify(mods)});
+  // Feedback visual
+  const lbl=checkbox.closest('label');
+  if(lbl){lbl.style.background=checkbox.checked?'#EAF3DE':'#fafafa';lbl.style.borderColor=checkbox.checked?'#3B6D11':'#f0f0ec';setTimeout(()=>{lbl.style.background='#fafafa';lbl.style.borderColor='#f0f0ec';},800);}
+}
+
+// ===== DECLARACIÓN ANUAL PM (iframe integrado) =====
+function renderDecAnual(){
+  if(!userCanAccess(session.email,'da_pm')){renderPortada();return;}
+  app.innerHTML=renderTopNav('da_pm')+`
+    <div class="card" style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
+      <div style="font-size:13px;font-weight:600;color:#633806">📋 Declaración Anual PM</div>
+      <button class="btn btn-sm" onclick="renderPortada()">← Módulos</button>
+    </div>
+    <div style="background:#fff;border:1px solid #e5e5e0;border-radius:12px;overflow:hidden;min-height:85vh">
+      <iframe id="da-pm-frame" src="da_pm.html" style="width:100%;height:85vh;border:none" title="Declaración Anual PM"></iframe>
+    </div>`;
+}
+
+// ===== PAGOS PROVISIONALES =====
+let ppCache=[];
+let ppClienteActivo=null;
+
+const PP_MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const PP_PERIODOS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+async function renderPagosProv(){
+  if(!userCanAccess(session.email,'pp')){renderPortada();return;}
+  app.innerHTML=renderTopNav('pp')+`<div class="loading" id="pp-load"><span class="spinner"></span>Cargando...</div><div id="pp-content"></div>`;
+  await loadCaches();
+  const ejercicio=new Date().getFullYear();
+  const [pagos]=await Promise.all([
+    sbGet('pp_pagos','?select=*&order=ejercicio.desc,mes.asc')
+  ]);
+  ppCache=pagos||[];
+  document.getElementById('pp-load').style.display='none';
+  renderPPList(ejercicio);
+}
+
+function renderPPList(ejercicio){
+  const ejercicios=[...new Set(ppCache.map(p=>p.ejercicio))].sort((a,b)=>b-a);
+  if(!ejercicios.includes(ejercicio))ejercicios.unshift(ejercicio);
+  const tabsEj=ejercicios.map(ej=>`<div class="tab${ej===ejercicio?' on':''}" onclick="renderPPList(${ej})">${ej}</div>`).join('');
+  const pagosFiltrados=ppCache.filter(p=>p.ejercicio===ejercicio);
+  // Agrupar por cliente
+  const byCliente={};
+  pagosFiltrados.forEach(p=>{
+    if(!byCliente[p.client_id]) byCliente[p.client_id]={cliente_nombre:p.cliente_nombre,client_id:p.client_id,pagos:[]};
+    byCliente[p.client_id].pagos.push(p);
+  });
+  const clientesConPagos=Object.values(byCliente);
+  const clientes=clientesCache.filter(c=>c.activo!==false);
+  const clientesSinPagos=clientes.filter(c=>!byCliente[c.id]);
+
+  const rowsExist=clientesConPagos.map(g=>{
+    const totalPagado=g.pagos.reduce((s,p)=>s+(parseFloat(p.monto_pagado)||0),0);
+    const mesesPagados=g.pagos.filter(p=>p.monto_pagado>0).length;
+    const mesActual=new Date().getMonth()+1;
+    const mesesVencidos=g.pagos.filter(p=>p.mes<mesActual&&(!p.monto_pagado||p.monto_pagado<=0)).length;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f0ec;cursor:pointer" onclick="renderPPDetalle(${g.client_id},${ejercicio})">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">${escH(g.cliente_nombre)}</div>
+        <div style="font-size:11px;color:#888;margin-top:2px">${mesesPagados} meses pagados · ${fmtMXN(totalPagado)} total pagado</div>
+      </div>
+      ${mesesVencidos>0?`<span style="background:#FCEBEB;color:#A32D2D;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">${mesesVencidos} vencido${mesesVencidos!==1?'s':''}</span>`:'<span style="background:#EAF3DE;color:#3B6D11;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">Al día</span>'}
+      <span style="color:#888;font-size:14px">›</span>
+    </div>`;
+  }).join('');
+
+  const rowsNew=clientesSinPagos.slice(0,8).map(c=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0ec;cursor:pointer" onclick="renderPPDetalle(${c.id},${ejercicio})">
+      <div style="flex:1;font-size:13px;color:#888">${escH(c.nombre||c.razon_social||'Cliente')}</div>
+      <span style="background:#F1EFE8;color:#5F5E5A;padding:2px 8px;border-radius:999px;font-size:10px">Sin registro</span>
+      <span style="color:#888;font-size:14px">›</span>
+    </div>`).join('');
+
+  document.getElementById('pp-content').innerHTML=`
+    <div class="card" style="background:#72243E;color:#fff;border-color:#72243E;margin-bottom:0.75rem">
+      <div style="font-size:14px;font-weight:700">💳 Pagos Provisionales ISR</div>
+      <div style="font-size:11px;opacity:.8;margin-top:2px">Art. 14 LISR — Régimen General de Ley</div>
+    </div>
+    <div class="tab-bar">${tabsEj}<button class="btn btn-sm btn-primary" onclick="ppNuevoEjercicio()">+ Ejercicio</button></div>
+    ${clientesConPagos.length?`<div class="card"><div class="sec-label">Clientes con seguimiento — ${ejercicio}</div>${rowsExist}</div>`:''}
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="sec-label" style="margin-bottom:0">Agregar cliente a ${ejercicio}</div>
+      </div>
+      ${rowsNew||'<div style="font-size:12px;color:#888">Todos los clientes ya tienen registro en este ejercicio.</div>'}
+    </div>`;
+}
+
+async function renderPPDetalle(clientId,ejercicio){
+  const cliente=clientesCache.find(c=>c.id===clientId)||{id:clientId,nombre:'Cliente',razon_social:''};
+  const nombreCliente=cliente.nombre||cliente.razon_social||'Cliente';
+  app.innerHTML=renderTopNav('pp')+`
+    <div class="card" style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
+      <button class="btn btn-sm" onclick="renderPagosProv()">← Pagos Provisionales</button>
+      <div style="font-size:13px;font-weight:600">${escH(nombreCliente)} · ${ejercicio}</div>
+      <button class="btn btn-sm btn-primary" onclick="ppGenerarMeses(${clientId},'${escH(nombreCliente)}',${ejercicio})">+ Inicializar meses</button>
+    </div>
+    <div id="pp-detalle-content"><div class="loading"><span class="spinner"></span>Cargando...</div></div>`;
+  const pagos=ppCache.filter(p=>p.client_id===clientId&&p.ejercicio===ejercicio);
+  renderPPTabla(pagos,clientId,nombreCliente,ejercicio);
+}
+
+function renderPPTabla(pagos,clientId,nombreCliente,ejercicio){
+  const mesActual=new Date().getMonth()+1;
+  // Generar 12 filas, con datos si existen
+  const filas=PP_MESES.map((mes,i)=>{
+    const numMes=i+1;
+    const p=pagos.find(x=>x.mes===numMes)||{mes:numMes,client_id:clientId,ejercicio,cliente_nombre:nombreCliente,ingresos_acumulados:0,deducciones_autorizadas:0,coeficiente_utilidad:0,base_gravable:0,isr_determinado:0,isr_retenido:0,monto_pagado:0,fecha_pago:'',status:'pendiente'};
+    const vencido=numMes<mesActual&&(!p.monto_pagado||p.monto_pagado<=0);
+    const pagado=p.monto_pagado>0;
+    const statusColor=pagado?'#3B6D11':vencido?'#A32D2D':'#633806';
+    const statusBg=pagado?'#EAF3DE':vencido?'#FCEBEB':'#FAEEDA';
+    const statusLabel=pagado?'Pagado':vencido?'Vencido':'Pendiente';
+    return `<tr style="background:${vencido&&!pagado?'#fff8f8':'#fff'}">
+      <td style="padding:6px 8px;font-size:12px;font-weight:600;color:#1a1a1a">${mes}</td>
+      <td style="padding:6px 8px"><input type="number" value="${p.ingresos_acumulados||''}" placeholder="0.00" step="0.01"
+        style="width:100px;font-size:11px;padding:3px 6px;border:1px solid #e0e0db;border-radius:4px;text-align:right"
+        onchange="ppUpdateField(${clientId},${numMes},${ejercicio},'ingresos_acumulados',parseFloat(this.value)||0)"></td>
+      <td style="padding:6px 8px"><input type="number" value="${p.coeficiente_utilidad||''}" placeholder="0.0000" step="0.0001" min="0" max="1"
+        style="width:80px;font-size:11px;padding:3px 6px;border:1px solid #e0e0db;border-radius:4px;text-align:right"
+        onchange="ppUpdateField(${clientId},${numMes},${ejercicio},'coeficiente_utilidad',parseFloat(this.value)||0)"></td>
+      <td style="padding:6px 8px;font-size:11px;color:#888;text-align:right">${fmtMXN((p.ingresos_acumulados||0)*(p.coeficiente_utilidad||0))}</td>
+      <td style="padding:6px 8px"><input type="number" value="${p.isr_retenido||''}" placeholder="0.00" step="0.01"
+        style="width:90px;font-size:11px;padding:3px 6px;border:1px solid #e0e0db;border-radius:4px;text-align:right"
+        onchange="ppUpdateField(${clientId},${numMes},${ejercicio},'isr_retenido',parseFloat(this.value)||0)"></td>
+      <td style="padding:6px 8px"><input type="number" value="${p.monto_pagado||''}" placeholder="0.00" step="0.01"
+        style="width:100px;font-size:11px;padding:3px 6px;border:1px solid ${pagado?'#3B6D11':'#e0e0db'};border-radius:4px;text-align:right;background:${pagado?'#f0f7f0':'#fff'}"
+        onchange="ppUpdateField(${clientId},${numMes},${ejercicio},'monto_pagado',parseFloat(this.value)||0)"></td>
+      <td style="padding:6px 8px"><input type="date" value="${p.fecha_pago||''}"
+        style="font-size:11px;padding:3px 6px;border:1px solid #e0e0db;border-radius:4px"
+        onchange="ppUpdateField(${clientId},${numMes},${ejercicio},'fecha_pago',this.value)"></td>
+      <td style="padding:6px 8px;text-align:center"><span style="background:${statusBg};color:${statusColor};padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">${statusLabel}</span></td>
+    </tr>`;
+  }).join('');
+
+  const totalPagado=pagos.reduce((s,p)=>s+(parseFloat(p.monto_pagado)||0),0);
+  const totalISR=pagos.reduce((s,p)=>s+(parseFloat(p.isr_determinado)||((parseFloat(p.ingresos_acumulados)||0)*(parseFloat(p.coeficiente_utilidad)||0)*0.30)),0);
+
+  document.getElementById('pp-detalle-content').innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:1rem">
+      <div class="kpi"><div class="kpi-label">ISR Determinado Est.</div><div class="kpi-val" style="color:#dc2626">${fmtMXN(totalISR)}</div></div>
+      <div class="kpi"><div class="kpi-label">Pagado en el año</div><div class="kpi-val" style="color:#3B6D11">${fmtMXN(totalPagado)}</div></div>
+      <div class="kpi"><div class="kpi-label">Saldo pendiente</div><div class="kpi-val" style="color:${totalISR-totalPagado>0?'#dc2626':'#3B6D11'}">${fmtMXN(Math.max(0,totalISR-totalPagado))}</div></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;min-width:700px">
+          <thead style="background:#72243E;color:#fff">
+            <tr>
+              <th style="padding:8px 8px;font-size:11px;text-align:left">Mes</th>
+              <th style="padding:8px 8px;font-size:11px;text-align:right">Ingresos Acum.</th>
+              <th style="padding:8px 8px;font-size:11px;text-align:right">CU</th>
+              <th style="padding:8px 8px;font-size:11px;text-align:right">Base Grav.</th>
+              <th style="padding:8px 8px;font-size:11px;text-align:right">ISR Retenido</th>
+              <th style="padding:8px 8px;font-size:11px;text-align:right">Monto Pagado</th>
+              <th style="padding:8px 8px;font-size:11px;text-align:left">Fecha Pago</th>
+              <th style="padding:8px 8px;font-size:11px;text-align:center">Status</th>
+            </tr>
+          </thead>
+          <tbody>${filas}</tbody>
+          <tfoot>
+            <tr style="background:#f5f5f3;font-weight:700">
+              <td style="padding:8px 8px;font-size:12px">TOTAL</td>
+              <td colspan="4"></td>
+              <td style="padding:8px 8px;font-size:12px;text-align:right;color:#72243E">${fmtMXN(totalPagado)}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+    <div class="card" style="background:#FBEAF0;border-color:#e8b4c8">
+      <div style="font-size:11px;color:#72243E;font-weight:600">📌 Art. 14 LISR — Pagos provisionales</div>
+      <div style="font-size:11px;color:#72243E;margin-top:4px;line-height:1.5">CU = Utilidad fiscal / Ingresos acumulables del ejercicio anterior. Base gravable = Ingresos acumulados × CU. ISR a pagar = Base × 30% menos ISR retenido y pagos anteriores. Fecha límite: día 17 del mes siguiente.</div>
+    </div>`;
+}
+
+let ppUpdateTimer={};
+function ppUpdateField(clientId,mes,ejercicio,campo,valor){
+  const key=`${clientId}-${mes}-${ejercicio}`;
+  clearTimeout(ppUpdateTimer[key]);
+  ppUpdateTimer[key]=setTimeout(async()=>{
+    const idx=ppCache.findIndex(p=>p.client_id===clientId&&p.mes===mes&&p.ejercicio===ejercicio);
+    if(idx>=0){
+      ppCache[idx]={...ppCache[idx],[campo]:valor};
+      await sbPatch('pp_pagos',`?client_id=eq.${clientId}&mes=eq.${mes}&ejercicio=eq.${ejercicio}`,{[campo]:valor,updated_at:nowISO()});
+    } else {
+      const nuevo={client_id:clientId,mes,ejercicio,cliente_nombre:(clientesCache.find(c=>c.id===clientId)||{}).nombre||'',ingresos_acumulados:0,coeficiente_utilidad:0,isr_retenido:0,monto_pagado:0,fecha_pago:'',status:'pendiente',[campo]:valor,updated_at:nowISO()};
+      const res=await sbPost('pp_pagos',nuevo);
+      const data=await res.json();
+      if(data&&data[0])ppCache.push(data[0]);
+    }
+  },800);
+}
+
+async function ppGenerarMeses(clientId,nombreCliente,ejercicio){
+  const existentes=ppCache.filter(p=>p.client_id===clientId&&p.ejercicio===ejercicio);
+  const mesesExist=new Set(existentes.map(p=>p.mes));
+  const nuevos=[];
+  for(let m=1;m<=12;m++){
+    if(!mesesExist.has(m)){
+      nuevos.push({client_id:clientId,mes:m,ejercicio,cliente_nombre:nombreCliente,ingresos_acumulados:0,coeficiente_utilidad:0,isr_retenido:0,monto_pagado:0,fecha_pago:'',status:'pendiente',updated_at:nowISO()});
+    }
+  }
+  if(nuevos.length){
+    const res=await fetch(`${SB_URL}/rest/v1/pp_pagos`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(nuevos)});
+    const data=await res.json();
+    if(Array.isArray(data)) ppCache.push(...data);
+  }
+  const pagos=ppCache.filter(p=>p.client_id===clientId&&p.ejercicio===ejercicio);
+  renderPPTabla(pagos,clientId,nombreCliente,ejercicio);
+}
+
+async function ppNuevoEjercicio(){
+  const ej=prompt('Ejercicio fiscal (año):',new Date().getFullYear());
+  if(!ej||isNaN(parseInt(ej)))return;
+  renderPPList(parseInt(ej));
 }
 
 
