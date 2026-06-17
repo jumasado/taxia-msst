@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TaxIA día a día</title>
@@ -107,7 +106,7 @@ table.data-table tr:hover td{background:#fafaf8}
 .tarea-header{display:flex;align-items:flex-start;gap:10px}
 .tarea-check{width:20px;height:20px;border-radius:50%;border:2px solid #d1d1d1;flex-shrink:0;margin-top:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
 .tarea-check.checked{background:#8DC63F;border-color:#8DC63F}
-.tarea-check.checked::after{content:'â';color:#fff;font-size:11px;font-weight:700}
+.tarea-check.checked::after{content:'✓';color:#fff;font-size:11px;font-weight:700}
 .tarea-check.disabled{cursor:default;opacity:.4}
 .tarea-body{flex:1}
 .tarea-desc{font-size:14px;font-weight:500;color:#1a1a1a;margin-bottom:4px}
@@ -124,20 +123,20 @@ table.data-table tr:hover td{background:#fafaf8}
 <div class="app" id="app"></div>
 <script>
 const NEWS_POOL=[
-  {src:'RMF 2026 / Siempre Al Día',date:'Mar 2026',title:'Días inhábiles SAT: 2 y 3 de abril 2026 (Jueves y Viernes Santo)',summary:'La Regla 2.1.6 de la RMF 2026 declara inhábiles el 2 y 3 de abril para actos y trámites ante el SAT. Ajusta tus plazos de presentación y pago si vencen en esas fechas.',url:'https://www.sat.gob.mx/consulta/65334/conoce-los-dias-inhabiles'},
-  {src:'BBVA / SAT',date:'Mar 2026',title:'Plataformas digitales obligadas a dar acceso al SAT desde abril 2026',summary:'A partir del 1 de abril de 2026, las plataformas digitales de servicios e intermediación deben permitir al SAT acceso a información de operaciones en tiempo real conforme al CFDI 4.0.',url:'https://www.sat.gob.mx'},
-  {src:'El Imparcial',date:'9 Mar 2026',title:'SAT intensifica vigilancia de transferencias electrónicas en 2026',summary:'El SAT mantiene monitoreo de operaciones electrónicas y reporta movimientos inusuales. Depósitos en efectivo >$15,000 mensuales son reportados automáticamente por los bancos.',url:'https://www.elimparcial.com'},
-  {src:'PRODECON',date:'Mar 2026',title:'PRODECON habilita micrositio guía para declaración anual 2026',summary:'La Procuraduría de la Defensa del Contribuyente (PRODECON) habilitó un micrositio con guía paso a paso para contribuyentes en la presentación de su declaración anual ante el SAT.',url:'https://www.prodecon.gob.mx'},
   {src:'SAT',date:'Feb 2026',title:'Nueva versión del CFDI 4.0: cambios en catálogos de uso',summary:'El SAT publicó actualizaciones a los catálogos del CFDI 4.0, incluyendo nuevos usos de comprobante y modificaciones a la validación de RFC receptor para personas morales.',url:'https://www.sat.gob.mx'},
   {src:'El Financiero',date:'Feb 2026',title:'ISR personas físicas: deducciones personales que no debes olvidar',summary:'Gastos médicos, dentales, hospitalarios, colegiaturas y donativos son deducibles en la declaración anual. El límite de deducciones es el 15% del ingreso total o 5 UMAs anuales.',url:'https://www.elfinanciero.com.mx'},
-  {src:'SAT / DOF',date:'Ene 2026',title:'Actualización de la UMA para 2026: impacto en obligaciones fiscales',summary:'El INEGI publicó el nuevo valor de la UMA 2026 en $113.14 diarios. Este valor impacta límites de deducciones personales, multas fiscales y aportaciones de seguridad social.',url:'https://www.dof.gob.mx'},
-  {src:'IMSS',date:'Ene 2026',title:'IMSS: nuevas tablas de cuotas obrero-patronales 2026',summary:'El IMSS publicó las tablas actualizadas de cuotas para 2026 conforme al SBC actualizado. Los patrones deben revisar sus determinaciones de cuotas y ajustar sus sistemas de nómina.',url:'https://www.imss.gob.mx'},
-  {src:'El Informador',date:'Ene 2026',title:'Buzón Tributario: SAT intensifica notificaciones electrónicas en 2026',summary:'El SAT ha incrementado el uso del Buzón Tributario para enviar requerimientos y actos administrativos. Se recomienda revisar el buzón al menos cada 3 días para evitar notificaciones por estrados.',url:'https://www.informador.mx'},
-  {src:'SAT',date:'Dic 2025',title:'Complemento Carta Porte 3.1 obligatorio desde enero 2026',summary:'A partir del 1 de enero de 2026, el Complemento Carta Porte versión 3.1 es obligatorio para el transporte de mercancías por carretera, incluyendo nuevos campos de ubicación y autotransporte.',url:'https://www.sat.gob.mx'},
-  {src:'SHCP',date:'Dic 2025',title:'Presupuesto de Egresos 2026: impacto en deducciones corporativas',summary:'El PEF 2026 modifica algunas partidas deducibles para empresas del sector energético y financiero. Los contadores deben revisar los artículos 28 y 32 de la LISR actualizados.',url:'https://www.shcp.gob.mx'},
-  {src:'SAT',date:'Nov 2025',title:'Régimen Simplificado de Confianza: ajustes para 2026',summary:'El SAT publicó actualizaciones al RESICO para personas físicas y morales. Se amplían los sectores elegibles y se modifica el cálculo de pagos provisionales para contribuyentes con ingresos mixtos.',url:'https://www.sat.gob.mx'},
-  {src:'INFONAVIT',date:'Nov 2025',title:'INFONAVIT actualiza tabla de aportaciones patronales 2026',summary:'Las aportaciones al INFONAVIT se mantienen en 5% del SBC, pero se actualizan los topes y procedimientos de determinación conforme a los cambios en la UMA y el salario mínimo 2026.',url:'https://www.infonavit.org.mx'},
-  {src:'DOF',date:'Oct 2025',title:'Reforma al CFF: nuevas facultades de comprobación del SAT',summary:'El Diario Oficial publicó reformas al Código Fiscal de la Federación que amplían las facultades de revisión electrónica del SAT y reducen los plazos de respuesta para aclaraciones de contribuyentes.',url:'https://www.dof.gob.mx'}
+  {src:'RMF 2026',date:'Mar 2026',title:'Días inhábiles SAT: 2 y 3 de abril 2026',summary:'La Regla 2.1.6 de la RMF 2026 declara inhábiles el 2 y 3 de abril para actos y trámites ante el SAT. Ajusta tus plazos de presentación y pago si vencen en esas fechas.',url:'https://www.sat.gob.mx'},
+  {src:'BBVA / SAT',date:'Mar 2026',title:'Plataformas digitales obligadas a dar acceso al SAT desde abril 2026',summary:'A partir del 1 de abril de 2026, las plataformas digitales deben permitir al SAT acceso a información de operaciones en tiempo real conforme al CFDI 4.0.',url:'https://www.sat.gob.mx'},
+  {src:'El Imparcial',date:'Mar 2026',title:'SAT intensifica vigilancia de transferencias electrónicas en 2026',summary:'El SAT mantiene monitoreo de operaciones electrónicas y reporta movimientos inusuales. Depósitos en efectivo mayores a $15,000 mensuales son reportados automáticamente.',url:'https://www.elimparcial.com'},
+  {src:'PRODECON',date:'Mar 2026',title:'PRODECON habilita micrositio para declaración anual 2026',summary:'La Procuraduría de la Defensa del Contribuyente habilitó un micrositio con guía paso a paso para contribuyentes en la presentación de su declaración anual ante el SAT.',url:'https://www.prodecon.gob.mx'},
+  {src:'SAT',date:'Ene 2026',title:'Actualización de la UMA para 2026: impacto en obligaciones fiscales',summary:'El INEGI publicó el nuevo valor de la UMA 2026 en $113.14 diarios. Este valor impacta límites de deducciones personales, multas fiscales y aportaciones de seguridad social.',url:'https://www.dof.gob.mx'},
+  {src:'IMSS',date:'Ene 2026',title:'IMSS: nuevas tablas de cuotas obrero-patronales 2026',summary:'El IMSS publicó las tablas actualizadas de cuotas para 2026. Los patrones deben revisar sus determinaciones de cuotas y ajustar sus sistemas de nómina.',url:'https://www.imss.gob.mx'},
+  {src:'SAT',date:'Dic 2025',title:'Complemento Carta Porte 3.1 obligatorio desde enero 2026',summary:'A partir del 1 de enero de 2026, el Complemento Carta Porte versión 3.1 es obligatorio para el transporte de mercancías por carretera.',url:'https://www.sat.gob.mx'},
+  {src:'SHCP',date:'Dic 2025',title:'Presupuesto de Egresos 2026: impacto en deducciones corporativas',summary:'El PEF 2026 modifica algunas partidas deducibles para empresas. Los contadores deben revisar los artículos 28 y 32 de la LISR actualizados.',url:'https://www.shcp.gob.mx'},
+  {src:'DOF',date:'Oct 2025',title:'Reforma al CFF: nuevas facultades de comprobación del SAT',summary:'El Diario Oficial publicó reformas al CFF que amplían las facultades de revisión electrónica del SAT y reducen los plazos de respuesta para aclaraciones.',url:'https://www.dof.gob.mx'},
+  {src:'SAT',date:'Nov 2025',title:'Régimen Simplificado de Confianza: ajustes para 2026',summary:'El SAT publicó actualizaciones al RESICO para personas físicas y morales. Se amplían los sectores elegibles y se modifica el cálculo de pagos provisionales.',url:'https://www.sat.gob.mx'},
+  {src:'INFONAVIT',date:'Nov 2025',title:'INFONAVIT actualiza tabla de aportaciones patronales 2026',summary:'Las aportaciones al INFONAVIT se mantienen en 5% del SBC, pero se actualizan los topes conforme a los cambios en la UMA y el salario mínimo 2026.',url:'https://www.infonavit.org.mx'},
+  {src:'El Informador',date:'Ene 2026',title:'Buzón Tributario: SAT intensifica notificaciones electrónicas en 2026',summary:'El SAT ha incrementado el uso del Buzón Tributario para enviar requerimientos. Se recomienda revisar el buzón al menos cada 3 días para evitar notificaciones por estrados.',url:'https://www.informador.mx'}
 ];
 const SB_URL='https://ysctgzbqaducghivamff.supabase.co';
 const SB_KEY='sb_publishable_t3OG3DkHfRGxVA1hrnJUbg_kRZ6hbM8';
@@ -313,13 +312,12 @@ function nav(s){
 
 // Noticias dinámicas desde fiscalia.com vía Edge Function
 let noticiasCache = [];
-// Pre-cargar noticias desde NEWS_POOL local
+// Pre-cargar desde NEWS_POOL para mostrar inmediatamente
 if (typeof NEWS_POOL !== 'undefined' && NEWS_POOL.length > 0) {
-  const today = new Date();
-  const start = (today.getDay() * 2) % NEWS_POOL.length;
-  noticiasCache = NEWS_POOL.slice(start, start + 3).map(n => ({
-    titulo: n.title, resumen: n.summary, fuente: n.src, fecha: n.date, url: n.url
-  }));
+  var _nd = new Date(); var _ns = (_nd.getDay()*2) % NEWS_POOL.length;
+  noticiasCache = NEWS_POOL.slice(_ns, _ns+3).map(function(n){
+    return {titulo:n.title,resumen:n.summary,fuente:n.src,fecha:n.date,url:n.url};
+  });
 }
 
 async function fetchNoticias() {
@@ -332,25 +330,9 @@ async function fetchNoticias() {
     const data = await res.json();
     if (data.noticias && Array.isArray(data.noticias)) {
       noticiasCache = data.noticias;
-      return;
     }
   } catch(e) {
-    console.warn('No se pudieron cargar noticias remotas, usando pool local:', e);
-  }
-  // Fallback: usar NEWS_POOL local
-  if (typeof NEWS_POOL !== 'undefined' && NEWS_POOL.length > 0) {
-    const today = new Date();
-    const dayIndex = today.getDay();
-    const start = (dayIndex * 2) % NEWS_POOL.length;
-    noticiasCache = NEWS_POOL.slice(start, start + 2).concat(
-      start + 2 > NEWS_POOL.length ? NEWS_POOL.slice(0, (start + 2) - NEWS_POOL.length) : []
-    ).map(n => ({
-      titulo: n.title,
-      resumen: n.summary,
-      fuente: n.src,
-      fecha: n.date,
-      url: n.url
-    }));
+    console.warn('No se pudieron cargar noticias:', e);
   }
 }
 
@@ -469,25 +451,12 @@ async function renderLogin(){
       </div>
     </div>
   </div>`;
-  // Cargar noticias: primero desde NEWS_POOL local, luego intentar API
+  // Cargar noticias después de que el DOM esté listo
   setTimeout(()=>{
-    // Pre-cargar desde NEWS_POOL inmediatamente
-    if (typeof NEWS_POOL !== 'undefined' && NEWS_POOL.length > 0) {
-      const _d = new Date();
-      const _s = (_d.getDay() * 2) % NEWS_POOL.length;
-      noticiasCache = NEWS_POOL.slice(_s, _s + 3).map(n => ({
-        titulo: n.title, resumen: n.summary, fuente: n.src, fecha: n.date, url: n.url
-      }));
-      const _el = document.getElementById('news-container');
-      if(_el) _el.innerHTML = renderNewsCards();
-    }
-    // Luego intentar actualizar desde la API
     fetchNoticias().then(()=>{
-      if(noticiasCache.length > 0) {
-        const newsEl=document.getElementById('news-container');
-        if(newsEl) newsEl.innerHTML=renderNewsCards();
-      }
-    }).catch(()=>{});
+      const newsEl=document.getElementById('news-container');
+      if(newsEl) newsEl.innerHTML=renderNewsCards();
+    });
   }, 100);
 }
 
@@ -591,9 +560,9 @@ function buildPlanUI(tareas,today,targetEmail,canEdit,isRemote){
       if(canDelete) actionsHTML+='<button class="btn btn-sm btn-danger" style="font-size:11px;padding:4px 8px" onclick="eliminarTarea(\'' +tid+ '\',\'' +te+ '\')">Eliminar</button>';
       actionsHTML+='</div>';
     } else if(isDone){
-      actionsHTML='<div style="width:24px;height:24px;border-radius:50%;background:#8DC63F;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:700">â</span></div>';
+      actionsHTML='<div style="width:24px;height:24px;border-radius:50%;background:#8DC63F;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:700">✓</span></div>';
     } else if(isEliminada){
-      actionsHTML='<div style="width:24px;height:24px;border-radius:50%;background:#fca5a5;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:700">â</span></div>';
+      actionsHTML='<div style="width:24px;height:24px;border-radius:50%;background:#fca5a5;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="color:#fff;font-size:12px;font-weight:700">✕</span></div>';
     }
     let cardClass='tarea-card'+(isDone?' done':isStandby?' standby':isEliminada?' eliminada':'')+(isOld&&!isDone&&!isStandby&&!isEliminada?' dragged-in':'');
     tareasHTML+='<div class="'+cardClass+'" id="tcard-'+t.id+'">'+
@@ -843,14 +812,14 @@ async function renderDashboard(date){
     const pct=total>0?Math.round(done/total*100):0;
     const color=pc(em);
     const tList=total>0?tareas.map(t=>`<div style="display:flex;align-items:center;gap:6px;margin:2px 0;font-size:13px;color:${t.status==='concluida'?'#999':'#555'}">
-      <span style="color:${t.status==='concluida'?'#8DC63F':'#d1d1d1'};font-size:11px">${t.status==='concluida'?'â':'â'}</span>
+      <span style="color:${t.status==='concluida'?'#8DC63F':'#d1d1d1'};font-size:11px">${t.status==='concluida'?'✓':'○'}</span>
       <span style="${t.status==='concluida'?'text-decoration:line-through':''}">${escH(t.descripcion)}</span>
       ${t.client_name?`<span style="font-size:11px;color:#999">(${escH(t.client_name)})</span>`:''}
     </div>
     <div style="display:flex;gap:10px;margin-left:18px;margin-top:2px;flex-wrap:wrap">
-      <span style="font-size:10px;color:#bbb">ð Alta: ${t.fecha_creacion||'—'}</span>
-      ${t.status==='concluida'&&t.fecha_conclusion?`<span style="font-size:10px;color:#1D9E75;font-weight:500">â Concluida: ${t.fecha_conclusion.slice(0,10)}</span>`:''}
-      ${t.status==='standby'?`<span style="font-size:10px;color:#3B4BC8;font-weight:500">â¸ Stand By</span>`:''}
+      <span style="font-size:10px;color:#bbb">📅 Alta: ${t.fecha_creacion||'—'}</span>
+      ${t.status==='concluida'&&t.fecha_conclusion?`<span style="font-size:10px;color:#1D9E75;font-weight:500">✓ Concluida: ${t.fecha_conclusion.slice(0,10)}</span>`:''}
+      ${t.status==='standby'?`<span style="font-size:10px;color:#3B4BC8;font-weight:500">⏸ Stand By</span>`:''}
     </div>
   </div>`).join(''):'<div style="font-size:13px;color:#bbb">Sin tareas registradas</div>';
     const canActOn=(session.role==='admin')||(session.role==='manager'&&u.role==='assistant');
@@ -1006,7 +975,7 @@ async function renderDashboard(date){
   <div class="card">
     <div class="sec-label">Análisis ejecutivo — Claude</div>
     <div class="analysis-box" id="abox"><span style="color:#bbb;font-style:italic">Presiona "Analizar" para el resumen ejecutivo.</span></div>
-    <button class="btn btn-purple btn-full" style="margin-top:12px" onclick="runAnalysis()">Analizar con Claude â</button>
+    <button class="btn btn-purple btn-full" style="margin-top:12px" onclick="runAnalysis()">Analizar con Claude ↗</button>
   </div>`;
 
   buildCharts(visible,allTareas||[],byEmail);
@@ -1057,7 +1026,7 @@ async function runAnalysis(){
     if(!tareas.length)return u.name+' ('+( u.role==='manager'?'Líder de Práctica Fiscal':'Consultor Junior')+'): sin tareas hoy';
     const done=tareas.filter(t=>t.status==='concluida').length;
     const sb=tareas.filter(t=>t.status==='standby').length;
-    return u.name+' ('+(u.role==='manager'?'Líder de Práctica Fiscal':'Consultor Junior')+') — '+done+'/'+tareas.length+' concluidas'+(sb?' · '+sb+' en Stand By':'')+': \n'+tareas.map(t=>'  '+(t.status==='concluida'?'â':t.status==='standby'?'â¸':'·')+' '+t.descripcion+(t.client_name?' ['+t.client_name+']':'')).join('\n');
+    return u.name+' ('+(u.role==='manager'?'Líder de Práctica Fiscal':'Consultor Junior')+') — '+done+'/'+tareas.length+' concluidas'+(sb?' · '+sb+' en Stand By':'')+': \n'+tareas.map(t=>'  '+(t.status==='concluida'?'✓':t.status==='standby'?'⏸':'·')+' '+t.descripcion+(t.client_name?' ['+t.client_name+']':'')).join('\n');
   }).filter(Boolean).join('\n\n');
   const devLines=(allDev||[]).length?'\n\nDevoluciones IVA activas:\n'+(allDev||[]).map(d=>'  · '+d.cliente_nombre+' ('+d.periodo+') — '+d.status+(d.responsable?' — Resp: '+d.responsable:'')+(d.monto_solicitado?' — $'+Number(d.monto_solicitado).toLocaleString('es-MX'):'')).join('\n'):'';
   try{
@@ -1102,7 +1071,7 @@ async function renderHistory(){
         <input type="date" id="hist-desde" value="${hace7}" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none">
         <input type="date" id="hist-hasta" value="${hoy}" style="padding:7px 10px;font-size:13px;border:1px solid #e0e0db;border-radius:8px;background:#fff;outline:none">
         <button class="btn btn-sm btn-primary" onclick="loadHistorial()">Ver reporte</button>
-        <button class="btn btn-sm btn-purple" onclick="imprimirHistorial()">â PDF</button>
+        <button class="btn btn-sm btn-purple" onclick="imprimirHistorial()">⎙ PDF</button>
       </div>
     </div>
   </div>
@@ -1290,7 +1259,7 @@ async function loadHistorial(){
     '</div>';
   });
 
-  // ===== GRÍFICA GLOBAL: tareas por día =====
+  // ===== GRÁFICA GLOBAL: tareas por día =====
   // Recopilar todos los datos de tareas de todos los usuarios visibles
   const allTareasGraf=await sbGet('tareas','?email=in.'+emailFilter+'&select=created_at,fecha_creacion,fecha_conclusion,status&order=created_at.asc');
   const desdeDt2=new Date(document.getElementById('hist-desde').value+'T00:00:00');
@@ -1525,8 +1494,8 @@ async function reporteDevolucionesPDF(){
     '</div>'+
     '<div style="display:flex;gap:8px">'+
       '<button class="btn btn-full" onclick="document.getElementById(\'modal-reporte-dev\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-purple btn-full" onclick="generarReporteDevPDF(true)" style="flex:1;margin-top:0">â Solo correo</button>'+
-      '<button class="btn btn-primary btn-full" onclick="generarReporteDevPDF(false)" style="flex:1;margin-top:0">â PDF</button>'+
+      '<button class="btn btn-purple btn-full" onclick="generarReporteDevPDF(true)" style="flex:1;margin-top:0">✉ Solo correo</button>'+
+      '<button class="btn btn-primary btn-full" onclick="generarReporteDevPDF(false)" style="flex:1;margin-top:0">⎙ PDF</button>'+
     '</div>'+
   '</div>';
   document.body.appendChild(overlay);
@@ -1695,7 +1664,7 @@ async function generarReporteDevPDF(soloCorreo=false){
       if(data.ok){
         const msg=document.createElement('div');
         msg.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:10px 20px;border-radius:8px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)';
-        msg.textContent='â Reporte enviado a '+destinatarios.join(', ');
+        msg.textContent='✉ Reporte enviado a '+destinatarios.join(', ');
         document.body.appendChild(msg);
         setTimeout(()=>msg.remove(),4000);
       }
@@ -1765,8 +1734,8 @@ function renderClientesTabla(){
   const canEdit=session.role==='admin'||session.role==='manager';
   tbody.innerHTML=list.map(c=>{
     const grupoCell=c.grupos?'<span class="badge badge-group">'+escH(c.grupos.nombre)+'</span>':'—';
-    const editBtn=canEdit?'<button class="btn btn-sm" onclick="editCliente(\''+c.id+'\')">âEditar</button>':'';
-    const delBtn=canEdit?'<button class="btn btn-sm btn-danger" onclick="deleteCliente(\''+c.id+'\')">âEliminar</button>':'';
+    const editBtn=canEdit?'<button class="btn btn-sm" onclick="editCliente(\''+c.id+'\')">​Editar</button>':'';
+    const delBtn=canEdit?'<button class="btn btn-sm btn-danger" onclick="deleteCliente(\''+c.id+'\')">​Eliminar</button>':'';
     return '<tr>'+
       '<td style="font-weight:500">'+escH(c.nombre)+'</td>'+
       '<td style="color:#888">'+escH(c.rfc||'—')+'</td>'+
@@ -1821,7 +1790,7 @@ async function deleteCliente(id){
 async function renderGrupos(){
   app.innerHTML=renderTopNav('clientes')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
-    <button class="btn btn-sm" onclick="renderClientes()">â Clientes</button>
+    <button class="btn btn-sm" onclick="renderClientes()">← Clientes</button>
     <div style="font-size:15px;font-weight:600">Grupos de clientes</div>
   </div>
   <div class="card"><div class="sec-label">Grupos existentes</div><div id="grupos-list"></div></div>
@@ -2016,7 +1985,7 @@ async function renderDevoluciones(){
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
     <div style="font-size:15px;font-weight:600">Devoluciones IVA</div>
     <div style="display:flex;gap:8px">
-    <button class="btn btn-sm btn-purple" onclick="reporteDevolucionesPDF()">â Reporte PDF</button>
+    <button class="btn btn-sm btn-purple" onclick="reporteDevolucionesPDF()">⎙ Reporte PDF</button>
     <button class="btn btn-primary btn-sm" onclick="renderNuevaDevolucion()">+ Nueva solicitud</button>
   </div>
   </div>
@@ -2129,7 +2098,7 @@ async function renderNuevaDevolucion(id){
 
   app.innerHTML=renderTopNav('devoluciones')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
-    <button class="btn btn-sm" onclick="renderDevoluciones()">â Devoluciones</button>
+    <button class="btn btn-sm" onclick="renderDevoluciones()">← Devoluciones</button>
     <div style="font-size:15px;font-weight:600">${editing?'Editar solicitud':'Nueva solicitud de devolución IVA'}</div>
   </div>
   <div class="card">
@@ -2229,10 +2198,10 @@ async function renderDetalleDevolucion(id){
   const plazos=calcPlazos(dev);
   app.innerHTML=renderTopNav('devoluciones')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
-    <button class="btn btn-sm" onclick="renderDevoluciones()">â Devoluciones</button>
+    <button class="btn btn-sm" onclick="renderDevoluciones()">← Devoluciones</button>
     <div style="font-size:15px;font-weight:600;flex:1">${escH(dev.cliente_nombre||'—')} — ${escH(dev.periodo)}</div>
-    <button class="btn btn-sm btn-purple" onclick="renderNuevaDevolucion('${id}')">âï¸ Editar</button>
-    ${session.role==='admin'?'<button class="btn btn-sm btn-danger" onclick="deleteDevolucion(\''+id+'\')">ð Eliminar</button>':''}
+    <button class="btn btn-sm btn-purple" onclick="renderNuevaDevolucion('${id}')">✏️ Editar</button>
+    ${session.role==='admin'?'<button class="btn btn-sm btn-danger" onclick="deleteDevolucion(\''+id+'\')">🗑 Eliminar</button>':''}
   </div>
   <div class="loading" id="detl"><span class="spinner"></span>Cargando...</div>
   <div id="det-body"></div>`;
@@ -2244,7 +2213,7 @@ async function renderDetalleDevolucion(id){
   ]);
   document.getElementById('detl').style.display='none';
 
-  // ---- LÍNEA DE TIEMPO ----
+  // ---- LÍNEA DE TIEMPO ----
   const hitos=[
     {label:'Día 0 — Inicio trámite',fecha:dev.fecha_inicio,done:!!dev.fecha_inicio,color:'#3B4BC8'},
     {label:'Día 10 hábil — Presentar ante SAT',fecha:plazos.presentacion,done:!!dev.fecha_presentacion_sat,color:dev.fecha_presentacion_sat?'#8DC63F':'#EF9F27'},
@@ -2253,7 +2222,7 @@ async function renderDetalleDevolucion(id){
   ];
   if(dev.fecha_presentacion_sat) hitos[1]={...hitos[1],fecha:dev.fecha_presentacion_sat,done:true,color:'#8DC63F'};
 
-  // ---- GRÍFICA HORIZONTAL SVG DE LÍNEA DE TIEMPO ----
+  // ---- GRÁFICA HORIZONTAL SVG DE LÍNEA DE TIEMPO ----
   const totalDias=40;
   const fi=dev.fecha_inicio?new Date(dev.fecha_inicio+'T12:00:00'):new Date();
   const hoy=new Date(todayKey()+'T12:00:00');
@@ -2299,7 +2268,7 @@ async function renderDetalleDevolucion(id){
     const textColor=h.done?'#1a1a1a':'#aaa';
 
     svgParts+='<circle cx="'+cx+'" cy="'+(barY+barH/2)+'" r="7" fill="'+dotColor+'" stroke="#fff" stroke-width="2"/>';
-    if(h.done) svgParts+='<text x="'+cx+'" y="'+(barY+barH/2+4)+'" text-anchor="middle" font-size="8" fill="#fff" font-weight="700">â</text>';
+    if(h.done) svgParts+='<text x="'+cx+'" y="'+(barY+barH/2+4)+'" text-anchor="middle" font-size="8" fill="#fff" font-weight="700">✓</text>';
     svgParts+='<line x1="'+cx+'" y1="'+lineY1+'" x2="'+cx+'" y2="'+lineY2+'" stroke="'+dotColor+'" stroke-width="1.5"/>';
     svgParts+='<text x="'+cx+'" y="'+labelY+'" text-anchor="middle" font-size="10" fill="'+textColor+'" font-weight="600">'+h.label+'</text>';
     svgParts+='<text x="'+cx+'" y="'+sublabelY+'" text-anchor="middle" font-size="9" fill="#aaa">'+h.sublabel+'</text>';
@@ -2322,7 +2291,7 @@ async function renderDetalleDevolucion(id){
   // ---- CHECKLIST REQUISITOS ----
   const reqRows=(requisitos||[]).map(r=>'<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid #f0f0ec">'+
     '<div onclick="toggleRequisito(\''+r.id+'\','+r.completado+',\''+id+'\')" style="width:20px;height:20px;border-radius:50%;border:2px solid '+(r.completado?'#8DC63F':'#d1d1d1')+';flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:'+(r.completado?'#8DC63F':'#fff')+'">'+
-      (r.completado?'<span style="color:#fff;font-size:10px;font-weight:700">â</span>':'')+
+      (r.completado?'<span style="color:#fff;font-size:10px;font-weight:700">✓</span>':'')+
     '</div>'+
     '<div style="flex:1;font-size:13px;color:'+(r.completado?'#999':'#1a1a1a')+';'+(r.completado?'text-decoration:line-through':'')+'">'+ escH(r.requisito)+'</div>'+
     (r.fecha_completado?'<div style="font-size:10px;color:#888">'+r.fecha_completado+'</div>':'')+
@@ -2372,7 +2341,7 @@ async function renderDetalleDevolucion(id){
               (p.atendido&&p.fecha_atendido?'<div style="font-size:10px;color:#5a8a1a"><span style="font-weight:600">Atendido:</span> '+p.fecha_atendido+'</div>':'')+
             '</div>'+
             '<div style="display:flex;gap:6px">'+
-              '<button class="btn btn-sm" style="font-size:10px;padding:3px 8px" onclick="editarPuntoReq(\''+p.id+'\',\''+id+'\')">âï¸ Editar</button>'+
+              '<button class="btn btn-sm" style="font-size:10px;padding:3px 8px" onclick="editarPuntoReq(\''+p.id+'\',\''+id+'\')">✏️ Editar</button>'+
             '</div>'+
           '</div>'+
         '</div>'+
@@ -2629,7 +2598,7 @@ async function agregarPuntoRequerimiento(devId,numReq){
 
 
 
-/* ===== PROYECCIÍN FISCAL ANUAL ===== */
+/* ===== PROYECCIÓN FISCAL ANUAL ===== */
 const MESES_NOMBRES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const AJUSTES_BASE=[
   {concepto:'Depreciación fiscal (LISR Art. 31-38)',tipo:'resta',referencia_legal:'LISR Art. 31-38',importe:0,notas:'Diferencia entre depreciación fiscal y contable'},
@@ -2692,7 +2661,7 @@ async function renderNuevaProyeccion(id){
   const anioOpts=[anioActual-1,anioActual,anioActual+1].map(y=>'<option value="'+y+'"'+(editing?editing.ejercicio===y?' selected':'':y===anioActual?' selected':'')+'>'+y+'</option>').join('');
   app.innerHTML=renderTopNav('proyeccion')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
-    <button class="btn btn-sm" onclick="renderProyeccion()">â Proyecciones</button>
+    <button class="btn btn-sm" onclick="renderProyeccion()">← Proyecciones</button>
     <div style="font-size:15px;font-weight:600">${editing?'Editar proyección':'Nueva proyección fiscal'}</div>
   </div>
   <div class="card">
@@ -2752,13 +2721,13 @@ async function renderDetalleProyeccion(id){
   const proy=pfCache.find(p=>p.id===id);if(!proy)return;
   app.innerHTML=renderTopNav('proyeccion')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
-    <button class="btn btn-sm" onclick="renderProyeccion()">â Proyecciones</button>
+    <button class="btn btn-sm" onclick="renderProyeccion()">← Proyecciones</button>
     <div style="font-size:15px;font-weight:600;flex:1">${escH(proy.cliente_nombre)} — ${proy.ejercicio}</div>
-    <button class="btn btn-sm btn-purple" onclick="renderNuevaProyeccion('${id}')">âï¸ Editar</button>
-    <button class="btn btn-sm btn-purple" onclick="reporteProyeccionPDF('${id}')">â Reporte PDF</button>
-    <button class="btn btn-sm" style="background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" onclick="guardarEscenarioProyeccion('${id}')">ð¾ Guardar escenario</button>
-    <button class="btn btn-sm" style="background:#f5f5f3;color:#555" onclick="verEscenariosProyeccion('${id}')">ð Escenarios anteriores</button>
-    <button class="btn btn-sm btn-danger" onclick="deleteProyeccion('${id}')">ð Eliminar</button>
+    <button class="btn btn-sm btn-purple" onclick="renderNuevaProyeccion('${id}')">✏️ Editar</button>
+    <button class="btn btn-sm btn-purple" onclick="reporteProyeccionPDF('${id}')">⎙ Reporte PDF</button>
+    <button class="btn btn-sm" style="background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" onclick="guardarEscenarioProyeccion('${id}')">💾 Guardar escenario</button>
+    <button class="btn btn-sm" style="background:#f5f5f3;color:#555" onclick="verEscenariosProyeccion('${id}')">📊 Escenarios anteriores</button>
+    <button class="btn btn-sm btn-danger" onclick="deleteProyeccion('${id}')">🗑 Eliminar</button>
   </div>
   <div class="loading" id="pf-detl"><span class="spinner"></span>Cargando...</div>
   <div id="pf-det-body"></div>`;
@@ -2814,7 +2783,7 @@ async function renderDetalleProyeccion(id){
     '<td style="text-align:right;font-size:12px">'+fmtMXN(m.otros_gastos)+'</td>'+
     '<td style="text-align:right;font-size:12px;font-weight:600;color:'+(parseFloat(m.utilidad_neta_contable||0)>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(m.utilidad_neta_contable)+'</td>'+
     '<td style="text-align:right;font-size:12px;color:#888">'+(m.real&&m.pago_provisional?fmtMXN(m.pago_provisional):'—')+'</td>'+
-    '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="abrirCapturaMes(\''+id+'\','+m.mes+',\''+(m.id||'')+'\')">'+( m.real?'âï¸':'+ Capturar')+'</button></td>'+
+    '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="abrirCapturaMes(\''+id+'\','+m.mes+',\''+(m.id||'')+'\')">'+( m.real?'✏️':'+ Capturar')+'</button></td>'+
   '</tr>').join('');
 
   const ajustesSorted=[...ajustesData].sort((a,b)=>a.tipo===b.tipo?0:a.tipo==='suma'?-1:1);
@@ -2824,7 +2793,7 @@ async function renderDetalleProyeccion(id){
     '<td style="text-align:right;font-size:12px;font-weight:600">'+fmtMXN(a.importe)+'</td>'+
     '<td style="font-size:11px;color:#888">'+escH(a.referencia_legal||'')+'</td>'+
     '<td style="font-size:11px;color:#888;font-style:italic">'+escH(a.notas||'')+'</td>'+
-    '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="editarAjuste(\''+a.id+'\',\''+id+'\')">âï¸</button></td>'+
+    '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="editarAjuste(\''+a.id+'\',\''+id+'\')">✏️</button></td>'+
   '</tr>').join('');
 
   document.getElementById('pf-det-body').innerHTML=
@@ -2858,7 +2827,7 @@ async function renderDetalleProyeccion(id){
           '<b>Procedimiento:</b><br>'+
           '1. Utilidad fiscal estimada: '+fmtMXN(utilidadFiscal)+'<br>'+
           '2. Ingresos nominales proyectados: '+fmtMXN(totalIngresos)+'<br>'+
-          '3. CU = Utilidad fiscal Í· Ingresos nominales = '+fmtMXN(utilidadFiscal)+' Í· '+fmtMXN(totalIngresos)+' = <b>'+cuPct+'%</b><br>'+
+          '3. CU = Utilidad fiscal ÷ Ingresos nominales = '+fmtMXN(utilidadFiscal)+' ÷ '+fmtMXN(totalIngresos)+' = <b>'+cuPct+'%</b><br>'+
           '<span style="font-size:10px;color:#888">Aplicable para determinación de pagos provisionales del ejercicio siguiente (Art. 14 LISR)</span>'+
         '</div>'+
       '</td>'+
@@ -3068,7 +3037,7 @@ async function guardarEscenarioProyeccion(id){
       '<textarea id="esc-notas" rows="2" placeholder="Ej: Proyección al mes de marzo..." style="width:100%;padding:8px;border:1px solid #e0e0db;border-radius:8px;font-size:13px;font-family:inherit;resize:none;box-sizing:border-box"></textarea></div>'+
     '<div style="display:flex;gap:8px">'+
       '<button class="btn btn-full" onclick="document.getElementById(\'modal-escenario-save\').remove()" style="flex:1;margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="confirmarEscenario(\''+id+'\','+totalIngresos+','+totalCosto+','+totalGastosOp+','+utilidadContable+','+totalSumas+','+totalRestas+','+utilidadFiscal+','+isrEstimado+','+totalPP+','+isrACargo+','+cu+','+margenBruto+','+margenNeto+','+nMeses+')" style="flex:1;margin-top:0">ð¾ Guardar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="confirmarEscenario(\''+id+'\','+totalIngresos+','+totalCosto+','+totalGastosOp+','+utilidadContable+','+totalSumas+','+totalRestas+','+utilidadFiscal+','+isrEstimado+','+totalPP+','+isrACargo+','+cu+','+margenBruto+','+margenNeto+','+nMeses+')" style="flex:1;margin-top:0">💾 Guardar</button>'+
     '</div>'+
   '</div>';
   document.body.appendChild(overlay);
@@ -3081,7 +3050,7 @@ async function confirmarEscenario(proyId,ti,tc,tgo,uc,ts,tr,uf,isr,pp,isrC,cu,mb
   await sbPost('pf_reportes',{proyeccion_id:proyId,cliente_nombre:proy.cliente_nombre,ejercicio:proy.ejercicio,fecha_corte:todayKey(),meses_reales:nM,total_ingresos:ti,total_costo:tc,total_gastos_op:tgo,utilidad_contable:uc,total_sumas:ts,total_restas:tr,utilidad_fiscal:uf,isr_estimado:isr,total_pp:pp,isr_a_cargo:isrC,cu,margen_bruto:mb,margen_neto:mn,notas},'return=minimal');
   const msg=document.createElement('div');
   msg.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:10px 20px;border-radius:8px;z-index:9999';
-  msg.textContent='â Escenario guardado — '+todayKey();
+  msg.textContent='✅ Escenario guardado — '+todayKey();
   document.body.appendChild(msg);
   setTimeout(()=>msg.remove(),3000);
 }
@@ -3091,7 +3060,7 @@ async function verEscenariosProyeccion(id){
   document.getElementById('modal-escenarios')?.remove();
   const reportes=await sbGet('pf_reportes','?proyeccion_id=eq.'+id+'&select=*&order=fecha_corte.asc');
   const data=reportes||[];
-  if(!data.length){alert('No hay escenarios guardados. Usa "ð¾ Guardar escenario" para crear el primero.');return;}
+  if(!data.length){alert('No hay escenarios guardados. Usa "💾 Guardar escenario" para crear el primero.');return;}
   const overlay=document.createElement('div');
   overlay.className='modal-overlay';
   overlay.id='modal-escenarios';
@@ -3111,16 +3080,16 @@ async function verEscenariosProyeccion(id){
         '</div>'+
         (r.notas?'<div style="font-size:11px;color:#888;font-style:italic;background:#f5f5f3;padding:6px 8px;border-radius:6px">'+escH(r.notas)+'</div>':'')+
       '</div>'+
-      (session.role==='admin'?'<button id="del-esc-'+r.id+'" data-esc="'+r.id+'" data-proy="'+id+'" class="btn btn-sm btn-danger" style="font-size:10px">ð</button>':'')+
+      (session.role==='admin'?'<button id="del-esc-'+r.id+'" data-esc="'+r.id+'" data-proy="'+id+'" class="btn btn-sm btn-danger" style="font-size:10px">🗑</button>':'')+
     '</div>'+
   '</div>').join('');
   overlay.innerHTML='<div class="modal-box" style="max-width:620px;max-height:80vh;overflow-y:auto">'+
-    '<div class="modal-title">ð Escenarios anteriores</div>'+
+    '<div class="modal-title">📊 Escenarios anteriores</div>'+
     '<div class="modal-sub">'+escH(proy.cliente_nombre)+' — Ejercicio '+proy.ejercicio+' · '+data.length+' escenario'+(data.length!==1?'s':'')+'</div>'+
     '<div style="margin:12px 0">'+escRows+'</div>'+
     '<div style="display:flex;gap:8px">'+
       '<button class="btn btn-full" onclick="document.getElementById(\'modal-escenarios\').remove()" style="flex:1;margin-top:0">Cerrar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="document.getElementById(\'modal-escenarios\').remove();generarComparativoPDF(\''+id+'\')" style="flex:1;margin-top:0">â Reporte PDF comparativo</button>'+
+      '<button class="btn btn-primary btn-full" onclick="document.getElementById(\'modal-escenarios\').remove();generarComparativoPDF(\''+id+'\')" style="flex:1;margin-top:0">⎙ Reporte PDF comparativo</button>'+
     '</div>'+
   '</div>';
   document.body.appendChild(overlay);
@@ -3153,9 +3122,9 @@ async function generarComparativoPDF(id){
     const difIng=parseFloat(ultimo.total_ingresos)-parseFloat(primero.total_ingresos);
     const difFiscal=parseFloat(ultimo.utilidad_fiscal)-parseFloat(primero.utilidad_fiscal);
     const difISR=parseFloat(ultimo.isr_a_cargo)-parseFloat(primero.isr_a_cargo);
-    if(Math.abs(difIng)>0) tendencias.push((difIng>0?'ð':'ð')+' Ingresos: '+(difIng>0?'+':'')+fmtMXN(difIng)+' vs primer escenario');
-    if(Math.abs(difFiscal)>0) tendencias.push((difFiscal>0?'ð':'ð')+' Utilidad fiscal: '+(difFiscal>0?'+':'')+fmtMXN(difFiscal)+' vs primer escenario');
-    if(Math.abs(difISR)>0) tendencias.push((difISR>0?'â ï¸':'â')+' ISR a cargo: '+(difISR>0?'+':'')+fmtMXN(difISR)+' vs primer escenario');
+    if(Math.abs(difIng)>0) tendencias.push((difIng>0?'📈':'📉')+' Ingresos: '+(difIng>0?'+':'')+fmtMXN(difIng)+' vs primer escenario');
+    if(Math.abs(difFiscal)>0) tendencias.push((difFiscal>0?'📈':'📉')+' Utilidad fiscal: '+(difFiscal>0?'+':'')+fmtMXN(difFiscal)+' vs primer escenario');
+    if(Math.abs(difISR)>0) tendencias.push((difISR>0?'⚠️':'✅')+' ISR a cargo: '+(difISR>0?'+':'')+fmtMXN(difISR)+' vs primer escenario');
   }
   const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
   const win=window.open('','_blank');
@@ -3440,11 +3409,11 @@ async function mostrarAvisoBienvenida(){
           '<div style="font-size:12px;color:rgba(255,255,255,.75);margin-bottom:2px">'+saludo+' — '+new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',weekday:'long',day:'numeric',month:'long'})+'</div>'+
           '<div style="font-size:17px;font-weight:600;color:#fff">'+escH(u.name||email)+'</div>'+
         '</div>'+
-        '<button id="btn-cerrar-aviso" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.15);border:none;cursor:pointer;color:#fff;font-size:16px">â</button>'+
+        '<button id="btn-cerrar-aviso" style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.15);border:none;cursor:pointer;color:#fff;font-size:16px">✕</button>'+
       '</div>'+
       (sesAnterior?
         '<div style="background:#2d3db0;padding:8px 20px;display:flex;gap:20px;flex-wrap:wrap">'+
-          '<div style="font-size:11px;color:rgba(255,255,255,.85)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#8DC63F;margin-right:5px"></span>Íltima sesión: '+fechaAnterior+'</div>'+
+          '<div style="font-size:11px;color:rgba(255,255,255,.85)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#8DC63F;margin-right:5px"></span>Última sesión: '+fechaAnterior+'</div>'+
           (durAnterior?'<div style="font-size:11px;color:rgba(255,255,255,.85)">&#9201; '+durAnterior+'</div>':'')+
         '</div>':'')+
       '<div style="padding:16px 20px">'+
@@ -3794,7 +3763,7 @@ function initReporteGerencial(){
         '<td><span class="_mdb '+cls+'">'+v.dias+' días</span></td>'+
         '<td><span class="_mi '+nc+'">'+ni+'</span></td>'+
       '</tr>';
-    }).join(''):'<tr><td colspan="5" style="text-align:center;padding:12px;color:#2e7d52;font-weight:700">â Sin tareas vencidas</td></tr>';
+    }).join(''):'<tr><td colspan="5" style="text-align:center;padding:12px;color:#2e7d52;font-weight:700">✅ Sin tareas vencidas</td></tr>';
 
     // Opinión profesional
     const calidadHtml='';
@@ -3851,24 +3820,24 @@ function initReporteGerencial(){
 
     ov.innerHTML='<div id="_msspanel">'+
       '<div class="_mh">'+
-        '<div><h2>ð Reporte Gerencial — MSST Consulting SC</h2><p>'+dr+' · Solo para: CPC Manuel Santana</p></div>'+
+        '<div><h2>📊 Reporte Gerencial — MSST Consulting SC</h2><p>'+dr+' · Solo para: CPC Manuel Santana</p></div>'+
         '<div class="_mhright">'+
           '<div style="font-size:9px;color:rgba(255,255,255,.75);margin-right:8px"><span style="background:#1a73e8;padding:1px 5px;border-radius:3px;font-weight:700">AC</span> ActiveCollab &nbsp; <span style="background:#3B4BC8;padding:1px 5px;border-radius:3px;font-weight:700">TX</span> TaxIA</div>'+
-          '<button class="_mpdf" onclick="window.print()">ð¨ï¸ PDF</button>'+
-          '<button class="_mcl" onclick="document.getElementById(\'_msstor\').style.display=\'none\'">â</button>'+
+          '<button class="_mpdf" onclick="window.print()">🖨️ PDF</button>'+
+          '<button class="_mcl" onclick="document.getElementById(\'_msstor\').style.display=\'none\'">✕</button>'+
         '</div>'+
       '</div>'+
       '<div class="_mflt">'+
         '<label>Desde <input type="date" id="_msd0" value="'+d0+'"></label>'+
         '<label>Hasta <input type="date" id="_msd1" value="'+d1+'"></label>'+
-        '<button class="_mub grn" onclick="applyDR()">â Aplicar</button>'+
-        '<button class="_mub" onclick="navW(-1)">â Anterior</button>'+
+        '<button class="_mub grn" onclick="applyDR()">✅ Aplicar</button>'+
+        '<button class="_mub" onclick="navW(-1)">← Anterior</button>'+
         '<button class="_mub" onclick="navW(1)">Siguiente →</button>'+
         '<span style="width:1px;height:18px;background:#ddd;display:inline-block;margin:0 2px"></span>'+
         allU+
-        '<button class="_mub" onclick="refreshReporteG()">ð Actualizar</button>'+
+        '<button class="_mub" onclick="refreshReporteG()">🔄 Actualizar</button>'+
         '<span style="width:1px;height:18px;background:#ddd;display:inline-block;margin:0 2px"></span>'+
-        '<button id="_btn_ac" class="_mub" style="background:#1a73e8" onclick="cargarACtahora()">ð¥ Cargar Active Collab</button>'+
+        '<button id="_btn_ac" class="_mub" style="background:#1a73e8" onclick="cargarACtahora()">📥 Cargar Active Collab</button>'+
         '<span id="_ac_status" style="font-size:10px;color:#888"></span>'+
       '</div>'+
       '<div class="_mbd">'+
@@ -3882,9 +3851,9 @@ function initReporteGerencial(){
           '<div class="_mcc"><h3>Tareas registradas vs concluidas por persona</h3>'+svgBarras()+'</div>'+
           '<div class="_mcc"><h3>% Cumplimiento por persona</h3>'+svgCumplimiento()+'</div>'+
         '</div>'+
-        '<div class="_msec">ð¥ Análisis por Colaborador</div>'+
+        '<div class="_msec">👥 Análisis por Colaborador</div>'+
         '<div class="_mug">'+uCards+'</div>'+
-        '<div class="_msec">â ï¸ Tareas Vencidas</div>'+
+        '<div class="_msec">⚠️ Tareas Vencidas</div>'+
         '<table class="_mvt"><thead><tr><th>Tarea / Cliente</th><th>Resp.</th><th>Fecha alta</th><th>Atraso</th><th>Prioridad</th></tr></thead>'+
         '<tbody>'+vHtml+'</tbody></table>'+
         calidadHtml+
@@ -3926,10 +3895,10 @@ function initReporteGerencial(){
     }
 
     if(status){
-      if(ok>0) status.innerHTML=' <span style="color:#2e7d52">â AC cargado ('+ok+' usuarios)</span>'+(err?' <span style="color:#c0392b">'+err+' errores</span>':'');
-      else status.innerHTML=' <span style="color:#c0392b">â No se pudo conectar con AC</span>';
+      if(ok>0) status.innerHTML=' <span style="color:#2e7d52">✓ AC cargado ('+ok+' usuarios)</span>'+(err?' <span style="color:#c0392b">'+err+' errores</span>':'');
+      else status.innerHTML=' <span style="color:#c0392b">✗ No se pudo conectar con AC</span>';
     }
-    if(btn){btn.disabled=false;btn.textContent='ð Recargar AC';}
+    if(btn){btn.disabled=false;btn.textContent='🔄 Recargar AC';}
 
     // Refrescar el reporte con los datos de AC
     if(ok>0) renderGconAC(sel,d0,d1);
@@ -3978,7 +3947,7 @@ function initReporteGerencial(){
 
   const btn=document.createElement('button');
   btn.id='_msstbtn';
-  btn.innerHTML='ð Mi Reporte';
+  btn.innerHTML='📊 Mi Reporte';
   btn.title='Reporte Gerencial — Solo CPC Manuel Santana';
   btn.onclick=()=>renderG(USERS.map(u=>u.name),d0val,d1val);
 
@@ -4188,7 +4157,7 @@ tr:last-child td{border-bottom:none}
     <div style="font-size:16px;font-weight:700;margin-bottom:4px">Proyección de Resultado Fiscal</div>
     <div style="font-size:11px;color:#888">Ejercicio ${proy.ejercicio} · ${escH(proy.cliente_nombre)}</div>
     <div style="font-size:11px;color:#888;margin-top:3px">Tasa ISR: ${proy.tasa_isr}% · ${hoy}</div>
-    <div style="font-size:11px;color:#EF9F27;font-weight:600;margin-top:3px">INFORMACIÍN CONFIDENCIAL Y PRIVILEGIADA</div>
+    <div style="font-size:11px;color:#EF9F27;font-weight:600;margin-top:3px">INFORMACIÓN CONFIDENCIAL Y PRIVILEGIADA</div>
   </div>
 </div>
 
@@ -4230,7 +4199,7 @@ tr:last-child td{border-bottom:none}
       <tr class="${isrEstimado>0?'isr-row':'isr-row favor'}"><td colspan="2">ISR estimado (${proy.tasa_isr}%)</td><td style="text-align:right">${fmtMXN(isrEstimado)}</td><td></td><td></td></tr>
       <tr style="background:#f5f5f3"><td colspan="2" style="color:#888;font-size:10px">- Pagos provisionales realizados + proyectados</td><td style="text-align:right;color:#888;font-weight:600">(${fmtMXN(totalPP2)})</td><td></td><td></td></tr>
       <tr style="background:${isrACargoP>0?'#fef2f2':'#f0f7d4'}"><td colspan="2" style="font-weight:700;font-size:13px;color:${isrACargoP>0?'#dc2626':'#5a8a1a'}">${isrACargoP>0?'ISR a cargo del ejercicio':'Saldo a favor del contribuyente'}</td><td style="text-align:right;font-weight:700;font-size:13px;color:${isrACargoP>0?'#dc2626':'#5a8a1a'}">${isrACargoP>0?fmtMXN(isrACargoP):fmtMXN(saldoFavorP)}</td><td></td><td></td></tr>
-      <tr style="background:#f0f4ff"><td colspan="4" style="font-size:10px;color:#3B4BC8;padding:8px"><strong>CU = ${fmtMXN(utilidadFiscal)} Í· ${fmtMXN(totalIngresos)} = ${cuPDF.toFixed(2)}%</strong> · Aplicable ejercicio ${proy.ejercicio+1} (Art. 14 LISR)</td><td></td></tr>
+      <tr style="background:#f0f4ff"><td colspan="4" style="font-size:10px;color:#3B4BC8;padding:8px"><strong>CU = ${fmtMXN(utilidadFiscal)} ÷ ${fmtMXN(totalIngresos)} = ${cuPDF.toFixed(2)}%</strong> · Aplicable ejercicio ${proy.ejercicio+1} (Art. 14 LISR)</td><td></td></tr>
     </tfoot>
   </table>
 </div>
@@ -4309,7 +4278,7 @@ async function renderNuevoCierre(id){
   const anioOpts=anios.map(y=>'<option value="'+y+'"'+(editing?editing.ejercicio===y?' selected':'':y===anioActual-1?' selected':'')+'>'+y+'</option>').join('');
   app.innerHTML=renderTopNav('proyeccion')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
-    <button class="btn btn-sm" onclick="renderCierres()">â Cierres</button>
+    <button class="btn btn-sm" onclick="renderCierres()">← Cierres</button>
     <div style="font-size:15px;font-weight:600">${editing?'Editar cierre fiscal':'Nuevo cierre fiscal'}</div>
   </div>
   <div class="card">
@@ -4391,12 +4360,12 @@ async function renderDetalleCierre(id){
   const cierre=cierresCache.find(c=>c.id===id);if(!cierre)return;
   app.innerHTML=renderTopNav('proyeccion')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
-    <button class="btn btn-sm" onclick="renderCierres()">â Cierres</button>
+    <button class="btn btn-sm" onclick="renderCierres()">← Cierres</button>
     <div style="font-size:15px;font-weight:600;flex:1">${escH(cierre.cliente_nombre)} — Ejercicio ${cierre.ejercicio}</div>
-    <button class="btn btn-sm btn-purple" onclick="renderNuevoCierre('${id}')">âï¸ Editar</button>
+    <button class="btn btn-sm btn-purple" onclick="renderNuevoCierre('${id}')">✏️ Editar</button>
     <button id="btn-add-suma-cierre" class="btn btn-sm" style="background:#f0f7d4;color:#5a8a1a;border-color:#c5e0a0;font-size:11px">+ Ingreso acumulable</button>
     <button id="btn-add-resta-cierre" class="btn btn-sm btn-danger" style="font-size:11px">+ Deducción</button>
-    <button class="btn btn-sm btn-danger" onclick="deleteCierre('${id}')">ð</button>
+    <button class="btn btn-sm btn-danger" onclick="deleteCierre('${id}')">🗑</button>
   </div>
   <div class="loading" id="cfd-l"><span class="spinner"></span>Cargando...</div>
   <div id="cfd-body"></div>`;
@@ -4423,7 +4392,7 @@ async function renderDetalleCierre(id){
     '<div style="font-size:10px;color:#888">'+escH(a.referencia_legal||'')+'</div>'+
     (a.notas?'<div style="font-size:10px;color:#888;font-style:italic">'+escH(a.notas)+'</div>':'')+
     '<div style="font-size:12px;font-weight:600;color:'+(a.tipo==='suma'?'#3B6D11':'#A32D2D')+';min-width:80px;text-align:right">'+fmtMXN(a.importe)+'</div>'+
-    '<button class="btn btn-sm" style="font-size:10px;padding:2px 6px" id="edit-ajc-'+a.id+'" data-id="'+a.id+'" data-cierre="'+id+'">âï¸</button>'+
+    '<button class="btn btn-sm" style="font-size:10px;padding:2px 6px" id="edit-ajc-'+a.id+'" data-id="'+a.id+'" data-cierre="'+id+'">✏️</button>'+
   '</div>').join(''):'<div style="font-size:13px;color:#bbb;padding:8px 0">Sin ajustes registrados.</div>';
 
   const barPP='<div style="background:var(--color-background-secondary);border-radius:8px;padding:12px;margin-bottom:12px">'+
@@ -4489,7 +4458,7 @@ async function renderDetalleCierre(id){
         '<strong>Procedimiento:</strong><br>'+
         '1. Utilidad fiscal del ejercicio '+cierre.ejercicio+': '+fmtMXN(uf)+'<br>'+
         '2. Ingresos nominales del ejercicio '+cierre.ejercicio+': '+fmtMXN(cierre.ingresos_acumulables)+'<br>'+
-        '3. CU = '+fmtMXN(uf)+' Í· '+fmtMXN(cierre.ingresos_acumulables)+' = <strong>'+cu.toFixed(2)+'%</strong><br>'+
+        '3. CU = '+fmtMXN(uf)+' ÷ '+fmtMXN(cierre.ingresos_acumulables)+' = <strong>'+cu.toFixed(2)+'%</strong><br>'+
         '<span style="font-size:11px;opacity:.8">Aplicable para pagos provisionales del ejercicio '+(cierre.ejercicio+1)+' (Art. 14 LISR)</span>'+
       '</div>'+
       '<div style="font-size:28px;font-weight:700;color:#3B4BC8;margin-top:8px">'+cu.toFixed(2)+'%</div>'+
