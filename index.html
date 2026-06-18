@@ -168,9 +168,10 @@ const ALL_MODULES=[
   {id:'historial',  label:'Historial',             icon:'📅', desc:'Registro histórico de actividades',             color:'#374151', bg:'#f3f4f6'},
   {id:'admin',      label:'Usuarios',              icon:'👥', desc:'Administración de usuarios y accesos',           color:'#374151', bg:'#f3f4f6'},
   {id:'permisos',   label:'Permisos',              icon:'🔑', desc:'Control de acceso a módulos por usuario',       color:'#374151', bg:'#f3f4f6'},
+  {id:'doc',        label:'Documentación',         icon:'📁', desc:'Expediente digital: estados financieros y generales del cliente', color:'#0f4c81', bg:'#dbeafe'},
 ];
 // Módulos que el admin SIEMPRE tiene (no configurables)
-const ADMIN_ALWAYS=['plan','devoluciones','proyeccion','da_pm','pp','dashboard','clientes','historial','admin','permisos'];
+const ADMIN_ALWAYS=['plan','devoluciones','proyeccion','da_pm','pp','doc','dashboard','clientes','historial','admin','permisos'];
 // Módulos por defecto para nuevos usuarios
 const DEFAULT_MODULES_BY_ROLE={
   admin: ADMIN_ALWAYS,
@@ -256,8 +257,8 @@ async function ensureArrastre(email){
 }
 
 function renderTopNav(active){
-  const navOrder=['dashboard','plan','clientes','historial','devoluciones','proyeccion','da_pm','pp','admin','permisos'];
-  const navLabels={dashboard:'Dashboard',plan:'Mis Tareas',clientes:'Clientes',historial:'Historial',devoluciones:'Devoluciones IVA',proyeccion:'Proyección Fiscal',da_pm:'Dec. Anual',pp:'Pagos Prov.',admin:'Usuarios',permisos:'Permisos'};
+  const navOrder=['dashboard','plan','clientes','historial','devoluciones','proyeccion','da_pm','pp','doc','admin','permisos'];
+  const navLabels={dashboard:'Dashboard',plan:'Mis Tareas',clientes:'Clientes',historial:'Historial',devoluciones:'Devoluciones IVA',proyeccion:'Proyección Fiscal',da_pm:'Dec. Anual',pp:'Pagos Prov.',doc:'Documentación',admin:'Usuarios',permisos:'Permisos'};
   const items=navOrder.filter(id=>userCanAccess(session.email,id)).map(id=>({id,label:navLabels[id]||id}));
   return `<div class="nav">
     <div style="display:flex;align-items:center;gap:10px">
@@ -356,6 +357,7 @@ function nav(s){
   else if(s==='permisos') renderPermisos();
   else if(s==='da_pm') renderDecAnual();
   else if(s==='pp') renderPagosProv();
+  else if(s==='doc') renderDocumentacion();
   else if(s==='portada') renderPortada();
 }
 
@@ -5025,32 +5027,63 @@ function pRender(){
   pRenderModulo();
 }
 
+
+// Helpers para evitar escaping en onclick
+function ppCliClick(el){ PAGOS.selCli(el.dataset.id, el.dataset.nombre); }
+function docCliClick(el){ docSelCliente(el.dataset.id, el.dataset.nombre); }
+
+let pTipoPersona='pm'; // 'pm' | 'pf'
+
 function pRenderClientes(){
+  const esPM=(c)=>{ const t=(c.tipo||'').toLowerCase(); return t==='pm'||t==='persona moral'||t==='moral'||!t; };
+  const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase(); return t==='pf'||t==='persona fisica'||t==='física'||t==='fisica'; };
+  const listaPM=clientesCache.filter(c=>c.activo!==false&&esPM(c)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
+  const listaPF=clientesCache.filter(c=>c.activo!==false&&esPF(c)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
+  const listaActual=pTipoPersona==='pm'?listaPM:listaPF;
+
   pApp().innerHTML=renderTopNav('pp')+`
-    <div style="max-width:560px;margin:0 auto">
-      <div style="margin-bottom:1.5rem">
+    <div style="max-width:620px;margin:0 auto">
+      <div style="margin-bottom:1.25rem">
         <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.04em">MSST Consulting · TaxIA</div>
         <div style="font-size:22px;font-weight:700;margin-top:2px">Pagos Provisionales</div>
         <div style="font-size:12px;color:#888;margin-top:2px">Revisión mensual de obligaciones federales y estatales</div>
       </div>
+      <!-- Selector PM/PF -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1rem">
+        <div onclick="PAGOS.setTipoPersona('pm')" style="border:2px solid ${pTipoPersona==='pm'?'#3B4BC8':'#e5e5e0'};border-radius:12px;padding:14px 16px;cursor:pointer;background:${pTipoPersona==='pm'?'#EEEDFE':'#fff'};transition:all .15s">
+          <div style="font-size:13px;font-weight:700;color:${pTipoPersona==='pm'?'#3B4BC8':'#1a1a1a'}">🏢 Personas Morales</div>
+          <div style="font-size:11px;color:#888;margin-top:2px">${listaPM.length} clientes · Art. 14 LISR</div>
+        </div>
+        <div onclick="PAGOS.setTipoPersona('pf')" style="border:2px solid ${pTipoPersona==='pf'?'#72243E':'#e5e5e0'};border-radius:12px;padding:14px 16px;cursor:pointer;background:${pTipoPersona==='pf'?'#FBEAF0':'#fff'};transition:all .15s">
+          <div style="font-size:13px;font-weight:700;color:${pTipoPersona==='pf'?'#72243E':'#1a1a1a'}">👤 Personas Físicas</div>
+          <div style="font-size:11px;color:#888;margin-top:2px">${listaPF.length} clientes · Art. 106 LISR</div>
+        </div>
+      </div>
       <div class="card">
-        <div class="sec-label">Seleccionar cliente</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="sec-label" style="margin-bottom:0">${pTipoPersona==='pm'?'Personas Morales':'Personas Físicas'}</div>
+        </div>
         <div style="position:relative;margin-bottom:10px">
           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;pointer-events:none">🔍</span>
           <input type="text" id="p-cli-buscar" placeholder="Buscar por nombre..." oninput="PAGOS.filtrarCli(this.value)" style="padding-left:32px">
         </div>
-        <div id="p-cli-lista" style="max-height:400px;overflow-y:auto">${pListaCli(clientesCache)}</div>
+        <div id="p-cli-lista" style="max-height:380px;overflow-y:auto">${pListaCli(listaActual)}</div>
+        ${pTipoPersona==='pf'?'<div style="margin-top:10px;padding:8px 12px;background:#FBEAF0;border-radius:8px;font-size:11px;color:#72243E">⚠ El módulo de Personas Físicas está en desarrollo. Por ahora puedes registrar períodos usando los impuestos aplicables (ISR PF, IVA, Retenciones).</div>':''}
       </div>
     </div>`;
 }
 
 function pListaCli(lista){
-  if(!lista.length)return `<div style="text-align:center;padding:1.5rem;color:#888;font-size:13px">Sin resultados</div>`;
-  return lista.map(c=>`
-    <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid #e5e5e0;border-radius:10px;cursor:pointer;margin-bottom:6px;background:#fafafa;transition:border-color .15s" onmouseenter="this.style.borderColor='#3B4BC8'" onmouseleave="this.style.borderColor='#e5e5e0'" onclick="PAGOS.selCli('${pH(String(c.id))}','${pH(c.nombre)}')">
-      <div style="width:38px;height:38px;border-radius:10px;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#3C3489;flex-shrink:0">${c.nombre.charAt(0).toUpperCase()}</div>
-      <div style="font-size:14px;font-weight:600">${pH(c.nombre)}</div>
-    </div>`).join('');
+  if(!lista.length)return '<div style="text-align:center;padding:1.5rem;color:#888;font-size:13px">Sin clientes de este tipo. Verifica el campo "tipo" en el catálogo de clientes.</div>';
+  return lista.map(c=>{
+    const color=pTipoPersona==='pm'?'#3C3489':'#72243E';
+    const bg=pTipoPersona==='pm'?'#EEEDFE':'#FBEAF0';
+    return '<div data-id="'+pH(String(c.id))+'" data-nombre="'+pH(c.nombre)+'" onclick="ppCliClick(this)" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1.5px solid #e5e5e0;border-radius:10px;cursor:pointer;margin-bottom:6px;background:#fafafa">'
+      +'<div style="width:38px;height:38px;border-radius:10px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:'+color+';flex-shrink:0">'+c.nombre.charAt(0).toUpperCase()+'</div>'
+      +'<div style="flex:1"><div style="font-size:14px;font-weight:600">'+pH(c.nombre)+'</div>'
+      +(c.rfc?'<div style="font-size:11px;color:#888;margin-top:1px">'+pH(c.rfc)+'</div>':'')
+      +'</div></div>';
+  }).join('');
 }
 
 function pRenderModulo(){
@@ -5629,8 +5662,15 @@ return {
     pRender();
   },
   filtrarCli: function(q){
-    const f=clientesCache.filter(c=>c.nombre.toLowerCase().includes(q.toLowerCase()));
+    const esPM=(c)=>{ const t=(c.tipo||'').toLowerCase(); return t==='pm'||t==='persona moral'||t==='moral'||!t; };
+    const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase(); return t==='pf'||t==='persona fisica'||t==='física'||t==='fisica'; };
+    const base=clientesCache.filter(c=>c.activo!==false&&(pTipoPersona==='pm'?esPM(c):esPF(c)));
+    const f=base.filter(c=>!q||(c.nombre||'').toLowerCase().includes(q.toLowerCase()));
     const el=document.getElementById('p-cli-lista');if(el)el.innerHTML=pListaCli(f);
+  },
+  setTipoPersona: function(tipo){
+    pTipoPersona=tipo;
+    pRenderClientes();
   },
   selCli: async function(id,nombre){
     pClienteActual={id,nombre};
@@ -5887,6 +5927,413 @@ window.onerror = function(msg, src, line, col, err) {
   if(fb) fb.innerHTML = '<div style="padding:2rem;color:#dc2626;font-family:sans-serif"><strong>Error JS:</strong><br>' + msg + '<br>Línea ' + line + '</div>';
   return false;
 };
+// ========================================================
+// ===== MÓDULO DOCUMENTACIÓN DEL CLIENTE =================
+// ========================================================
+
+const DOC_TIPOS_GENERAL=[
+  {id:'acta_constitutiva',label:'Acta Constitutiva',icon:'📜',req:true},
+  {id:'acta_asamblea',label:'Actas de Asamblea',icon:'📋',req:false},
+  {id:'poder_notarial',label:'Poder Notarial',icon:'⚖️',req:false},
+  {id:'constancia_sf',label:'Constancia de Situación Fiscal',icon:'🏛️',req:true},
+  {id:'fiel',label:'FIEL / e.firma (.cer + .key)',icon:'🔐',req:true},
+  {id:'csd',label:'CSD / Sello Digital (.cer)',icon:'🔏',req:false},
+  {id:'rfc_doc',label:'Documento RFC',icon:'📄',req:true},
+  {id:'contrato_social',label:'Contrato Social / Estatutos',icon:'📃',req:false},
+  {id:'opinion_cumplimiento',label:'Opinión de Cumplimiento SAT',icon:'✅',req:false},
+  {id:'otro_general',label:'Otro documento general',icon:'📎',req:false},
+];
+const DOC_MESES_L=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const DOC_MESES_C=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const DOC_TIPOS_FIN=[
+  {id:'er_anual',label:'Estado de Resultados Anual',icon:'📊',extractable:true},
+  {id:'balance_general',label:'Balance General al 31-Dic',icon:'⚖️',extractable:true},
+  {id:'catalogo_cuentas',label:'Catálogo de Cuentas',icon:'📑',extractable:false},
+  {id:'declaracion_anual',label:'Declaración Anual Presentada',icon:'🏛️',extractable:false},
+  {id:'declaracion_pp',label:'Comprobantes PP (todos los meses)',icon:'💳',extractable:false},
+  {id:'aux_ingresos',label:'Auxiliar de Ingresos',icon:'💹',extractable:true},
+  {id:'aux_iva',label:'Auxiliar de IVA',icon:'🔢',extractable:true},
+  {id:'aux_bancos',label:'Conciliaciones Bancarias',icon:'🏦',extractable:false},
+  {id:'nomina',label:'Resumen de Nómina',icon:'👥',extractable:true},
+  {id:'otro_financiero',label:'Otro documento financiero',icon:'📎',extractable:false},
+];
+
+let docClienteActual=null,docTab='generales',docEjercicio=new Date().getFullYear();
+let docCacheGen=[],docCacheFin=[];
+
+function escD(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function docToast(msg,tipo){
+  const bg=tipo==='ok'?'#EAF3DE':tipo==='err'?'#FCEBEB':'#FAEEDA';
+  const cl=tipo==='ok'?'#3B6D11':tipo==='err'?'#A32D2D':'#854F0B';
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:24px;right:24px;z-index:9999;background:'+bg+';color:'+cl+';border:1px solid;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.12)';
+  t.textContent=(tipo==='ok'?'✓ ':tipo==='err'?'✕ ':'⚠ ')+msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),3000);
+}
+
+async function renderDocumentacion(){
+  if(!userCanAccess(session.email,'doc')){renderPortada();return;}
+  await loadCaches();
+  docClienteActual=null;docCacheGen=[];docCacheFin=[];
+  renderDocLista();
+}
+
+function renderDocLista(){
+  const lista=clientesCache.filter(c=>c.activo!==false).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
+  app.innerHTML=renderTopNav('doc')+
+  '<div style="max-width:700px;margin:0 auto">'+
+  '<div style="margin-bottom:1.25rem">'+
+  '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.04em">MSST Consulting · TaxIA</div>'+
+  '<div style="font-size:22px;font-weight:700;margin-top:2px">Documentación del Cliente</div>'+
+  '<div style="font-size:12px;color:#888;margin-top:2px">Expediente digital — estados financieros y documentos generales</div></div>'+
+  '<div class="card">'+
+  '<div class="sec-label">Seleccionar cliente</div>'+
+  '<div style="position:relative;margin-bottom:10px">'+
+  '<span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;pointer-events:none">🔍</span>'+
+  '<input type="text" id="doc-buscar" placeholder="Buscar cliente..." oninput="docFiltrar(this.value)" style="padding-left:32px"></div>'+
+  '<div id="doc-lista" style="max-height:420px;overflow-y:auto">'+docRenderLista(lista)+'</div></div></div>';
+}
+
+function docRenderLista(lista){
+  if(!lista.length) return '<div style="text-align:center;padding:1.5rem;color:#888">Sin clientes.</div>';
+  return lista.map(c=>{
+    const id=escD(String(c.id)), nom=escD(c.nombre), ini=c.nombre.charAt(0).toUpperCase();
+    return '<div data-id="'+id+'" data-nombre="'+nom+'" onclick="docCliClick(this)" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid #e5e5e0;border-radius:10px;cursor:pointer;margin-bottom:6px;background:#fafafa" onmouseenter="this.style.borderColor=&quot;#0f4c81&quot;" onmouseleave="this.style.borderColor=&quot;#e5e5e0&quot;">'+
+    '<div style="width:38px;height:38px;border-radius:10px;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#0f4c81;flex-shrink:0">'+ini+'</div>'+
+    '<div style="flex:1"><div style="font-size:14px;font-weight:600">'+nom+'</div>'+(c.rfc?'<div style="font-size:11px;color:#888">'+escD(c.rfc)+'</div>':'')+'</div>'+
+    '<div style="font-size:11px;color:#888;text-transform:uppercase">'+escD(c.tipo||'PM')+'</div><span style="color:#888">›</span></div>';
+  }).join('');
+}
+
+function docFiltrar(q){
+  const lista=clientesCache.filter(c=>c.activo!==false&&(!q||(c.nombre||'').toLowerCase().includes(q.toLowerCase())));
+  const el=document.getElementById('doc-lista');if(el)el.innerHTML=docRenderLista(lista);
+}
+
+async function docSelCliente(id,nombre){
+  docClienteActual={id,nombre};docTab='generales';docEjercicio=new Date().getFullYear();
+  app.innerHTML=renderTopNav('doc')+'<div class="loading"><span class="spinner"></span>Cargando expediente...</div>';
+  try{
+    [docCacheGen,docCacheFin]=await Promise.all([
+      sbGet('client_documents','?cliente_id=eq.'+encodeURIComponent(id)+'&categoria=eq.general&select=*&order=tipo.asc'),
+      sbGet('client_documents','?cliente_id=eq.'+encodeURIComponent(id)+'&categoria=eq.financiero&select=*&order=ejercicio.desc,mes.asc'),
+    ]);
+    docCacheGen=docCacheGen||[];docCacheFin=docCacheFin||[];
+  }catch(e){docCacheGen=[];docCacheFin=[];}
+  docRenderCliente();
+}
+
+function docRenderCliente(){
+  const c=docClienteActual;
+  const ejercicios=[...new Set(docCacheFin.map(d=>d.ejercicio).filter(Boolean))].sort((a,b)=>b-a);
+  if(!ejercicios.includes(docEjercicio))ejercicios.unshift(docEjercicio);
+  app.innerHTML=renderTopNav('doc')+
+  '<div style="max-width:900px;margin:0 auto">'+
+  '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">'+
+  '<div style="display:flex;align-items:center;gap:10px">'+
+  '<button class="btn btn-sm" onclick="renderDocumentacion()">← Clientes</button>'+
+  '<div style="width:36px;height:36px;border-radius:10px;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#0f4c81">'+c.nombre.charAt(0).toUpperCase()+'</div>'+
+  '<div><div style="font-size:16px;font-weight:700">'+escD(c.nombre)+'</div>'+
+  '<div style="font-size:11px;color:#888">'+docCacheGen.length+' doc. generales · '+docCacheFin.length+' doc. financieros</div></div></div></div>'+
+  '<div class="tab-row">'+
+  '<button class="tab '+(docTab==='generales'?'active':'')+'" onclick="docSetTab(\'generales\')">📜 Generales del cliente</button>'+
+  '<button class="tab '+(docTab==='financiero'?'active':'')+'" onclick="docSetTab(\'financiero\')">📊 Estados financieros</button>'+
+  '</div>'+
+  '<div id="doc-tab-content">'+docTabContent(ejercicios)+'</div></div>';
+}
+
+function docSetTab(tab){
+  docTab=tab;
+  const ejercicios=[...new Set(docCacheFin.map(d=>d.ejercicio).filter(Boolean))].sort((a,b)=>b-a);
+  if(!ejercicios.includes(docEjercicio))ejercicios.unshift(docEjercicio);
+  const el=document.getElementById('doc-tab-content');
+  if(el)el.innerHTML=docTabContent(ejercicios);
+  document.querySelectorAll('.tab-row .tab').forEach(b=>{
+    const isGen=b.textContent.includes('Generales');
+    b.classList.toggle('active',(tab==='generales'&&isGen)||(tab==='financiero'&&!isGen));
+  });
+}
+
+function docTabContent(ejercicios){
+  return docTab==='generales'?docRenderGenerales():docRenderFinanciero(ejercicios);
+}
+
+function docRenderGenerales(){
+  const docMap={};docCacheGen.forEach(d=>{docMap[d.tipo]=d;});
+  const rows=DOC_TIPOS_GENERAL.map(function(t){
+    const d=docMap[t.id]||null, ok=!!(d&&d.archivo_url), ext=(d&&d.archivo_ext)||'';
+    const extClr=ext==='pdf'?'#dc2626':ext==='csv'?'#3B6D11':'#185FA5';
+    let html='<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f0f0ec">';
+    html+='<div style="font-size:20px;width:28px;text-align:center;flex-shrink:0">'+t.icon+'</div>';
+    html+='<div style="flex:1"><div style="font-size:13px;font-weight:600">'+escD(t.label)+(t.req?'<span style="color:#dc2626;margin-left:4px;font-size:10px">*</span>':'')+'</div>';
+    html+=ok?('<div style="font-size:11px;color:#888">'+escD(d.nombre_archivo||'')+'</div>'):('<div style="font-size:11px;color:#bbb">Sin documento</div>');
+    html+='</div>';
+    if(ok) html+='<span style="background:#f5f5f3;color:'+extClr+';border:1px solid #e5e5e0;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700">'+ext.toUpperCase()+'</span>';
+    html+='<div style="display:flex;gap:5px;flex-shrink:0">';
+    if(ok){
+      html+='<button class="btn btn-sm" data-did="'+escD(String(d.id))+'" data-url="'+escD(d.archivo_url||'')+'" data-nombre="'+escD(d.nombre_archivo||'')+'" onclick="docVerDoc(this.dataset.did,this.dataset.url,this.dataset.nombre)">Ver</button>';
+      html+='<button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border-color:#fca5a5" data-did="'+escD(String(d.id))+'" onclick="docElimDoc(this.dataset.did,\'general\')">✕</button>';
+    }
+    html+='<label class="btn btn-sm btn-primary" style="cursor:pointer;margin:0">'+(ok?'↑ Reemplazar':'↑ Subir');
+    html+='<input type="file" accept=".pdf,.csv,.xlsx,.xls,.jpg,.png" style="display:none" data-tipo="'+escD(t.id)+'" data-label="'+escD(t.label)+'" onchange="docSubirGeneral(this.dataset.tipo,this.dataset.label,this)"></label>';
+    html+='</div></div>';
+    return html;
+  }).join('');
+  return '<div class="card">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+    +'<div class="sec-label" style="margin-bottom:0">Documentos generales</div>'
+    +'<div style="font-size:11px;color:#888">'+docCacheGen.length+' de '+DOC_TIPOS_GENERAL.length+' tipos</div></div>'
+    +'<div style="background:#E6F1FB;border-radius:8px;padding:8px 12px;font-size:11px;color:#185FA5;margin-bottom:12px">'
+    +'📎 Sube los documentos legales y administrativos del cliente. Formatos: PDF, CSV, Excel, imagen.</div>'
+    +rows+'<div style="font-size:10px;color:#bbb;margin-top:8px">* Documento obligatorio</div></div>';
+}
+
+function docRenderFinanciero(ejercicios){
+  const anioOpts=ejercicios.map(function(e){return '<option value="'+e+'"'+(e===docEjercicio?' selected':'')+'>'+e+'</option>';}).join('');
+  const finEj=docCacheFin.filter(function(d){return d.ejercicio===docEjercicio;});
+  const balMap={};finEj.filter(function(d){return d.tipo==='balanza';}).forEach(function(d){balMap[d.mes]=d;});
+
+  const grid=DOC_MESES_L.map(function(mes,i){
+    const n=i+1, d=balMap[n]||null, ok=!!d;
+    const col=ok?'#3B6D11':'#888', brd=ok?'#3B6D11':'#e5e5e0', bg=ok?'#f0f7f0':'#fafafa';
+    const hasCifras=!!(d&&d.cifras&&Object.keys(d.cifras).length);
+    let html='<div style="border:1.5px solid '+brd+';border-radius:8px;padding:8px;background:'+bg+';text-align:center">';
+    html+='<div style="font-size:12px;font-weight:600;color:'+col+'">'+DOC_MESES_C[i]+'</div>';
+    html+='<div style="font-size:9px;color:'+col+';margin:2px 0">'+(ok?'✓ Cargada':'Sin cargar')+'</div>';
+    if(hasCifras) html+='<div style="font-size:9px;color:#3B4BC8">✨ Cifras</div>';
+    html+='<div style="margin-top:5px;display:flex;flex-direction:column;gap:3px">';
+    if(ok) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px" data-did="'+escD(String(d.id))+'" data-nombre="'+escD(d.nombre_archivo||'')+'" onclick="docVerCifras(this.dataset.did,this.dataset.nombre)">Ver</button>';
+    if(ok&&!hasCifras) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#EEEDFE;color:#3B4BC8;border-color:#c5d0ff" data-did="'+escD(String(d.id))+'" onclick="docExtraerCifras(this.dataset.did,\'balanza\','+docEjercicio+','+n+')">✨ IA</button>';
+    html+='<label class="btn btn-sm" style="font-size:9px;padding:2px 4px;cursor:pointer;justify-content:center;margin:0">'+(ok?'↑':'↑ Subir');
+    html+='<input type="file" accept=".pdf,.csv,.xlsx,.xls" style="display:none" data-mes="'+n+'" data-ej="'+docEjercicio+'" onchange="docSubirBalanza(parseInt(this.dataset.mes),parseInt(this.dataset.ej),this)"></label>';
+    html+='</div></div>';
+    return html;
+  }).join('');
+
+  const otros=DOC_TIPOS_FIN.map(function(t){
+    const d=finEj.find(function(x){return x.tipo===t.id;})||null, ok=!!d;
+    const hasCifras=!!(d&&d.cifras&&Object.keys(d.cifras).length);
+    let html='<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f0ec">';
+    html+='<div style="font-size:18px;width:24px;text-align:center;flex-shrink:0">'+t.icon+'</div>';
+    html+='<div style="flex:1"><div style="font-size:13px;font-weight:600">'+escD(t.label)+'</div>';
+    html+=ok?('<div style="font-size:11px;color:#888">'+escD(d.nombre_archivo||'')+(hasCifras?' · Con cifras':'')+'</div>'):('<div style="font-size:11px;color:#bbb">Sin documento</div>');
+    html+='</div><div style="display:flex;gap:5px;flex-shrink:0">';
+    if(ok&&t.extractable&&!hasCifras) html+='<button class="btn btn-sm" style="background:#EEEDFE;color:#3B4BC8;border-color:#c5d0ff;font-size:10px" data-did="'+escD(String(d.id))+'" data-tipo="'+escD(t.id)+'" onclick="docExtraerCifras(this.dataset.did,this.dataset.tipo,'+docEjercicio+',null)">✨ IA</button>';
+    if(ok){
+      html+='<button class="btn btn-sm" data-did="'+escD(String(d.id))+'" data-url="'+escD(d.archivo_url||'')+'" data-nombre="'+escD(d.nombre_archivo||'')+'" onclick="docVerDoc(this.dataset.did,this.dataset.url,this.dataset.nombre)">Ver</button>';
+      html+='<button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border-color:#fca5a5" data-did="'+escD(String(d.id))+'" onclick="docElimDoc(this.dataset.did,\'financiero\')">✕</button>';
+    }
+    html+='<label class="btn btn-sm btn-primary" style="cursor:pointer;margin:0;font-size:11px">'+(ok?'↑':'↑ Subir');
+    html+='<input type="file" accept=".pdf,.csv,.xlsx,.xls" style="display:none" data-tipo="'+escD(t.id)+'" data-label="'+escD(t.label)+'" data-ej="'+docEjercicio+'" onchange="docSubirFinanciero(this.dataset.tipo,this.dataset.label,parseInt(this.dataset.ej),this)"></label>';
+    html+='</div></div>';
+    return html;
+  }).join('');
+
+  return '<div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+    +'<div style="font-size:12px;color:#888;font-weight:600">EJERCICIO FISCAL</div>'
+    +'<select onchange="docEjercicio=parseInt(this.value);docSetTab(\'financiero\')" style="font-size:13px;padding:6px 10px;border:1px solid #e0e0db;border-radius:8px;width:130px">'+anioOpts+'</select>'
+    +'<div style="font-size:11px;color:#888">'+finEj.length+' documentos en '+docEjercicio+'</div></div>'
+    +'<div class="card"><div class="sec-label">Balanzas de comprobación — '+docEjercicio+'</div>'
+    +'<div style="background:#E6F1FB;border-radius:8px;padding:8px 12px;font-size:11px;color:#185FA5;margin-bottom:12px">Sube en CSV o Excel para extracción automática. También acepta PDF.</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">'+grid+'</div></div>'
+    +'<div class="card"><div class="sec-label">Otros documentos financieros — '+docEjercicio+'</div>'+otros+'</div>';
+}
+
+async function docUploadStorage(file,path){
+  const AK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+  const ext=file.name.split('.').pop().toLowerCase();
+  const ct=ext==='pdf'?'application/pdf':ext==='csv'?'text/csv':'application/octet-stream';
+  const r=await fetch(SB_URL+'/storage/v1/object/documentos-clientes/'+path,{
+    method:'POST',headers:{'Authorization':'Bearer '+AK,'apikey':AK,'Content-Type':ct,'x-upsert':'true'},body:file
+  });
+  if(!r.ok)throw new Error('Storage error '+r.status+': '+await r.text());
+  return SB_URL+'/storage/v1/object/authenticated/documentos-clientes/'+path;
+}
+
+async function docSubirGeneral(tipoId,tipoLabel,input){
+  const file=input.files[0];if(!file)return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  docToast('Subiendo '+file.name+'...','warn');
+  try{
+    const url=await docUploadStorage(file,'general/'+docClienteActual.id+'/'+tipoId+'-'+Date.now()+'.'+ext);
+    const existing=docCacheGen.find(d=>d.tipo===tipoId);
+    const payload={cliente_id:String(docClienteActual.id),cliente_nombre:docClienteActual.nombre,
+      categoria:'general',tipo:tipoId,tipo_label:tipoLabel,nombre_archivo:file.name,
+      archivo_url:url,archivo_ext:ext,cifras:{},status:'cargado',updated_at:nowISO()};
+    if(existing?.id){
+      await sbPatch('client_documents','?id=eq.'+existing.id,payload);
+      const idx=docCacheGen.findIndex(d=>d.id===existing.id);if(idx>=0)docCacheGen[idx]={...existing,...payload};
+    }else{
+      const res=await sbPost('client_documents',{...payload,created_at:nowISO()},'return=representation');
+      const data=await res.json();const nuevo=Array.isArray(data)?data[0]:data;if(nuevo)docCacheGen.push(nuevo);
+    }
+    docSetTab('generales');docToast('Archivo subido','ok');
+  }catch(e){docToast('Error: '+e.message,'err');}
+}
+
+async function docSubirBalanza(mes,ejercicio,input){
+  const file=input.files[0];if(!file)return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  docToast('Subiendo balanza '+DOC_MESES_L[mes-1]+'...','warn');
+  try{
+    const url=await docUploadStorage(file,'financiero/'+docClienteActual.id+'/'+ejercicio+'/balanza_'+mes+'-'+Date.now()+'.'+ext);
+    const existing=docCacheFin.find(d=>d.tipo==='balanza'&&d.mes===mes&&d.ejercicio===ejercicio);
+    let cifras={};
+    if(ext==='csv'){const text=await file.text();cifras=docExtraerCSV(text);}
+    const payload={cliente_id:String(docClienteActual.id),cliente_nombre:docClienteActual.nombre,
+      categoria:'financiero',tipo:'balanza',mes,ejercicio,tipo_label:'Balanza '+DOC_MESES_L[mes-1],
+      nombre_archivo:file.name,archivo_url:url,archivo_ext:ext,
+      cifras,status:Object.keys(cifras).length?'extraido':'cargado',updated_at:nowISO()};
+    if(existing?.id){
+      await sbPatch('client_documents','?id=eq.'+existing.id,payload);
+      const idx=docCacheFin.findIndex(d=>d.id===existing.id);if(idx>=0)docCacheFin[idx]={...existing,...payload};
+    }else{
+      const res=await sbPost('client_documents',{...payload,created_at:nowISO()},'return=representation');
+      const data=await res.json();const nuevo=Array.isArray(data)?data[0]:data;if(nuevo)docCacheFin.push(nuevo);
+    }
+    const ejs=[...new Set(docCacheFin.map(d=>d.ejercicio).filter(Boolean))].sort((a,b)=>b-a);
+    if(!ejs.includes(docEjercicio))ejs.unshift(docEjercicio);
+    docSetTab('financiero');
+    docToast(Object.keys(cifras).length?'Balanza subida y cifras extraídas del CSV':'Balanza subida — usa ✨ IA para PDF','ok');
+  }catch(e){docToast('Error: '+e.message,'err');}
+}
+
+async function docSubirFinanciero(tipoId,tipoLabel,ejercicio,input){
+  const file=input.files[0];if(!file)return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  docToast('Subiendo '+file.name+'...','warn');
+  try{
+    const url=await docUploadStorage(file,'financiero/'+docClienteActual.id+'/'+ejercicio+'/'+tipoId+'-'+Date.now()+'.'+ext);
+    const existing=docCacheFin.find(d=>d.tipo===tipoId&&d.ejercicio===ejercicio);
+    let cifras={};
+    if(ext==='csv'){const text=await file.text();cifras=docExtraerCSV(text);}
+    const payload={cliente_id:String(docClienteActual.id),cliente_nombre:docClienteActual.nombre,
+      categoria:'financiero',tipo:tipoId,tipo_label:tipoLabel,ejercicio,mes:null,
+      nombre_archivo:file.name,archivo_url:url,archivo_ext:ext,
+      cifras,status:Object.keys(cifras).length?'extraido':'cargado',updated_at:nowISO()};
+    if(existing?.id){
+      await sbPatch('client_documents','?id=eq.'+existing.id,payload);
+      const idx=docCacheFin.findIndex(d=>d.id===existing.id);if(idx>=0)docCacheFin[idx]={...existing,...payload};
+    }else{
+      const res=await sbPost('client_documents',{...payload,created_at:nowISO()},'return=representation');
+      const data=await res.json();const nuevo=Array.isArray(data)?data[0]:data;if(nuevo)docCacheFin.push(nuevo);
+    }
+    docSetTab('financiero');docToast('Documento subido','ok');
+  }catch(e){docToast('Error: '+e.message,'err');}
+}
+
+async function docExtraerCifras(docId,tipo,ejercicio,mes){
+  if(!docId){docToast('Sube el archivo primero','warn');return;}
+  const d=[...docCacheGen,...docCacheFin].find(x=>String(x.id)===String(docId));
+  if(!d){docToast('Documento no encontrado','err');return;}
+  docToast('Extrayendo cifras con IA...','warn');
+  try{
+    const AK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+    const r=await fetch(d.archivo_url,{headers:{'Authorization':'Bearer '+AK,'apikey':AK}});
+    if(!r.ok)throw new Error('No se pudo leer el archivo');
+    const blob=await r.blob();
+    const b64=await new Promise((res,rej)=>{const fr=new FileReader();fr.onloadend=()=>res(fr.result.split(',')[1]);fr.onerror=rej;fr.readAsDataURL(blob);});
+    const mesLbl=mes?DOC_MESES_L[mes-1]+' '+ejercicio:'ejercicio '+ejercicio;
+    const prompt=tipo==='balanza'
+      ?'Eres contador experto. De esta balanza de comprobación al '+mesLbl+' extrae cifras clave en MXN. Solo JSON sin markdown: {"ingresos":0,"costo_ventas":0,"gastos_operacion":0,"otros_ingresos":0,"otros_gastos":0,"activo_fijo_bruto":0,"depreciacion_acumulada":0,"cuentas_por_cobrar":0,"bancos":0,"inventarios":0,"cuentas_por_pagar":0}'
+      :tipo==='er_anual'
+      ?'Eres contador experto. De este Estado de Resultados extrae cifras en MXN. Solo JSON sin markdown: {"ingresos":0,"costo_ventas":0,"utilidad_bruta":0,"gastos_operacion":0,"utilidad_operacion":0,"productos_financieros":0,"gastos_financieros":0,"utilidad_antes_isr":0,"isr_contable":0,"utilidad_neta":0}'
+      :tipo==='nomina'
+      ?'Extrae resumen de nómina en JSON: {"total_nomina":0,"sueldos":0,"prestaciones":0,"imss_patronal":0,"infonavit":0,"num_trabajadores":0}'
+      :'Extrae las cifras financieras principales en JSON.';
+    const apiRes=await fetch(SB_URL+'/functions/v1/claude-analysis',{
+      method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+AK},
+      body:JSON.stringify({prompt,pdf_base64:b64,pdf_media_type:'application/pdf'})
+    });
+    const apiData=await apiRes.json();
+    if(!apiRes.ok)throw new Error(apiData.error||'Error API');
+    let raw=(apiData.text||'').replace(/```json|```/g,'').trim();
+    let cifras={};
+    try{cifras=JSON.parse(raw);}catch(e){cifras={_raw:raw};}
+    await sbPatch('client_documents','?id=eq.'+docId,{cifras,status:'extraido',updated_at:nowISO()});
+    const allD=[...docCacheGen,...docCacheFin];
+    const idx=allD.findIndex(x=>String(x.id)===String(docId));
+    if(idx<docCacheGen.length)docCacheGen[idx].cifras=cifras;
+    else docCacheFin[idx-docCacheGen.length].cifras=cifras;
+    const ejs=[...new Set(docCacheFin.map(d=>d.ejercicio).filter(Boolean))].sort((a,b)=>b-a);
+    if(!ejs.includes(docEjercicio))ejs.unshift(docEjercicio);
+    docSetTab('financiero');docToast('Cifras extraídas correctamente','ok');
+  }catch(e){docToast('Error extrayendo: '+e.message,'err');}
+}
+
+function docExtraerCSV(text){
+  const lines=text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
+  if(!lines.length)return{};
+  const sep=lines[0].includes(';')?';':',';
+  const header=lines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
+  let iC=0,iN=1,iS=-1;
+  header.forEach((h,i)=>{if(/^CUENTA$|^COD/.test(h))iC=i;else if(/^NOMBRE$|^DESCRIPCION/.test(h))iN=i;else if(/SALDO.?ACTUAL.?NETO|SALDO.?FINAL|SALDO.?NETO|BALANCE$/.test(h))iS=i;});
+  if(iS<0){for(let i=0;i<header.length;i++){if(/SALDO/i.test(header[i])){iS=i;break;}}if(iS<0)iS=header.length-1;}
+  let ingresos=0,costo_ventas=0,gastos_operacion=0,otros_gastos=0,activo_fijo_bruto=0,depreciacion_acumulada=0,cuentas_por_cobrar=0,cuentas_por_pagar=0,inventarios=0,bancos=0;
+  for(let i=1;i<lines.length;i++){
+    const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+    const num=(cols[iC]||'').trim(),nom=(cols[iN]||'').toUpperCase();
+    const saldo=parseFloat((cols[iS]||'').replace(/[$, ]/g,''))||0;
+    if(!num||saldo===0)continue;
+    const p=num.charAt(0);
+    if(p==='4')ingresos+=Math.abs(saldo);
+    else if(p==='5')costo_ventas+=Math.abs(saldo);
+    else if(p==='6'||p==='7'){if(/FINANCIERO|INTERES|CAMBIARIO/.test(nom))otros_gastos+=Math.abs(saldo);else gastos_operacion+=Math.abs(saldo);}
+    else if(p==='1'){
+      if(/BANCO|CAJA/.test(nom))bancos+=Math.abs(saldo);
+      else if(/CLIENTE|DEUDOR/.test(nom))cuentas_por_cobrar+=Math.abs(saldo);
+      else if(/INVENTARIO|MERCANCIA/.test(nom))inventarios+=Math.abs(saldo);
+      else if(/TERRENO|EDIFICIO|MAQUINARIA|EQUIPO|VEHICULO/.test(nom)&&!/DEPRECIA/.test(nom))activo_fijo_bruto+=Math.abs(saldo);
+      else if(/DEPRECIA/.test(nom))depreciacion_acumulada+=Math.abs(saldo);
+    }else if(p==='2'){if(/PROVEEDOR|ACREEDOR/.test(nom))cuentas_por_pagar+=Math.abs(saldo);}
+  }
+  return{ingresos,costo_ventas,gastos_operacion,otros_gastos,activo_fijo_bruto,depreciacion_acumulada,cuentas_por_cobrar,cuentas_por_pagar,inventarios,bancos};
+}
+
+async function docElimDoc(id,cat){
+  if(!confirm('¿Eliminar este documento?'))return;
+  try{
+    await fetch(SB_URL+'/rest/v1/client_documents?id=eq.'+id,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    if(cat==='general')docCacheGen=docCacheGen.filter(d=>String(d.id)!==String(id));
+    else docCacheFin=docCacheFin.filter(d=>String(d.id)!==String(id));
+    docSetTab(docTab);docToast('Documento eliminado','ok');
+  }catch(e){docToast('Error: '+e.message,'err');}
+}
+
+function docVerCifras(id,nombre){
+  const d=[...docCacheGen,...docCacheFin].find(x=>String(x.id)===String(id));
+  if(!d)return;
+  const cifras=d.cifras||{};
+  if(!Object.keys(cifras).length){docToast('Sin cifras. Usa ✨ IA para extraerlas.','warn');return;}
+  const filas=Object.entries(cifras).filter(([k])=>k!=='_raw').map(([k,v])=>
+    '<tr><td style="padding:5px 10px;font-size:12px;color:#555;text-transform:capitalize">'+escD(k.replace(/_/g,' '))+'</td>'+
+    '<td style="padding:5px 10px;font-size:12px;font-weight:600;text-align:right">'+
+    (typeof v==='number'?new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0}).format(v):escD(String(v)))+
+    '</td></tr>'
+  ).join('');
+  const m=document.createElement('div');m.className='modal-overlay';m.id='doc-cifras-modal';
+  m.innerHTML='<div class="modal-box" style="max-width:480px">'+
+  '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
+  '<div><div style="font-size:15px;font-weight:700">Cifras extraídas — ✨ IA</div><div style="font-size:11px;color:#888">'+escD(nombre)+'</div></div>'+
+  '<button onclick="docCerrarCifras()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button></div>'+
+  '<div style="overflow-y:auto;max-height:400px"><table style="width:100%;border-collapse:collapse"><tbody>'+filas+'</tbody></table></div>'+
+  '<button class="btn" style="width:100%;margin-top:12px" onclick="docCerrarCifras()">Cerrar</button></div>';
+  document.body.appendChild(m);
+}
+
+function docCerrarCifras(){const m=document.getElementById('doc-cifras-modal');if(m)m.remove();}
+function docVerDoc(id,url,nombre){if(url)window.open(url,'_blank');else docToast('URL no disponible','warn');}
+
+// ===== API para consulta desde otros módulos =====
+async function docGetCifrasCliente(clienteId,ejercicio,tipo,mes){
+  try{
+    let qs='?cliente_id=eq.'+encodeURIComponent(String(clienteId))+'&ejercicio=eq.'+ejercicio+'&tipo=eq.'+tipo+'&select=cifras,nombre_archivo,status,archivo_url';
+    if(mes!==null&&mes!==undefined)qs+='&mes=eq.'+mes;
+    const rows=await sbGet('client_documents',qs);
+    return rows&&rows[0]?rows[0]:null;
+  }catch(e){return null;}
+}
+
 try {
   document.getElementById('app').style.display = '';
   document.getElementById('app-fallback').style.display = 'none';
