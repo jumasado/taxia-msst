@@ -4772,6 +4772,8 @@ function renderDecAnual(){
 const PP_MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const PP_MESES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+// ===== PP ENTRADA: DROPDOWN TIPO PROYECCIÓN =====
+
 // Impuestos federales disponibles
 const PP_IMPUESTOS_FED = [
   {id:'isr_pm',   badge:'ISR PM', label:'ISR Personas Morales',              ley:'Art. 14 LISR — Pagos provisionales mensuales',       vence:'Día 17 del mes siguiente'},
@@ -4807,58 +4809,75 @@ async function renderPagosProv() {
   if (!userCanAccess(session.email, 'pp')) { renderPortada(); return; }
   await loadCaches();
   ppClienteActivo = null; ppMesActivo = null;
-  
+
+  // Clientes PM: tipo 'pm' o 'PM', o nombre con SA/SC/SRL/CV en mayúsculas, o sin tipo definido
+  const clientesPM = clientesCache.filter(c => {
+    if (c.activo === false) return false;
+    const t = (c.tipo || '').toLowerCase();
+    return t === 'pm' || t === 'persona moral' || t === 'moral' || t === '' || t == null || !t;
+  }).sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+
+  const anioActual = new Date().getFullYear();
+  const anioOpts = [anioActual-1, anioActual, anioActual+1]
+    .map(y => `<option value="${y}"${y===anioActual?' selected':''}>${y}</option>`).join('');
+  const cliOpts = '<option value="">Selecciona cliente PM...</option>' +
+    clientesPM.map(c => `<option value="${c.id}" data-nombre="${escH(c.nombre)}">${escH(c.nombre)}</option>`).join('');
+
   app.innerHTML = renderTopNav('pp') + `
-  <div style="max-width:760px;margin:0 auto;padding:0 0 2rem">
-    <div style="margin-bottom:1.5rem">
-      <div style="font-size:11px;color:#888;font-weight:600;letter-spacing:.06em">MSST CONSULTING · TAXIA</div>
-      <div style="font-size:26px;font-weight:700;color:#1a1a1a;margin-top:2px">Pagos Provisionales</div>
-      <div style="font-size:13px;color:#888;margin-top:2px">Revisión mensual de obligaciones federales y estatales</div>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem">
+    <button class="btn btn-sm" onclick="renderPortada()">← Módulos</button>
+    <div style="font-size:15px;font-weight:600">Pagos Provisionales</div>
+  </div>
+  <div class="card">
+    <div class="sec-label" style="margin-bottom:12px">Seleccionar cliente y período</div>
+    <div class="grid2" style="margin-bottom:12px">
+      <div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px">Cliente — Persona Moral *</div>
+        <select id="pp-cliente-sel" style="width:100%" onchange="ppOnClienteChange(this)">${cliOpts}</select>
+        <input type="hidden" id="pp-cli-nombre" value="">
+      </div>
+      <div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px">Ejercicio fiscal *</div>
+        <select id="pp-ejercicio-sel" style="width:100%">${anioOpts}</select>
+      </div>
     </div>
-    <div class="card">
-      <div class="sec-label">SELECCIONAR CLIENTE</div>
-      <input type="text" id="pp-search" placeholder="🔍 Buscar por nombre..." 
-        oninput="ppFiltrarClientes()" style="margin-bottom:12px;font-size:14px">
-      <div id="pp-clientes-list"></div>
-    </div>
+    <div class="err-msg" id="pp-sel-err" style="display:none"></div>
+    <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="ppEntrarCliente()">Abrir →</button>
   </div>`;
-  ppRenderClientesList('');
 }
 
-function ppFiltrarClientes() {
-  ppRenderClientesList(document.getElementById('pp-search')?.value || '');
+function ppOnClienteChange(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  const nombre = opt?.dataset?.nombre || opt?.text || '';
+  const el = document.getElementById('pp-cli-nombre');
+  if (el) el.value = nombre;
 }
 
-function ppRenderClientesList(filtro) {
-  const lista = clientesCache
-    .filter(c => c.activo !== false)
-    .filter(c => !filtro || (c.nombre || c.razon_social || '').toLowerCase().includes(filtro.toLowerCase()))
-    .sort((a, b) => (a.nombre||'').localeCompare(b.nombre||''));
-  
-  document.getElementById('pp-clientes-list').innerHTML = lista.length
-    ? lista.map(c => {
-        const nombre = c.nombre || c.razon_social || 'Cliente';
-        const inicial = nombre.charAt(0).toUpperCase();
-        return `<div onclick="ppSeleccionarCliente(${c.id},'${escH(nombre)}')" 
-          style="display:flex;align-items:center;gap:12px;padding:14px 16px;border:1.5px solid #e5e5e0;border-radius:12px;margin-bottom:8px;cursor:pointer;transition:all .15s"
-          onmouseover="this.style.borderColor='#3B4BC8';this.style.background='#fafbff'"
-          onmouseout="this.style.borderColor='#e5e5e0';this.style.background='#fff'">
-          <div style="width:38px;height:38px;border-radius:10px;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#3B4BC8;flex-shrink:0">${escH(inicial)}</div>
-          <div style="font-size:14px;font-weight:600;color:#1a1a1a">${escH(nombre)}</div>
-        </div>`;
-      }).join('')
-    : '<div style="text-align:center;color:#888;padding:2rem;font-size:13px">Sin clientes encontrados.</div>';
+async function ppEntrarCliente() {
+  const sel = document.getElementById('pp-cliente-sel');
+  const clientId = parseInt(sel?.value);
+  const nombre = document.getElementById('pp-cli-nombre')?.value || sel?.options[sel.selectedIndex]?.text || '';
+  const ejercicio = parseInt(document.getElementById('pp-ejercicio-sel')?.value);
+  const err = document.getElementById('pp-sel-err');
+  if (!clientId || !nombre || !ejercicio) {
+    err.textContent = 'Selecciona cliente y ejercicio.'; err.style.display = 'block'; return;
+  }
+  err.style.display = 'none';
+  await ppSeleccionarCliente(clientId, nombre, ejercicio);
 }
 
-async function ppSeleccionarCliente(clientId, nombre) {
-  ppClienteActivo = { id: clientId, nombre };
+async function ppSeleccionarCliente(clientId, nombre, ejercicioInicial) {
+  ppClienteActivo = { id: clientId, nombre, ejercicio: ejercicioInicial || new Date().getFullYear() };
   ppTabActiva = 'revision';
+  // Cargar todos los períodos del cliente
+  const periodos = await sbGet('pp_periodos', `?client_id=eq.${clientId}&select=*&order=ejercicio.desc,mes.asc`);
+  (periodos||[]).forEach(p => { if(!ppCache.find(x=>x.id===p.id)) ppCache.push(p); });
   // Cargar config del cliente
   const cfgRows = await sbGet('pp_config', `?client_id=eq.${clientId}&select=*`);
   const cfg = cfgRows && cfgRows[0] ? cfgRows[0] : null;
   ppConfigCache[clientId] = cfg ? {
-    impuestos_fed: cfg.impuestos_fed || ['isr_pm','iva','ret_s','ret_h'],
-    impuestos_est: cfg.impuestos_est || ['isn_bc'],
+    impuestos_fed: typeof cfg.impuestos_fed === 'string' ? JSON.parse(cfg.impuestos_fed) : (cfg.impuestos_fed || ['isr_pm','iva','ret_s','ret_h']),
+    impuestos_est: typeof cfg.impuestos_est === 'string' ? JSON.parse(cfg.impuestos_est) : (cfg.impuestos_est || ['isn_bc']),
     cu: cfg.cu || 0,
     tasa_isr: cfg.tasa_isr || 30,
   } : {
@@ -4896,6 +4915,7 @@ function ppRenderCliente() {
       <div style="display:flex;gap:8px">
         <button class="btn btn-sm" onclick="renderPagosProv()">← Clientes</button>
         <button class="btn btn-sm btn-primary" onclick="ppNuevoPeriodo()">+ Nuevo período</button>
+        <!-- ejercicio activo: se pasa desde ppClienteActivo.ejercicio -->
       </div>
     </div>
 
@@ -4946,10 +4966,10 @@ function ppRenderTab() {
 // ===== TAB: REVISIÓN MENSUAL =====
 function ppRenderRevision(el) {
   if (ppMesActivo) { ppRenderMesDetalle(el); return; }
-  const ejercicio_actual = new Date().getFullYear();
+  const ejercicio_actual = ppClienteActivo?.ejercicio || new Date().getFullYear();
   const ejercicios_disponibles = [...new Set(ppCache.filter(p=>p.client_id===ppClienteActivo.id).map(p=>p.ejercicio))].sort((a,b)=>b-a);
   if (!ejercicios_disponibles.includes(ejercicio_actual)) ejercicios_disponibles.unshift(ejercicio_actual);
-  const ej_sel = ppMesActivo?.ejercicio || ejercicio_actual;
+  const ej_sel = ejercicio_actual;
 
   // Determinar status de cada mes
   const periodosMes = {};
