@@ -4855,12 +4855,15 @@ function ppOnClienteChange(sel) {
 
 async function ppEntrarCliente() {
   const sel = document.getElementById('pp-cliente-sel');
-  const clientId = parseInt(sel?.value);
-  const nombre = document.getElementById('pp-cli-nombre')?.value || sel?.options[sel.selectedIndex]?.text || '';
-  const ejercicio = parseInt(document.getElementById('pp-ejercicio-sel')?.value);
+  const rawVal = sel?.value;
+  const clientId = rawVal ? parseInt(rawVal) : 0;
+  // Tomar nombre del option seleccionado directamente (no depender del hidden)
+  const selIdx = sel?.selectedIndex || 0;
+  const nombre = (sel?.options[selIdx]?.dataset?.nombre) || sel?.options[selIdx]?.text || '';
+  const ejercicio = parseInt(document.getElementById('pp-ejercicio-sel')?.value) || new Date().getFullYear();
   const err = document.getElementById('pp-sel-err');
-  if (!clientId || !nombre || !ejercicio) {
-    err.textContent = 'Selecciona cliente y ejercicio.'; err.style.display = 'block'; return;
+  if (!clientId || clientId <= 0 || !nombre || nombre === 'Selecciona cliente PM...') {
+    err.textContent = 'Por favor selecciona un cliente.'; err.style.display = 'block'; return;
   }
   err.style.display = 'none';
   await ppSeleccionarCliente(clientId, nombre, ejercicio);
