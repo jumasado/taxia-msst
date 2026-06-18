@@ -129,7 +129,10 @@ table.data-table tr:hover td{background:#fafaf8}
 </style>
 </head>
 <body>
-<div class="app" id="app"></div>
+<div id="app-fallback" style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#888;font-size:14px">
+  Iniciando TaxIA...
+</div>
+<div class="app" id="app" style="display:none"></div>
 <script>
 const NEWS_POOL=[
   {src:'SAT',date:'Feb 2026',title:'Nueva versión del CFDI 4.0: cambios en catálogos de uso',summary:'El SAT publicó actualizaciones a los catálogos del CFDI 4.0, incluyendo nuevos usos de comprobante y modificaciones a la validación de RFC receptor para personas morales.',url:'https://www.sat.gob.mx'},
@@ -5879,7 +5882,18 @@ return {
   document.head.appendChild(s);
 })();
 
-renderLogin();
+window.onerror = function(msg, src, line, col, err) {
+  var fb = document.getElementById('app-fallback');
+  if(fb) fb.innerHTML = '<div style="padding:2rem;color:#dc2626;font-family:sans-serif"><strong>Error JS:</strong><br>' + msg + '<br>Línea ' + line + '</div>';
+  return false;
+};
+try {
+  document.getElementById('app').style.display = '';
+  document.getElementById('app-fallback').style.display = 'none';
+  renderLogin();
+} catch(e) {
+  document.getElementById('app-fallback').innerHTML = '<div style="padding:2rem;color:#dc2626;font-family:sans-serif"><strong>Error al iniciar:</strong><br>' + e.message + '<br>' + e.stack + '</div>';
+}
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
 </body>
