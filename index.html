@@ -4855,14 +4855,12 @@ function ppOnClienteChange(sel) {
 
 async function ppEntrarCliente() {
   const sel = document.getElementById('pp-cliente-sel');
-  const rawVal = sel?.value;
-  const clientId = rawVal ? parseInt(rawVal) : 0;
-  // Tomar nombre del option seleccionado directamente (no depender del hidden)
+  const clientId = sel?.value; // mantener como string (puede ser int o UUID)
   const selIdx = sel?.selectedIndex || 0;
-  const nombre = (sel?.options[selIdx]?.dataset?.nombre) || sel?.options[selIdx]?.text || '';
+  const nombre = sel?.options[selIdx]?.dataset?.nombre || sel?.options[selIdx]?.text || '';
   const ejercicio = parseInt(document.getElementById('pp-ejercicio-sel')?.value) || new Date().getFullYear();
   const err = document.getElementById('pp-sel-err');
-  if (!clientId || clientId <= 0 || !nombre || nombre === 'Selecciona cliente PM...') {
+  if (!clientId || !nombre || nombre === 'Selecciona cliente PM...') {
     err.textContent = 'Por favor selecciona un cliente.'; err.style.display = 'block'; return;
   }
   err.style.display = 'none';
@@ -4970,13 +4968,13 @@ function ppRenderTab() {
 function ppRenderRevision(el) {
   if (ppMesActivo) { ppRenderMesDetalle(el); return; }
   const ejercicio_actual = ppClienteActivo?.ejercicio || new Date().getFullYear();
-  const ejercicios_disponibles = [...new Set(ppCache.filter(p=>p.client_id===ppClienteActivo.id).map(p=>p.ejercicio))].sort((a,b)=>b-a);
+  const ejercicios_disponibles = [...new Set(ppCache.filter(p=>String(p.client_id)===String(ppClienteActivo.id)).map(p=>p.ejercicio))].sort((a,b)=>b-a);
   if (!ejercicios_disponibles.includes(ejercicio_actual)) ejercicios_disponibles.unshift(ejercicio_actual);
   const ej_sel = ejercicio_actual;
 
   // Determinar status de cada mes
   const periodosMes = {};
-  ppCache.filter(p=>p.client_id===ppClienteActivo.id&&p.ejercicio===ej_sel).forEach(p=>{
+  ppCache.filter(p=>String(p.client_id)===String(ppClienteActivo.id)&&p.ejercicio===ej_sel).forEach(p=>{
     periodosMes[p.mes] = p;
   });
 
@@ -5022,7 +5020,7 @@ function ppCambiarEjercicio(ej) {
   const el = document.getElementById('pp-tab-content');
   // Re-render con nuevo ejercicio
   const periodosMes = {};
-  ppCache.filter(p=>p.client_id===ppClienteActivo.id&&p.ejercicio===ej).forEach(p=>{periodosMes[p.mes]=p;});
+  ppCache.filter(p=>String(p.client_id)===String(ppClienteActivo.id)&&p.ejercicio===ej).forEach(p=>{periodosMes[p.mes]=p;});
   const mesActual = new Date().getMonth() + 1;
   const botonesMes = PP_MESES_LARGO.map((mes, i) => {
     const numMes = i + 1;
@@ -5039,7 +5037,7 @@ function ppCambiarEjercicio(ej) {
 
 async function ppAbrirMes(ejercicio, mes) {
   // Buscar o crear período
-  let periodo = ppCache.find(p => p.client_id===ppClienteActivo.id && p.ejercicio===ejercicio && p.mes===mes);
+  let periodo = ppCache.find(p => String(p.client_id)===String(ppClienteActivo.id) && p.ejercicio===ejercicio && p.mes===mes);
   if (!periodo) {
     const nuevo = {
       client_id: ppClienteActivo.id, cliente_nombre: ppClienteActivo.nombre,
@@ -5468,7 +5466,7 @@ function ppRenderHistorico(el) {
 
 // ===== TAB: INFORME DE REVISIÓN =====
 function ppRenderInforme(el) {
-  const ejercicios = [...new Set(ppCache.filter(p=>p.client_id===ppClienteActivo.id).map(p=>p.ejercicio))].sort((a,b)=>b-a);
+  const ejercicios = [...new Set(ppCache.filter(p=>String(p.client_id)===String(ppClienteActivo.id)).map(p=>p.ejercicio))].sort((a,b)=>b-a);
   const ejActual = ejercicios[0] || new Date().getFullYear();
   el.innerHTML = `
   <div class="card" style="margin-bottom:12px">
@@ -5491,14 +5489,14 @@ function ppRenderInforme(el) {
     <button class="btn btn-primary" onclick="ppGenerarInforme()">🖨 Imprimir / exportar</button>
   </div>
   <div id="pp-informe-preview" class="card" style="min-height:120px">
-    ${ppCache.filter(p=>p.client_id===ppClienteActivo.id&&p.ejercicio===ejActual).length
+    ${ppCache.filter(p=>String(p.client_id)===String(ppClienteActivo.id)&&p.ejercicio===ejActual).length
       ? ppBuildInformeHTML(ejActual, 0)
       : '<div style="text-align:center;padding:2rem;color:#888;font-size:13px">Sin datos para el período.</div>'}
   </div>`;
 }
 
 function ppBuildInformeHTML(ejercicio, mesFiltro) {
-  const periodos = ppCache.filter(p => p.client_id===ppClienteActivo.id && p.ejercicio===ejercicio && (mesFiltro===0||p.mes===mesFiltro)).sort((a,b)=>a.mes-b.mes);
+  const periodos = ppCache.filter(p => String(p.client_id)===String(ppClienteActivo.id) && p.ejercicio===ejercicio && (mesFiltro===0||p.mes===mesFiltro)).sort((a,b)=>a.mes-b.mes);
   if (!periodos.length) return '<div style="text-align:center;padding:1rem;color:#888">Sin datos para el período.</div>';
   const rows = periodos.map(p => {
     const imp = p.impuestos || {};
