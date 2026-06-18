@@ -4967,72 +4967,63 @@ function ppRenderTab() {
 // ===== TAB: REVISIÓN MENSUAL =====
 function ppRenderRevision(el) {
   if (ppMesActivo) { ppRenderMesDetalle(el); return; }
-  const ejercicio_actual = ppClienteActivo?.ejercicio || new Date().getFullYear();
+  const ej_sel = ppClienteActivo?.ejercicio || new Date().getFullYear();
   const ejercicios_disponibles = [...new Set(ppCache.filter(p=>String(p.client_id)===String(ppClienteActivo.id)).map(p=>p.ejercicio))].sort((a,b)=>b-a);
-  if (!ejercicios_disponibles.includes(ejercicio_actual)) ejercicios_disponibles.unshift(ejercicio_actual);
-  const ej_sel = ejercicio_actual;
+  if (!ejercicios_disponibles.includes(ej_sel)) ejercicios_disponibles.unshift(ej_sel);
+  ppRenderRevisionGrid(el, ej_sel, ejercicios_disponibles);
+}
 
-  // Determinar status de cada mes
+function ppRenderRevisionGrid(el, ej_sel, ejercicios_disponibles) {
   const periodosMes = {};
-  ppCache.filter(p=>String(p.client_id)===String(ppClienteActivo.id)&&p.ejercicio===ej_sel).forEach(p=>{
-    periodosMes[p.mes] = p;
-  });
+  ppCache.filter(p=>String(p.client_id)===String(ppClienteActivo.id)&&p.ejercicio===ej_sel).forEach(p=>{periodosMes[p.mes]=p;});
 
-  const mesActual = new Date().getMonth() + 1;
-  const botonesMes = PP_MESES_LARGO.map((mes, i) => {
+  let ejOpts = '';
+  (ejercicios_disponibles||[ej_sel]).forEach(function(e){
+    ejOpts += '<option value="'+e+'"'+(e===ej_sel?' selected':'')+'>'+e+'</option>';
+  });
+  if (!(ejercicios_disponibles||[]).includes(ej_sel-1)) {
+    ejOpts += '<option value="'+(ej_sel-1)+'">'+(ej_sel-1)+'</option>';
+  }
+
+  let botonesMes = '';
+  PP_MESES_LARGO.forEach(function(mes, i) {
     const numMes = i + 1;
     const periodo = periodosMes[numMes];
-    const revisado = periodo?.revisado;
-    const conAlertas = periodo && !revisado && periodo.status === 'alerta';
-    const color = revisado ? '#3B6D11' : conAlertas ? '#854F0B' : '#888';
-    const bg = revisado ? '#EAF3DE' : conAlertas ? '#FAEEDA' : '#f5f5f3';
-    const border = revisado ? '#3B6D11' : conAlertas ? '#e0b44a' : '#e5e5e0';
-    return `<button onclick="ppAbrirMes(${ej_sel},${numMes})" 
-      style="padding:10px;font-size:13px;font-weight:600;border:1.5px solid ${border};border-radius:8px;background:${bg};color:${color};cursor:pointer;font-family:inherit;transition:all .15s"
-      onmouseover="this.style.borderColor='#3B4BC8'" onmouseout="this.style.borderColor='${border}'">
-      ${PP_MESES_CORTO[i]}
-    </button>`;
-  }).join('');
+    const revisado = periodo && periodo.revisado;
+    const alerta = periodo && !revisado && periodo.status === 'alerta';
+    const color = revisado ? '#3B6D11' : alerta ? '#854F0B' : '#444';
+    const bg = revisado ? '#EAF3DE' : alerta ? '#FAEEDA' : '#f5f5f3';
+    const border = revisado ? '#3B6D11' : alerta ? '#e0b44a' : '#e5e5e0';
+    botonesMes += '<button onclick="ppAbrirMes('+ej_sel+','+numMes+')"'
+      +' style="padding:10px;font-size:13px;font-weight:600;border:1.5px solid '+border
+      +';border-radius:8px;background:'+bg+';color:'+color
+      +';cursor:pointer;font-family:inherit;transition:all .15s">'
+      +PP_MESES_CORTO[i]+'</button>';
+  });
 
-  el.innerHTML = `
-  <div class="card" style="margin-bottom:12px">
-    <div class="sec-label">SELECCIONAR PERÍODO</div>
-    <div style="margin-bottom:12px">
-      <div style="font-size:11px;color:#888;font-weight:600;margin-bottom:6px">EJERCICIO FISCAL</div>
-      <select onchange="ppCambiarEjercicio(parseInt(this.value))" style="width:220px;font-size:14px;padding:8px 10px;border:1px solid #e0e0db;border-radius:8px">
-        ${ejercicios_disponibles.map(e=>`<option value="${e}" ${e===ej_sel?'selected':''}>${e}</option>`).join('')}
-        <option value="${ej_sel-1}" ${!ejercicios_disponibles.includes(ej_sel-1)?'':'hidden'}>${ej_sel-1}</option>
-      </select>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px">
-      ${botonesMes}
-    </div>
-    <div style="display:flex;gap:14px;font-size:11px;color:#888">
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3B6D11;margin-right:4px"></span>Revisado</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#854F0B;margin-right:4px"></span>Con alertas</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ccc;margin-right:4px"></span>Sin iniciar</span>
-    </div>
-  </div>`;
+  el.innerHTML = '<div class="card" style="margin-bottom:12px">'
+    +'<div class="sec-label">SELECCIONAR PERÍODO</div>'
+    +'<div style="margin-bottom:12px">'
+    +'<div style="font-size:11px;color:#888;font-weight:600;margin-bottom:6px">EJERCICIO FISCAL</div>'
+    +'<select onchange="ppCambiarEjercicio(parseInt(this.value))" style="width:220px;font-size:14px;padding:8px 10px;border:1px solid #e0e0db;border-radius:8px">'
+    +ejOpts+'</select></div>'
+    +'<div id="pp-meses-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px">'
+    +botonesMes+'</div>'
+    +'<div style="display:flex;gap:14px;font-size:11px;color:#888">'
+    +'<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3B6D11;margin-right:4px"></span>Revisado</span>'
+    +'<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#854F0B;margin-right:4px"></span>Con alertas</span>'
+    +'<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ccc;margin-right:4px"></span>Sin iniciar</span>'
+    +'</div></div>';
 }
 
 function ppCambiarEjercicio(ej) {
+  ppClienteActivo.ejercicio = ej;
   ppMesActivo = null;
   const el = document.getElementById('pp-tab-content');
-  // Re-render con nuevo ejercicio
-  const periodosMes = {};
-  ppCache.filter(p=>String(p.client_id)===String(ppClienteActivo.id)&&p.ejercicio===ej).forEach(p=>{periodosMes[p.mes]=p;});
-  const mesActual = new Date().getMonth() + 1;
-  const botonesMes = PP_MESES_LARGO.map((mes, i) => {
-    const numMes = i + 1;
-    const periodo = periodosMes[numMes];
-    const revisado = periodo?.revisado;
-    const color = revisado ? '#3B6D11' : '#888';
-    const bg = revisado ? '#EAF3DE' : '#f5f5f3';
-    const border = revisado ? '#3B6D11' : '#e5e5e0';
-    return `<button onclick="ppAbrirMes(${ej},${numMes})" 
-      style="padding:10px;font-size:13px;font-weight:600;border:1.5px solid ${border};border-radius:8px;background:${bg};color:${color};cursor:pointer;font-family:inherit">${PP_MESES_CORTO[i]}</button>`;
-  }).join('');
-  el.querySelector('[style*="grid-template-columns:repeat(6"]').innerHTML = botonesMes;
+  if (!el) return;
+  const ejercicios_disponibles = [...new Set(ppCache.filter(p=>String(p.client_id)===String(ppClienteActivo.id)).map(p=>p.ejercicio))].sort((a,b)=>b-a);
+  if (!ejercicios_disponibles.includes(ej)) ejercicios_disponibles.unshift(ej);
+  ppRenderRevisionGrid(el, ej, ejercicios_disponibles);
 }
 
 async function ppAbrirMes(ejercicio, mes) {
