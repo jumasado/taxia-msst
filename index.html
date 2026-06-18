@@ -4855,15 +4855,18 @@ function ppOnClienteChange(sel) {
 
 async function ppEntrarCliente() {
   const sel = document.getElementById('pp-cliente-sel');
-  const clientId = sel?.value; // mantener como string (puede ser int o UUID)
-  const selIdx = sel?.selectedIndex || 0;
-  const nombre = sel?.options[selIdx]?.dataset?.nombre || sel?.options[selIdx]?.text || '';
-  const ejercicio = parseInt(document.getElementById('pp-ejercicio-sel')?.value) || new Date().getFullYear();
+  const ejSel = document.getElementById('pp-ejercicio-sel');
   const err = document.getElementById('pp-sel-err');
-  if (!clientId || !nombre || nombre === 'Selecciona cliente PM...') {
-    err.textContent = 'Por favor selecciona un cliente.'; err.style.display = 'block'; return;
+  const clientId = sel ? sel.value : '';
+  const ejercicio = ejSel ? (parseInt(ejSel.value) || new Date().getFullYear()) : new Date().getFullYear();
+  // Buscar el cliente directamente en clientesCache por id
+  const cliente = clientesCache.find(c => String(c.id) === String(clientId));
+  if (!clientId || !cliente) {
+    if(err){err.textContent = 'Por favor selecciona un cliente.'; err.style.display = 'block';}
+    return;
   }
-  err.style.display = 'none';
+  if(err) err.style.display = 'none';
+  const nombre = cliente.nombre || cliente.razon_social || '';
   await ppSeleccionarCliente(clientId, nombre, ejercicio);
 }
 
