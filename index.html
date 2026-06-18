@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TaxIA día a día</title>
-<!-- build: 20260617 -->
+<!-- build: 20260618 -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -4765,206 +4765,846 @@ function renderDecAnual(){
 }
 
 // ===== PAGOS PROVISIONALES =====
-let ppCache=[];
-let ppClienteActivo=null;
+// ===== PAGOS PROVISIONALES — MÓDULO COMPLETO =====
+// Art. 14 LISR (ISR PM), Art. 5-D LIVA, Art. 96 LISR (Ret. Sueldos), 
+// Arts. 106 y 116 LISR (Ret. Honorarios/Arr.), Art. 40 LHBC (ISN BC)
 
-const PP_MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const PP_PERIODOS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const PP_MESES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const PP_MESES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-async function renderPagosProv(){
-  if(!userCanAccess(session.email,'pp')){renderPortada();return;}
-  app.innerHTML=renderTopNav('pp')+`<div class="loading" id="pp-load"><span class="spinner"></span>Cargando...</div><div id="pp-content"></div>`;
+// Impuestos federales disponibles
+const PP_IMPUESTOS_FED = [
+  {id:'isr_pm',   badge:'ISR PM', label:'ISR Personas Morales',              ley:'Art. 14 LISR — Pagos provisionales mensuales',       vence:'Día 17 del mes siguiente'},
+  {id:'isr_pf',   badge:'ISR PF', label:'ISR Personas Físicas (Act. Emp.)',  ley:'Art. 106 LISR — Pagos provisionales actividad empresarial', vence:'Día 17 del mes siguiente'},
+  {id:'iva',      badge:'IVA',    label:'IVA — Impuesto al Valor Agregado',  ley:'Art. 5-D LIVA — Pago mensual definitivo',            vence:'Día 17 del mes siguiente'},
+  {id:'ieps',     badge:'IEPS',   label:'IEPS — Impuesto Especial Prod. Serv.', ley:'Art. 5 LIEPS — Pago mensual definitivo',          vence:'Día 17 del mes siguiente'},
+  {id:'ret_s',    badge:'RET S',  label:'Retenciones ISR Sueldos y Salarios',ley:'Art. 96 LISR — Retención mensual por empleador',     vence:'Día 17 del mes siguiente'},
+  {id:'ret_h',    badge:'RET H',  label:'Retenciones ISR Honorarios / Arrendamiento', ley:'Arts. 106 y 116 LISR — Retenciones a terceros', vence:'Día 17 del mes siguiente'},
+];
+
+// Impuestos estatales disponibles
+const PP_IMPUESTOS_EST = [
+  {id:'isn_bc', badge:'ISN', label:'ISN Baja California', estado:'BC', 
+   ley:'Art. 40 Ley de Hacienda del Estado de Baja California — Impuesto sobre erogaciones por remuneraciones al trabajo personal (3% sobre nómina total)',
+   vence:'Día 17 del mes siguiente', sistema:'Sistema de recaudación SEFA Baja California (www.sefa.bc.gob.mx)',
+   tasa_default:3,
+   campos:['base_rem','erog_excluidas','base_gravable','tasa_isn','isn_cargo','isn_pagar','linea_sefa','fecha_pago','importe_pagado','diferencia']},
+  {id:'isn_son', badge:'ISN', label:'ISN Sonora', estado:'SON',
+   ley:'Ley de Hacienda del Estado de Sonora — 2% sobre nómina',
+   vence:'Día 17 del mes siguiente', sistema:'Portal SIFEPAY Sonora',
+   tasa_default:2,
+   campos:['base_rem','erog_excluidas','base_gravable','tasa_isn','isn_cargo','isn_pagar','linea_captura','fecha_pago','importe_pagado','diferencia']},
+];
+
+let ppCache = [];           // periodos guardados en Supabase
+let ppConfigCache = {};     // config por cliente {clientId: {impuestos_fed:[], impuestos_est:[], cu:0, ...}}
+let ppClienteActivo = null; // cliente seleccionado {id, nombre, ...}
+let ppTabActiva = 'revision'; // revision | historico | informe | config
+let ppMesActivo = null;     // {ejercicio, mes, data}
+
+// ===== PANTALLA 1: SELECCIÓN DE CLIENTE =====
+async function renderPagosProv() {
+  if (!userCanAccess(session.email, 'pp')) { renderPortada(); return; }
   await loadCaches();
-  const ejercicio=new Date().getFullYear();
-  const [pagos]=await Promise.all([
-    sbGet('pp_pagos','?select=*&order=ejercicio.desc,mes.asc')
-  ]);
-  ppCache=pagos||[];
-  document.getElementById('pp-load').style.display='none';
-  renderPPList(ejercicio);
+  ppClienteActivo = null; ppMesActivo = null;
+  
+  app.innerHTML = renderTopNav('pp') + `
+  <div style="max-width:760px;margin:0 auto;padding:0 0 2rem">
+    <div style="margin-bottom:1.5rem">
+      <div style="font-size:11px;color:#888;font-weight:600;letter-spacing:.06em">MSST CONSULTING · TAXIA</div>
+      <div style="font-size:26px;font-weight:700;color:#1a1a1a;margin-top:2px">Pagos Provisionales</div>
+      <div style="font-size:13px;color:#888;margin-top:2px">Revisión mensual de obligaciones federales y estatales</div>
+    </div>
+    <div class="card">
+      <div class="sec-label">SELECCIONAR CLIENTE</div>
+      <input type="text" id="pp-search" placeholder="🔍 Buscar por nombre..." 
+        oninput="ppFiltrarClientes()" style="margin-bottom:12px;font-size:14px">
+      <div id="pp-clientes-list"></div>
+    </div>
+  </div>`;
+  ppRenderClientesList('');
 }
 
-function renderPPList(ejercicio){
-  const ejercicios=[...new Set(ppCache.map(p=>p.ejercicio))].sort((a,b)=>b-a);
-  if(!ejercicios.includes(ejercicio))ejercicios.unshift(ejercicio);
-  const tabsEj=ejercicios.map(ej=>`<div class="tab${ej===ejercicio?' on':''}" onclick="renderPPList(${ej})">${ej}</div>`).join('');
-  const pagosFiltrados=ppCache.filter(p=>p.ejercicio===ejercicio);
-  // Agrupar por cliente
-  const byCliente={};
-  pagosFiltrados.forEach(p=>{
-    if(!byCliente[p.client_id]) byCliente[p.client_id]={cliente_nombre:p.cliente_nombre,client_id:p.client_id,pagos:[]};
-    byCliente[p.client_id].pagos.push(p);
-  });
-  const clientesConPagos=Object.values(byCliente);
-  const clientes=clientesCache.filter(c=>c.activo!==false);
-  const clientesSinPagos=clientes.filter(c=>!byCliente[c.id]);
+function ppFiltrarClientes() {
+  ppRenderClientesList(document.getElementById('pp-search')?.value || '');
+}
 
-  const rowsExist=clientesConPagos.map(g=>{
-    const totalPagado=g.pagos.reduce((s,p)=>s+(parseFloat(p.monto_pagado)||0),0);
-    const mesesPagados=g.pagos.filter(p=>p.monto_pagado>0).length;
-    const mesActual=new Date().getMonth()+1;
-    const mesesVencidos=g.pagos.filter(p=>p.mes<mesActual&&(!p.monto_pagado||p.monto_pagado<=0)).length;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f0ec;cursor:pointer" onclick="renderPPDetalle(${g.client_id},${ejercicio})">
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:600">${escH(g.cliente_nombre)}</div>
-        <div style="font-size:11px;color:#888;margin-top:2px">${mesesPagados} meses pagados · ${fmtMXN(totalPagado)} total pagado</div>
+function ppRenderClientesList(filtro) {
+  const lista = clientesCache
+    .filter(c => c.activo !== false)
+    .filter(c => !filtro || (c.nombre || c.razon_social || '').toLowerCase().includes(filtro.toLowerCase()))
+    .sort((a, b) => (a.nombre||'').localeCompare(b.nombre||''));
+  
+  document.getElementById('pp-clientes-list').innerHTML = lista.length
+    ? lista.map(c => {
+        const nombre = c.nombre || c.razon_social || 'Cliente';
+        const inicial = nombre.charAt(0).toUpperCase();
+        return `<div onclick="ppSeleccionarCliente(${c.id},'${escH(nombre)}')" 
+          style="display:flex;align-items:center;gap:12px;padding:14px 16px;border:1.5px solid #e5e5e0;border-radius:12px;margin-bottom:8px;cursor:pointer;transition:all .15s"
+          onmouseover="this.style.borderColor='#3B4BC8';this.style.background='#fafbff'"
+          onmouseout="this.style.borderColor='#e5e5e0';this.style.background='#fff'">
+          <div style="width:38px;height:38px;border-radius:10px;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#3B4BC8;flex-shrink:0">${escH(inicial)}</div>
+          <div style="font-size:14px;font-weight:600;color:#1a1a1a">${escH(nombre)}</div>
+        </div>`;
+      }).join('')
+    : '<div style="text-align:center;color:#888;padding:2rem;font-size:13px">Sin clientes encontrados.</div>';
+}
+
+async function ppSeleccionarCliente(clientId, nombre) {
+  ppClienteActivo = { id: clientId, nombre };
+  ppTabActiva = 'revision';
+  // Cargar config del cliente
+  const cfgRows = await sbGet('pp_config', `?client_id=eq.${clientId}&select=*`);
+  const cfg = cfgRows && cfgRows[0] ? cfgRows[0] : null;
+  ppConfigCache[clientId] = cfg ? {
+    impuestos_fed: cfg.impuestos_fed || ['isr_pm','iva','ret_s','ret_h'],
+    impuestos_est: cfg.impuestos_est || ['isn_bc'],
+    cu: cfg.cu || 0,
+    tasa_isr: cfg.tasa_isr || 30,
+  } : {
+    impuestos_fed: ['isr_pm','iva','ret_s','ret_h'],
+    impuestos_est: ['isn_bc'],
+    cu: 0, tasa_isr: 30,
+  };
+  ppRenderCliente();
+}
+
+// ===== PANTALLA 2: DETALLE DE CLIENTE CON TABS =====
+function ppRenderCliente() {
+  if (!ppClienteActivo) { renderPagosProv(); return; }
+  const c = ppClienteActivo;
+  const inicial = c.nombre.charAt(0).toUpperCase();
+  const periodos = ppCache.filter(p => p.client_id === c.id);
+  const statusBadge = periodos.length
+    ? `<span style="background:#EAF3DE;color:#3B6D11;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600">${periodos.length} período${periodos.length!==1?'s':''}</span>`
+    : `<span style="background:#F1EFE8;color:#5F5E5A;padding:3px 10px;border-radius:999px;font-size:11px">Sin pagos</span>`;
+
+  const tabs = [
+    {id:'revision', label:'Revisión mensual'},
+    {id:'historico', label:'Histórico'},
+    {id:'informe',  label:'Informe de revisión'},
+    {id:'config',   label:'Configuración'},
+  ];
+
+  app.innerHTML = renderTopNav('pp') + `
+  <div style="max-width:900px;margin:0 auto;padding:0 0 2rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:11px;color:#888;font-weight:600;letter-spacing:.06em">MSST CONSULTING · TAXIA</div>
+        <div style="font-size:22px;font-weight:700;color:#1a1a1a">Pagos Provisionales</div>
       </div>
-      ${mesesVencidos>0?`<span style="background:#FCEBEB;color:#A32D2D;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">${mesesVencidos} vencido${mesesVencidos!==1?'s':''}</span>`:'<span style="background:#EAF3DE;color:#3B6D11;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">Al día</span>'}
-      <span style="color:#888;font-size:14px">›</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="renderPagosProv()">← Clientes</button>
+        <button class="btn btn-sm btn-primary" onclick="ppNuevoPeriodo()">+ Nuevo período</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:none;padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:38px;height:38px;border-radius:10px;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#3B4BC8;flex-shrink:0">${escH(inicial)}</div>
+        <div style="flex:1">
+          <div style="font-size:15px;font-weight:700">${escH(c.nombre)}</div>
+          <div style="font-size:11px;color:#888">ID: ${c.id}</div>
+        </div>
+        ${statusBadge}
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #e5e5e0;border-top:none;padding:0 16px;display:flex;gap:0;border-bottom:1px solid #e5e5e0">
+      ${tabs.map(t => `<button onclick="ppSetTab('${t.id}')" id="pptab-${t.id}"
+        style="padding:12px 16px;font-size:13px;font-weight:${ppTabActiva===t.id?'600':'400'};cursor:pointer;border:none;background:none;color:${ppTabActiva===t.id?'#3B4BC8':'#888'};border-bottom:2px solid ${ppTabActiva===t.id?'#3B4BC8':'transparent'};margin-bottom:-1px;font-family:inherit">
+        ${t.label}</button>`).join('')}
+    </div>
+
+    <div id="pp-tab-content" style="background:#fff;border:1px solid #e5e5e0;border-top:none;border-bottom-left-radius:12px;border-bottom-right-radius:12px;padding:1rem"></div>
+  </div>`;
+
+  ppRenderTab();
+}
+
+function ppSetTab(tab) {
+  ppTabActiva = tab;
+  ppMesActivo = null;
+  document.querySelectorAll('[id^="pptab-"]').forEach(b => {
+    const isOn = b.id === 'pptab-' + tab;
+    b.style.color = isOn ? '#3B4BC8' : '#888';
+    b.style.fontWeight = isOn ? '600' : '400';
+    b.style.borderBottom = isOn ? '2px solid #3B4BC8' : '2px solid transparent';
+  });
+  ppRenderTab();
+}
+
+function ppRenderTab() {
+  const el = document.getElementById('pp-tab-content');
+  if (!el) return;
+  if (ppTabActiva === 'revision') ppRenderRevision(el);
+  else if (ppTabActiva === 'historico') ppRenderHistorico(el);
+  else if (ppTabActiva === 'informe') ppRenderInforme(el);
+  else if (ppTabActiva === 'config') ppRenderConfig(el);
+}
+
+// ===== TAB: REVISIÓN MENSUAL =====
+function ppRenderRevision(el) {
+  if (ppMesActivo) { ppRenderMesDetalle(el); return; }
+  const ejercicio_actual = new Date().getFullYear();
+  const ejercicios_disponibles = [...new Set(ppCache.filter(p=>p.client_id===ppClienteActivo.id).map(p=>p.ejercicio))].sort((a,b)=>b-a);
+  if (!ejercicios_disponibles.includes(ejercicio_actual)) ejercicios_disponibles.unshift(ejercicio_actual);
+  const ej_sel = ppMesActivo?.ejercicio || ejercicio_actual;
+
+  // Determinar status de cada mes
+  const periodosMes = {};
+  ppCache.filter(p=>p.client_id===ppClienteActivo.id&&p.ejercicio===ej_sel).forEach(p=>{
+    periodosMes[p.mes] = p;
+  });
+
+  const mesActual = new Date().getMonth() + 1;
+  const botonesMes = PP_MESES_LARGO.map((mes, i) => {
+    const numMes = i + 1;
+    const periodo = periodosMes[numMes];
+    const revisado = periodo?.revisado;
+    const conAlertas = periodo && !revisado && periodo.status === 'alerta';
+    const color = revisado ? '#3B6D11' : conAlertas ? '#854F0B' : '#888';
+    const bg = revisado ? '#EAF3DE' : conAlertas ? '#FAEEDA' : '#f5f5f3';
+    const border = revisado ? '#3B6D11' : conAlertas ? '#e0b44a' : '#e5e5e0';
+    return `<button onclick="ppAbrirMes(${ej_sel},${numMes})" 
+      style="padding:10px;font-size:13px;font-weight:600;border:1.5px solid ${border};border-radius:8px;background:${bg};color:${color};cursor:pointer;font-family:inherit;transition:all .15s"
+      onmouseover="this.style.borderColor='#3B4BC8'" onmouseout="this.style.borderColor='${border}'">
+      ${PP_MESES_CORTO[i]}
+    </button>`;
+  }).join('');
+
+  el.innerHTML = `
+  <div class="card" style="margin-bottom:12px">
+    <div class="sec-label">SELECCIONAR PERÍODO</div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;color:#888;font-weight:600;margin-bottom:6px">EJERCICIO FISCAL</div>
+      <select onchange="ppCambiarEjercicio(parseInt(this.value))" style="width:220px;font-size:14px;padding:8px 10px;border:1px solid #e0e0db;border-radius:8px">
+        ${ejercicios_disponibles.map(e=>`<option value="${e}" ${e===ej_sel?'selected':''}>${e}</option>`).join('')}
+        <option value="${ej_sel-1}" ${!ejercicios_disponibles.includes(ej_sel-1)?'':'hidden'}>${ej_sel-1}</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px">
+      ${botonesMes}
+    </div>
+    <div style="display:flex;gap:14px;font-size:11px;color:#888">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3B6D11;margin-right:4px"></span>Revisado</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#854F0B;margin-right:4px"></span>Con alertas</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ccc;margin-right:4px"></span>Sin iniciar</span>
+    </div>
+  </div>`;
+}
+
+function ppCambiarEjercicio(ej) {
+  ppMesActivo = null;
+  const el = document.getElementById('pp-tab-content');
+  // Re-render con nuevo ejercicio
+  const periodosMes = {};
+  ppCache.filter(p=>p.client_id===ppClienteActivo.id&&p.ejercicio===ej).forEach(p=>{periodosMes[p.mes]=p;});
+  const mesActual = new Date().getMonth() + 1;
+  const botonesMes = PP_MESES_LARGO.map((mes, i) => {
+    const numMes = i + 1;
+    const periodo = periodosMes[numMes];
+    const revisado = periodo?.revisado;
+    const color = revisado ? '#3B6D11' : '#888';
+    const bg = revisado ? '#EAF3DE' : '#f5f5f3';
+    const border = revisado ? '#3B6D11' : '#e5e5e0';
+    return `<button onclick="ppAbrirMes(${ej},${numMes})" 
+      style="padding:10px;font-size:13px;font-weight:600;border:1.5px solid ${border};border-radius:8px;background:${bg};color:${color};cursor:pointer;font-family:inherit">${PP_MESES_CORTO[i]}</button>`;
+  }).join('');
+  el.querySelector('[style*="grid-template-columns:repeat(6"]').innerHTML = botonesMes;
+}
+
+async function ppAbrirMes(ejercicio, mes) {
+  // Buscar o crear período
+  let periodo = ppCache.find(p => p.client_id===ppClienteActivo.id && p.ejercicio===ejercicio && p.mes===mes);
+  if (!periodo) {
+    const nuevo = {
+      client_id: ppClienteActivo.id, cliente_nombre: ppClienteActivo.nombre,
+      ejercicio, mes, revisado: false, status: 'pendiente',
+      impuestos: {}, updated_at: nowISO()
+    };
+    const res = await sbPost('pp_periodos', nuevo, 'return=representation');
+    const data = await res.json();
+    periodo = Array.isArray(data) ? data[0] : data;
+    if (periodo) ppCache.push(periodo);
+  }
+  ppMesActivo = { ejercicio, mes, data: periodo };
+  ppRenderTab();
+}
+
+function ppRenderMesDetalle(el) {
+  const cfg = ppConfigCache[ppClienteActivo.id] || { impuestos_fed:['isr_pm','iva','ret_s','ret_h'], impuestos_est:['isn_bc'] };
+  const mesLabel = PP_MESES_LARGO[ppMesActivo.mes - 1] + ' ' + ppMesActivo.ejercicio;
+  const data = ppMesActivo.data || {};
+  const impuestos = data.impuestos || {};
+  
+  // Calcular totales
+  let totalDet = 0, totalPag = 0;
+  cfg.impuestos_fed.forEach(id => { 
+    totalDet += parseFloat(impuestos[id]?.isr_pagar || impuestos[id]?.importe_determinado || 0);
+    totalPag += parseFloat(impuestos[id]?.importe_pagado || 0);
+  });
+  cfg.impuestos_est.forEach(id => {
+    totalDet += parseFloat(impuestos[id]?.isn_pagar || impuestos[id]?.importe_determinado || 0);
+    totalPag += parseFloat(impuestos[id]?.importe_pagado || 0);
+  });
+
+  const fedRows = PP_IMPUESTOS_FED.filter(imp => cfg.impuestos_fed.includes(imp.id)).map(imp => {
+    const d = impuestos[imp.id] || {};
+    const importe = parseFloat(d.isr_pagar || d.importe_determinado || 0);
+    const pagado = parseFloat(d.importe_pagado || 0);
+    const fechaPago = d.fecha_pago || '';
+    const revisado = d.revisado || false;
+    const statusColor = revisado ? '#3B6D11' : importe > 0 ? '#185FA5' : '#888';
+    const statusBg = revisado ? '#EAF3DE' : importe > 0 ? '#E6F1FB' : '#f5f5f3';
+    return `<div onclick="ppAbrirImpuesto('${imp.id}')" 
+      style="display:flex;align-items:center;gap:12px;padding:14px;border-bottom:1px solid #f0f0ec;cursor:pointer"
+      onmouseover="this.style.background='#fafbff'" onmouseout="this.style.background='transparent'">
+      <div style="width:42px;height:42px;border-radius:8px;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#3B4BC8;text-align:center;line-height:1.2;flex-shrink:0">${imp.badge}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:#1a1a1a">${imp.label}</div>
+        <div style="font-size:11px;color:#888;margin-top:1px">${imp.ley}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:13px;font-weight:600;color:${importe>0?'#1a1a1a':'#bbb'}">${importe>0?fmtMXN(importe):'—'}</div>
+        <div style="font-size:10px;color:#888">${fechaPago||'Sin fecha'}</div>
+      </div>
+      <span style="background:${statusBg};color:${statusColor};padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;white-space:nowrap">${revisado?'Revisado':importe>0?'Capturado':'Pendiente'}</span>
     </div>`;
   }).join('');
 
-  const rowsNew=clientesSinPagos.slice(0,8).map(c=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0ec;cursor:pointer" onclick="renderPPDetalle(${c.id},${ejercicio})">
-      <div style="flex:1;font-size:13px;color:#888">${escH(c.nombre||c.razon_social||'Cliente')}</div>
-      <span style="background:#F1EFE8;color:#5F5E5A;padding:2px 8px;border-radius:999px;font-size:10px">Sin registro</span>
-      <span style="color:#888;font-size:14px">›</span>
-    </div>`).join('');
-
-  document.getElementById('pp-content').innerHTML=`
-    <div class="card" style="background:#72243E;color:#fff;border-color:#72243E;margin-bottom:0.75rem">
-      <div style="font-size:14px;font-weight:700">💳 Pagos Provisionales ISR</div>
-      <div style="font-size:11px;opacity:.8;margin-top:2px">Art. 14 LISR — Régimen General de Ley</div>
-    </div>
-    <div class="tab-bar">${tabsEj}<button class="btn btn-sm btn-primary" onclick="ppNuevoEjercicio()">+ Ejercicio</button></div>
-    ${clientesConPagos.length?`<div class="card"><div class="sec-label">Clientes con seguimiento — ${ejercicio}</div>${rowsExist}</div>`:''}
-    <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div class="sec-label" style="margin-bottom:0">Agregar cliente a ${ejercicio}</div>
+  const estRows = PP_IMPUESTOS_EST.filter(imp => cfg.impuestos_est.includes(imp.id)).map(imp => {
+    const d = impuestos[imp.id] || {};
+    const importe = parseFloat(d.isn_pagar || d.importe_determinado || 0);
+    const pagado = parseFloat(d.importe_pagado || 0);
+    const revisado = d.revisado || false;
+    return `<div onclick="ppAbrirImpuesto('${imp.id}')"
+      style="display:flex;align-items:center;gap:12px;padding:14px;cursor:pointer"
+      onmouseover="this.style.background='#fafbff'" onmouseout="this.style.background='transparent'">
+      <div style="width:42px;height:42px;border-radius:8px;background:#EAF3DE;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#3B6D11;text-align:center;line-height:1.2;flex-shrink:0">${imp.badge}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600">${imp.label} <span style="background:#e5e5e0;color:#555;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">${imp.estado}</span></div>
+        <div style="font-size:11px;color:#888">${imp.estado} · Tasa ${imp.tasa_default}%</div>
       </div>
-      ${rowsNew||'<div style="font-size:12px;color:#888">Todos los clientes ya tienen registro en este ejercicio.</div>'}
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:13px;font-weight:600;color:${importe>0?'#1a1a1a':'#bbb'}">${importe>0?fmtMXN(importe):'$0'}</div>
+        <div style="font-size:10px;color:#888">${d.fecha_pago||'Sin fecha'}</div>
+      </div>
+      <span style="background:${revisado?'#EAF3DE':'#f5f5f3'};color:${revisado?'#3B6D11':'#888'};padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;white-space:nowrap">${revisado?'Revisado':'Pendiente'}</span>
     </div>`;
-}
+  }).join('');
 
-async function renderPPDetalle(clientId,ejercicio){
-  const cliente=clientesCache.find(c=>c.id===clientId)||{id:clientId,nombre:'Cliente',razon_social:''};
-  const nombreCliente=cliente.nombre||cliente.razon_social||'Cliente';
-  app.innerHTML=renderTopNav('pp')+`
-    <div class="card" style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
-      <button class="btn btn-sm" onclick="renderPagosProv()">← Pagos Provisionales</button>
-      <div style="font-size:13px;font-weight:600">${escH(nombreCliente)} · ${ejercicio}</div>
-      <button class="btn btn-sm btn-primary" onclick="ppGenerarMeses(${clientId},'${escH(nombreCliente)}',${ejercicio})">+ Inicializar meses</button>
+  const docCount = data.doc_count || 0;
+  const docTotal = cfg.impuestos_fed.length + cfg.impuestos_est.length;
+
+  el.innerHTML = `
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+    <button class="btn btn-sm" onclick="ppMesActivo=null;ppRenderTab()">← Períodos</button>
+    <div style="font-size:17px;font-weight:700">${mesLabel}</div>
+    <span style="background:#F1EFE8;color:#5F5E5A;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600">${data.revisado?'Revisado':'Pendiente'}</span>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button class="btn btn-sm" onclick="ppGuardarMes()">💾 Guardar</button>
+      <button class="btn btn-sm" onclick="ppMarcarRevisado()" style="background:#EAF3DE;color:#3B6D11;border-color:#3B6D11">✓ Marcar revisado</button>
+      <button class="btn btn-sm" onclick="ppImprimirCedula()" style="background:#f5f5f3">🖨 Cédula</button>
     </div>
-    <div id="pp-detalle-content"><div class="loading"><span class="spinner"></span>Cargando...</div></div>`;
-  const pagos=ppCache.filter(p=>p.client_id===clientId&&p.ejercicio===ejercicio);
-  renderPPTabla(pagos,clientId,nombreCliente,ejercicio);
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+    <div class="kpi"><div class="kpi-label">Impuestos</div><div class="kpi-val" style="font-size:20px;color:#3B4BC8">${docTotal}</div></div>
+    <div class="kpi"><div class="kpi-label">Determinado</div><div class="kpi-val" style="font-size:16px;color:#dc2626">${fmtMXN(totalDet)}</div></div>
+    <div class="kpi"><div class="kpi-label">Pagado</div><div class="kpi-val" style="font-size:16px;color:#3B6D11">${fmtMXN(totalPag)}</div></div>
+    <div class="kpi"><div class="kpi-label">Docs ${docCount}/${docTotal}</div><div class="kpi-val" style="font-size:14px;color:#888">${docCount>=docTotal?'Completo':'Pendiente'}</div></div>
+  </div>
+
+  <div style="display:flex;gap:0;border-bottom:1px solid #e5e5e0;margin-bottom:12px">
+    <button onclick="ppSetSubTab('impuestos',this)" style="padding:8px 16px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:#3B4BC8;border-bottom:2px solid #3B4BC8;font-family:inherit">Impuestos</button>
+    <button onclick="ppSetSubTab('docs',this)" style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;font-family:inherit">📄 Documentación</button>
+    <button onclick="ppSetSubTab('analisis',this)" style="padding:8px 16px;font-size:13px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent;font-family:inherit">📊 Análisis comparativo</button>
+  </div>
+
+  <div id="pp-subtab-content">
+    <div style="margin-bottom:6px">
+      <div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;padding:6px 0">IMPUESTOS FEDERALES</div>
+      <div style="border:1px solid #e5e5e0;border-radius:10px;overflow:hidden">${fedRows||'<div style="padding:14px;color:#888;font-size:13px">Sin impuestos federales configurados.</div>'}</div>
+    </div>
+    <div style="margin-top:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0">
+        <div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em">IMPUESTOS ESTATALES</div>
+        <button class="btn btn-sm" style="font-size:10px" onclick="ppAgregarEstatal()">+ Agregar</button>
+      </div>
+      <div style="border:1px solid #e5e5e0;border-radius:10px;overflow:hidden">${estRows||'<div style="padding:14px;color:#888;font-size:13px">Sin impuestos estatales configurados.</div>'}</div>
+    </div>
+  </div>`;
 }
 
-function renderPPTabla(pagos,clientId,nombreCliente,ejercicio){
-  const mesActual=new Date().getMonth()+1;
-  // Generar 12 filas, con datos si existen
-  const filas=PP_MESES.map((mes,i)=>{
-    const numMes=i+1;
-    const p=pagos.find(x=>x.mes===numMes)||{mes:numMes,client_id:clientId,ejercicio,cliente_nombre:nombreCliente,ingresos_acumulados:0,deducciones_autorizadas:0,coeficiente_utilidad:0,base_gravable:0,isr_determinado:0,isr_retenido:0,monto_pagado:0,fecha_pago:'',status:'pendiente'};
-    const vencido=numMes<mesActual&&(!p.monto_pagado||p.monto_pagado<=0);
-    const pagado=p.monto_pagado>0;
-    const statusColor=pagado?'#3B6D11':vencido?'#A32D2D':'#633806';
-    const statusBg=pagado?'#EAF3DE':vencido?'#FCEBEB':'#FAEEDA';
-    const statusLabel=pagado?'Pagado':vencido?'Vencido':'Pendiente';
-    return `<tr style="background:${vencido&&!pagado?'#fff8f8':'#fff'}">
-      <td style="padding:6px 8px;font-size:12px;font-weight:600;color:#1a1a1a">${mes}</td>
-      <td style="padding:6px 8px"><input type="number" value="${p.ingresos_acumulados||''}" placeholder="0.00" step="0.01"
-        style="width:100px;font-size:11px;padding:3px 6px;border:1px solid #e0e0db;border-radius:4px;text-align:right"
-        onchange="ppUpdateField(${clientId},${numMes},${ejercicio},'ingresos_acumulados',parseFloat(this.value)||0)"></td>
-      <td style="padding:6px 8px"><input type="number" value="${p.coeficiente_utilidad||''}" placeholder="0.0000" step="0.0001" min="0" max="1"
-        style="width:80px;font-size:11px;padding:3px 6px;border:1px solid #e0e0db;border-radius:4px;text-align:right"
-        onchange="ppUpdateField(${clientId},${numMes},${ejercicio},'coeficiente_utilidad',parseFloat(this.value)||0)"></td>
-      <td style="padding:6px 8px;font-size:11px;color:#888;text-align:right">${fmtMXN((p.ingresos_acumulados||0)*(p.coeficiente_utilidad||0))}</td>
-      <td style="padding:6px 8px"><input type="number" value="${p.isr_retenido||''}" placeholder="0.00" step="0.01"
-        style="width:90px;font-size:11px;padding:3px 6px;border:1px solid #e0e0db;border-radius:4px;text-align:right"
-        onchange="ppUpdateField(${clientId},${numMes},${ejercicio},'isr_retenido',parseFloat(this.value)||0)"></td>
-      <td style="padding:6px 8px"><input type="number" value="${p.monto_pagado||''}" placeholder="0.00" step="0.01"
-        style="width:100px;font-size:11px;padding:3px 6px;border:1px solid ${pagado?'#3B6D11':'#e0e0db'};border-radius:4px;text-align:right;background:${pagado?'#f0f7f0':'#fff'}"
-        onchange="ppUpdateField(${clientId},${numMes},${ejercicio},'monto_pagado',parseFloat(this.value)||0)"></td>
-      <td style="padding:6px 8px"><input type="date" value="${p.fecha_pago||''}"
-        style="font-size:11px;padding:3px 6px;border:1px solid #e0e0db;border-radius:4px"
-        onchange="ppUpdateField(${clientId},${numMes},${ejercicio},'fecha_pago',this.value)"></td>
-      <td style="padding:6px 8px;text-align:center"><span style="background:${statusBg};color:${statusColor};padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">${statusLabel}</span></td>
+function ppSetSubTab(tab, btn) {
+  document.querySelectorAll('#pp-subtab-content').forEach(el => el.innerHTML = '');
+  document.querySelectorAll('[onclick^="ppSetSubTab"]').forEach(b => {
+    b.style.color = '#888'; b.style.borderBottom = '2px solid transparent'; b.style.fontWeight = '400';
+  });
+  btn.style.color = '#3B4BC8'; btn.style.borderBottom = '2px solid #3B4BC8'; btn.style.fontWeight = '600';
+  // Re-render subtab (simplificado por ahora)
+}
+
+// ===== MODAL: CAPTURA DE IMPUESTO =====
+function ppAbrirImpuesto(impId) {
+  const fedImp = PP_IMPUESTOS_FED.find(i => i.id === impId);
+  const estImp = PP_IMPUESTOS_EST.find(i => i.id === impId);
+  const imp = fedImp || estImp;
+  if (!imp) return;
+
+  const data = ppMesActivo?.data?.impuestos?.[impId] || {};
+  const mesLabel = PP_MESES_LARGO[ppMesActivo.mes - 1] + ' ' + ppMesActivo.ejercicio;
+  const cfg = ppConfigCache[ppClienteActivo.id] || {};
+  const cu = cfg.cu || 0;
+
+  let formHTML = '';
+  if (impId === 'isr_pm') {
+    const ing = parseFloat(data.ing_nominales || 0);
+    const cuVal = parseFloat(data.cu || cu || 0);
+    const util_est = ing * cuVal;
+    const perdidas = parseFloat(data.perdidas || 0);
+    const base = Math.max(0, util_est - perdidas);
+    const tasa = parseFloat(data.tasa_isr || cfg.tasa_isr || 30);
+    const isr_cargo = base * (tasa / 100);
+    const pp_ant = parseFloat(data.pp_anteriores || 0);
+    const ret_acum = parseFloat(data.retenciones_acum || 0);
+    const isr_pagar = Math.max(0, isr_cargo - pp_ant - ret_acum);
+
+    formHTML = `
+      <div style="background:#E6F1FB;border-radius:8px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">📋</span>
+        <div><span style="font-weight:700;color:#3B4BC8">${mesLabel}</span> — <span style="color:#555">${escH(ppClienteActivo.nombre)}</span></div>
+      </div>
+      ${ppCampo('ing_nominales','Ingresos nominales del período', data.ing_nominales||0,'number','','isr_pm')}
+      ${ppCampo('cu','Coeficiente de utilidad', data.cu||cu||0,'number','Art. 14 LISR · Determinado en declaración anual anterior','isr_pm')}
+      ${ppCampoCalc('util_est','Utilidad estimada (calculado)', fmtMXN(util_est))}
+      ${ppCampo('perdidas','Pérdidas fiscales a amortizar (acumulado)', data.perdidas||0,'number','Art. 57 LISR','isr_pm')}
+      ${ppCampoCalc('base_isr','Base del impuesto', fmtMXN(base))}
+      ${ppCampo('tasa_isr','Tasa ISR (%)', data.tasa_isr||cfg.tasa_isr||30,'number','','isr_pm')}
+      ${ppCampoCalc('isr_cargo','ISR a cargo del período', fmtMXN(isr_cargo))}
+      ${ppCampo('pp_anteriores','Pagos provisionales anteriores acumulados', data.pp_anteriores||0,'number','','isr_pm')}
+      ${ppCampo('retenciones_acum','Retenciones de ISR acumuladas', data.retenciones_acum||0,'number','','isr_pm')}
+      <div style="background:#f0f7ff;border:1.5px solid #3B4BC8;border-radius:8px;padding:10px 14px;margin-bottom:12px">
+        <div style="font-size:11px;color:#888;margin-bottom:4px">ISR a pagar (neto) <span style="background:#3B4BC8;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700">RESULTADO</span></div>
+        <input type="number" value="${isr_pagar.toFixed(2)}" id="pp-result-isr_pagar"
+          style="width:100%;font-size:18px;font-weight:700;color:#3B4BC8;border:none;background:transparent;outline:none" readonly>
+      </div>
+      ${ppCampo('linea_captura','Línea de captura SAT', data.linea_captura||'','text','','isr_pm')}
+      ${ppCampo('fecha_pago','Fecha de pago', data.fecha_pago||new Date().toLocaleDateString('en-CA',{timeZone:'America/Tijuana'}),'date','','isr_pm')}
+      ${ppCampo('observaciones','Observaciones del revisor', data.observaciones||'','text','','isr_pm')}`;
+  
+  } else if (impId === 'iva') {
+    const iva_cargo = parseFloat(data.iva_cargo || 0);
+    const iva_acred = parseFloat(data.iva_acreditable || 0);
+    const iva_ret_cob = parseFloat(data.iva_ret_cobrado || 0);
+    const iva_ret_pag = parseFloat(data.iva_ret_pagado || 0);
+    const iva_favor = parseFloat(data.iva_favor_ant || 0);
+    const resultado = iva_cargo - iva_acred - iva_ret_cob + iva_ret_pag - iva_favor;
+    formHTML = `
+      <div style="background:#E6F1FB;border-radius:8px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">📋</span>
+        <div><span style="font-weight:700;color:#3B4BC8">${mesLabel}</span> — <span style="color:#555">${escH(ppClienteActivo.nombre)}</span></div>
+      </div>
+      ${ppCampo('iva_cargo','IVA causado del período', data.iva_cargo||0,'number','','iva')}
+      ${ppCampo('iva_acreditable','IVA acreditable', data.iva_acreditable||0,'number','Art. 5-D LIVA','iva')}
+      ${ppCampo('iva_ret_cobrado','IVA retenido cobrado a clientes', data.iva_ret_cobrado||0,'number','','iva')}
+      ${ppCampo('iva_ret_pagado','IVA retenido pagado a proveedores', data.iva_ret_pagado||0,'number','','iva')}
+      ${ppCampo('iva_favor_ant','Saldo a favor de períodos anteriores', data.iva_favor_ant||0,'number','','iva')}
+      <div style="background:#f0f7ff;border:1.5px solid #3B4BC8;border-radius:8px;padding:10px 14px;margin-bottom:12px">
+        <div style="font-size:11px;color:#888;margin-bottom:4px">IVA a pagar / (Saldo a favor) <span style="background:#3B4BC8;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700">RESULTADO</span></div>
+        <div style="font-size:18px;font-weight:700;color:${resultado>=0?'#3B4BC8':'#3B6D11'}">${fmtMXN(resultado)}</div>
+      </div>
+      ${ppCampo('linea_captura','Línea de captura SAT', data.linea_captura||'','text','','iva')}
+      ${ppCampo('fecha_pago','Fecha de pago', data.fecha_pago||new Date().toLocaleDateString('en-CA',{timeZone:'America/Tijuana'}),'date','','iva')}
+      ${ppCampo('importe_pagado','Importe pagado', data.importe_pagado||0,'number','','iva')}
+      ${ppCampo('observaciones','Observaciones', data.observaciones||'','text','','iva')}`;
+  
+  } else if (impId === 'ret_s' || impId === 'ret_h') {
+    const base_ret = parseFloat(data.base_ret || 0);
+    const tasa = parseFloat(data.tasa || (impId==='ret_s'?0:10));
+    const ret_det = parseFloat(data.ret_determinada || 0);
+    formHTML = `
+      <div style="background:#E6F1FB;border-radius:8px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">📋</span>
+        <div><span style="font-weight:700;color:#3B4BC8">${mesLabel}</span> — <span style="color:#555">${escH(ppClienteActivo.nombre)}</span></div>
+      </div>
+      ${ppCampo('base_ret','Base de retención', data.base_ret||0,'number','','ret')}
+      ${ppCampo('ret_determinada','Retención determinada', data.ret_determinada||0,'number','','ret')}
+      <div style="background:#f0f7ff;border:1.5px solid #3B4BC8;border-radius:8px;padding:10px 14px;margin-bottom:12px">
+        <div style="font-size:11px;color:#888;margin-bottom:4px">Retención a enterar <span style="background:#3B4BC8;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700">RESULTADO</span></div>
+        <div style="font-size:18px;font-weight:700;color:#3B4BC8">${fmtMXN(ret_det)}</div>
+      </div>
+      ${ppCampo('linea_captura','Línea de captura SAT', data.linea_captura||'','text','','ret')}
+      ${ppCampo('fecha_pago','Fecha de pago', data.fecha_pago||new Date().toLocaleDateString('en-CA',{timeZone:'America/Tijuana'}),'date','','ret')}
+      ${ppCampo('importe_pagado','Importe pagado', data.importe_pagado||0,'number','','ret')}
+      ${ppCampo('observaciones','Observaciones', data.observaciones||'','text','','ret')}`;
+
+  } else if (impId === 'isn_bc') {
+    const base_rem = parseFloat(data.base_rem || 0);
+    const erog_excl = parseFloat(data.erog_excluidas || 0);
+    const base_grav = Math.max(0, base_rem - erog_excl);
+    const tasa = parseFloat(data.tasa_isn || 3);
+    const isn_cargo = base_grav * (tasa / 100);
+    const isn_pagar = parseFloat(data.isn_pagar || isn_cargo);
+    const imp_pagado = parseFloat(data.importe_pagado || 0);
+    const diferencia = imp_pagado - isn_pagar;
+    formHTML = `
+      <div style="background:#EAF3DE;border-radius:8px;padding:10px 14px;margin-bottom:16px">
+        <div style="font-weight:700;color:#3B4BC8;font-size:14px">${mesLabel} — ${escH(ppClienteActivo.nombre)}</div>
+        <div style="font-size:11px;color:#5a8a1a;margin-top:2px">Estado de Baja California · Tasa 3% sobre remuneraciones al trabajo personal gravadas</div>
+      </div>
+      <div style="background:#f5f5f3;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#555;line-height:1.5">
+        <strong>Base de cálculo (Art. 40 LHBC):</strong> Total de remuneraciones pagadas (sueldos, salarios, comisiones, honorarios asimilados) <strong>menos</strong> las exclusiones del Art. 41 LHBC: horas extra dobles, gratificación anual equivalente a 15 días de SMG, PTU, prima vacacional y de antigüedad.
+      </div>
+      ${ppCampo('base_rem','Total de remuneraciones pagadas (base)', data.base_rem||0,'number','Sueldos, salarios, comisiones, honorarios asimilados y cualquier erogación por trabajo personal. Art. 40 LHBC','isn_bc')}
+      ${ppCampo('erog_excluidas','Erogaciones excluidas (Art. 41 LHBC)', data.erog_excluidas||0,'number','Horas extra dobles, gratificaciones anuales, participación de utilidades, prima vacacional y antigüedad','isn_bc')}
+      ${ppCampoCalc('base_gravable','Base gravable (calculado)', fmtMXN(base_grav))}
+      ${ppCampo('tasa_isn','Tasa ISN BC (%)', data.tasa_isn||3,'number','','isn_bc')}
+      ${ppCampoCalc('isn_cargo_calc','ISN a cargo (calculado)', fmtMXN(isn_cargo))}
+      <div style="background:#f0f7ff;border:1.5px solid #3B4BC8;border-radius:8px;padding:10px 14px;margin-bottom:12px">
+        <div style="font-size:11px;color:#888;margin-bottom:4px">ISN a pagar <span style="background:#3B4BC8;color:#fff;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700">RESULTADO</span></div>
+        <input type="number" value="${isn_pagar.toFixed(2)}" id="pp-result-isn_pagar" 
+          style="width:100%;font-size:18px;font-weight:700;color:#3B4BC8;border:none;background:transparent;outline:none">
+      </div>
+      ${ppCampo('linea_sefa','Línea de captura SEFA BC', data.linea_sefa||'','text','','isn_bc')}
+      ${ppCampo('fecha_pago','Fecha de pago', data.fecha_pago||new Date().toLocaleDateString('en-CA',{timeZone:'America/Tijuana'}),'date','','isn_bc')}
+      ${ppCampo('importe_pagado','Importe pagado', data.importe_pagado||0,'number','','isn_bc')}
+      ${ppCampoCalc('diferencia_calc','Diferencia (pagado – determinado)', fmtMXN(diferencia))}
+      ${ppCampo('observaciones','Observaciones del revisor', data.observaciones||'','text','','isn_bc')}`;
+  }
+
+  // Crear modal
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay'; overlay.id = 'pp-modal-imp';
+  overlay.innerHTML = `<div class="modal-box" style="max-width:500px;max-height:92vh;overflow-y:auto;padding:1.5rem">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
+      <div>
+        <div style="font-size:16px;font-weight:700">${imp.label}</div>
+        <div style="font-size:11px;color:#888;margin-top:2px">${imp.ley} · Vence: ${imp.vence}</div>
+        ${imp.sistema?`<div style="font-size:11px;color:#3B6D11;margin-top:1px;font-weight:600">${imp.sistema}</div>`:''}
+      </div>
+      <button onclick="document.getElementById('pp-modal-imp').remove()" 
+        style="width:28px;height:28px;border-radius:50%;background:#f5f5f3;border:none;cursor:pointer;font-size:16px;flex-shrink:0">✕</button>
+    </div>
+    <hr style="border:none;border-top:1px solid #e5e5e0;margin:12px 0">
+    <div id="pp-modal-form">${formHTML}</div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" style="flex:1" onclick="ppGuardarImpuesto('${impId}')">💾 Guardar</button>
+      <button class="btn" onclick="document.getElementById('pp-modal-imp').remove()">Cancelar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  // Auto-calcular en tiempo real
+  overlay.querySelectorAll('input[type=number]').forEach(inp => {
+    inp.addEventListener('input', () => ppRecalcularModal(impId, cfg));
+  });
+}
+
+function ppCampo(id, label, valor, tipo, nota, prefix) {
+  return `<div style="margin-bottom:12px">
+    <div style="font-size:12px;color:#555;font-weight:500;margin-bottom:4px">${label}</div>
+    <input type="${tipo}" value="${escH(String(valor||''))}" id="pp-f-${prefix}-${id}"
+      style="width:100%;padding:9px 12px;font-size:14px;border:1px solid #e0e0db;border-radius:8px;background:#fff;font-family:inherit;outline:none"
+      onfocus="this.style.borderColor='#3B4BC8'" onblur="this.style.borderColor='#e0e0db'">
+    ${nota?`<div style="font-size:10px;color:#888;margin-top:3px;font-style:italic">${nota}</div>`:''}
+  </div>`;
+}
+
+function ppCampoCalc(id, label, valor) {
+  return `<div style="margin-bottom:12px">
+    <div style="font-size:12px;color:#555;font-weight:500;margin-bottom:4px">${label}</div>
+    <div id="pp-calc-${id}" style="width:100%;padding:9px 12px;font-size:14px;border:1px solid #e5e5e0;border-radius:8px;background:#f5f5f3;color:#888;font-family:inherit">${valor}</div>
+  </div>`;
+}
+
+function ppRecalcularModal(impId, cfg) {
+  if (impId === 'isr_pm') {
+    const ing = parseFloat(document.getElementById('pp-f-isr_pm-ing_nominales')?.value) || 0;
+    const cu = parseFloat(document.getElementById('pp-f-isr_pm-cu')?.value) || 0;
+    const tasa = parseFloat(document.getElementById('pp-f-isr_pm-tasa_isr')?.value) || 30;
+    const perdidas = parseFloat(document.getElementById('pp-f-isr_pm-perdidas')?.value) || 0;
+    const pp_ant = parseFloat(document.getElementById('pp-f-isr_pm-pp_anteriores')?.value) || 0;
+    const ret_acum = parseFloat(document.getElementById('pp-f-isr_pm-retenciones_acum')?.value) || 0;
+    const util_est = ing * cu;
+    const base = Math.max(0, util_est - perdidas);
+    const isr_cargo = base * (tasa / 100);
+    const isr_pagar = Math.max(0, isr_cargo - pp_ant - ret_acum);
+    const el_util = document.getElementById('pp-calc-util_est'); if (el_util) el_util.textContent = fmtMXN(util_est);
+    const el_base = document.getElementById('pp-calc-base_isr'); if (el_base) el_base.textContent = fmtMXN(base);
+    const el_cargo = document.getElementById('pp-calc-isr_cargo'); if (el_cargo) el_cargo.textContent = fmtMXN(isr_cargo);
+    const el_pagar = document.getElementById('pp-result-isr_pagar'); if (el_pagar) el_pagar.value = isr_pagar.toFixed(2);
+  } else if (impId === 'isn_bc') {
+    const base_rem = parseFloat(document.getElementById('pp-f-isn_bc-base_rem')?.value) || 0;
+    const erog_excl = parseFloat(document.getElementById('pp-f-isn_bc-erog_excluidas')?.value) || 0;
+    const tasa = parseFloat(document.getElementById('pp-f-isn_bc-tasa_isn')?.value) || 3;
+    const imp_pag = parseFloat(document.getElementById('pp-f-isn_bc-importe_pagado')?.value) || 0;
+    const base_grav = Math.max(0, base_rem - erog_excl);
+    const isn_cargo = base_grav * (tasa / 100);
+    const diferencia = imp_pag - isn_cargo;
+    const el_bg = document.getElementById('pp-calc-base_gravable'); if (el_bg) el_bg.textContent = fmtMXN(base_grav);
+    const el_cargo = document.getElementById('pp-calc-isn_cargo_calc'); if (el_cargo) el_cargo.textContent = fmtMXN(isn_cargo);
+    const el_pagar = document.getElementById('pp-result-isn_pagar'); if (el_pagar) el_pagar.value = isn_cargo.toFixed(2);
+    const el_dif = document.getElementById('pp-calc-diferencia_calc'); if (el_dif) el_dif.textContent = fmtMXN(diferencia);
+  }
+}
+
+async function ppGuardarImpuesto(impId) {
+  if (!ppMesActivo) return;
+  const modal = document.getElementById('pp-modal-imp');
+  const impData = {};
+  modal.querySelectorAll('input[id^="pp-f-"]').forEach(inp => {
+    const key = inp.id.replace(`pp-f-${impId}-`, '').replace(/^pp-f-[a-z_]+-/, '');
+    impData[key] = inp.type === 'number' ? (parseFloat(inp.value) || 0) : inp.value;
+  });
+  // Resultado calculado
+  const resultEl = modal.querySelector('[id^="pp-result-"]');
+  if (resultEl) {
+    const rKey = resultEl.id.replace('pp-result-', '');
+    impData[rKey] = parseFloat(resultEl.value) || 0;
+  }
+  impData.revisado = true;
+
+  if (!ppMesActivo.data) ppMesActivo.data = {};
+  if (!ppMesActivo.data.impuestos) ppMesActivo.data.impuestos = {};
+  ppMesActivo.data.impuestos[impId] = impData;
+
+  // Guardar en Supabase
+  const idx = ppCache.findIndex(p => p.id === ppMesActivo.data.id);
+  if (idx >= 0) {
+    await sbPatch('pp_periodos', `?id=eq.${ppMesActivo.data.id}`, { impuestos: ppMesActivo.data.impuestos, updated_at: nowISO() });
+    ppCache[idx] = { ...ppCache[idx], impuestos: ppMesActivo.data.impuestos };
+  }
+  modal.remove();
+  ppRenderMesDetalle(document.getElementById('pp-tab-content'));
+}
+
+async function ppGuardarMes() {
+  if (!ppMesActivo?.data?.id) return;
+  await sbPatch('pp_periodos', `?id=eq.${ppMesActivo.data.id}`, { impuestos: ppMesActivo.data.impuestos || {}, updated_at: nowISO() });
+  // Toast
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:9999';
+  t.textContent = '✓ Guardado'; document.body.appendChild(t); setTimeout(() => t.remove(), 2000);
+}
+
+async function ppMarcarRevisado() {
+  if (!ppMesActivo?.data?.id) return;
+  ppMesActivo.data.revisado = !ppMesActivo.data.revisado;
+  await sbPatch('pp_periodos', `?id=eq.${ppMesActivo.data.id}`, { revisado: ppMesActivo.data.revisado, updated_at: nowISO() });
+  const idx = ppCache.findIndex(p => p.id === ppMesActivo.data.id);
+  if (idx >= 0) ppCache[idx].revisado = ppMesActivo.data.revisado;
+  ppRenderMesDetalle(document.getElementById('pp-tab-content'));
+}
+
+function ppImprimirCedula() {
+  const c = ppClienteActivo; const mes = ppMesActivo;
+  const data = mes.data || {}; const imp = data.impuestos || {};
+  const cfg = ppConfigCache[c.id] || {};
+  const mesLabel = PP_MESES_LARGO[mes.mes-1] + ' ' + mes.ejercicio;
+  const win = window.open('', '_blank');
+  const rows = [...PP_IMPUESTOS_FED.filter(i=>cfg.impuestos_fed?.includes(i.id)), ...PP_IMPUESTOS_EST.filter(i=>cfg.impuestos_est?.includes(i.id))].map(i => {
+    const d = imp[i.id] || {};
+    const det = parseFloat(d.isr_pagar||d.isn_pagar||d.importe_determinado||0);
+    const pag = parseFloat(d.importe_pagado||0);
+    return `<tr><td>${i.badge}</td><td>${i.label}</td><td style="text-align:right">${det>0?fmtMXN(det):'—'}</td><td style="text-align:right">${d.fecha_pago||'—'}</td><td style="text-align:right">${pag>0?fmtMXN(pag):'—'}</td><td>${d.linea_captura||d.linea_sefa||'—'}</td></tr>`;
+  }).join('');
+  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Cédula PP ${mesLabel}</title>
+  <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;padding:20px;color:#1a1a1a}
+  .header{display:flex;justify-content:space-between;border-bottom:2px solid #72243E;padding-bottom:10px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:11px}th{background:#72243E;color:#fff;padding:6px 8px;text-align:left}
+  td{padding:5px 8px;border-bottom:1px solid #f0f0ec}.footer{margin-top:16px;font-size:9px;color:#aaa;display:flex;justify-content:space-between;border-top:1px solid #e5e5e0;padding-top:8px}
+  @page{size:letter;margin:12mm}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>
+  <div class="header"><div><div style="font-size:11px;color:#888">${escH(c.nombre)}</div><div style="font-size:18px;font-weight:700">Cédula de Revisión — Pagos Provisionales</div><div style="font-size:11px;color:#888">${mesLabel}</div></div>
+  <div style="text-align:right"><div style="font-size:11px;color:#888">CONFIDENCIAL</div><div style="font-size:11px;color:#888">MSST Consulting SC</div></div></div>
+  <table><thead><tr><th>Clave</th><th>Impuesto</th><th style="text-align:right">Determinado</th><th style="text-align:right">Fecha pago</th><th style="text-align:right">Pagado</th><th>Línea captura</th></tr></thead><tbody>${rows}</tbody></table>
+  <div class="footer"><span>Art. 14 LISR, Art. 5-D LIVA, Arts. 96, 106 y 116 LISR</span><span>TaxIA · MSST Consulting SC</span></div>
+  </body></html>`);
+  win.document.close(); setTimeout(() => win.print(), 500);
+}
+
+// ===== TAB: HISTÓRICO =====
+function ppRenderHistorico(el) {
+  const periodos = ppCache.filter(p => p.client_id === ppClienteActivo.id)
+    .sort((a,b) => b.ejercicio-a.ejercicio || b.mes-a.mes);
+  if (!periodos.length) { el.innerHTML = '<div style="text-align:center;padding:2rem;color:#888">Sin períodos registrados aún.</div>'; return; }
+  const rows = periodos.map(p => {
+    const imp = p.impuestos || {};
+    let total = 0;
+    Object.values(imp).forEach(d => { total += parseFloat(d.isr_pagar||d.isn_pagar||d.importe_determinado||0); });
+    return `<tr onclick="ppMesActivo={ejercicio:${p.ejercicio},mes:${p.mes},data:${JSON.stringify(p).replace(/"/g,'&quot;')}};ppTabActiva='revision';ppRenderTab()" style="cursor:pointer" onmouseover="this.style.background='#fafbff'" onmouseout="this.style.background=''">
+      <td style="padding:8px 10px;font-weight:600">${PP_MESES_LARGO[p.mes-1]} ${p.ejercicio}</td>
+      <td style="padding:8px 10px;text-align:right">${total>0?fmtMXN(total):'—'}</td>
+      <td style="padding:8px 10px;text-align:center"><span style="background:${p.revisado?'#EAF3DE':'#f5f5f3'};color:${p.revisado?'#3B6D11':'#888'};padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">${p.revisado?'Revisado':'Pendiente'}</span></td>
+      <td style="padding:8px 10px;font-size:11px;color:#888">${p.updated_at?new Date(p.updated_at).toLocaleDateString('es-MX',{timeZone:'America/Tijuana',day:'numeric',month:'short',year:'numeric'}):''}</td>
     </tr>`;
   }).join('');
+  el.innerHTML = `<table class="data-table"><thead><tr><th>Período</th><th style="text-align:right">Total determinado</th><th style="text-align:center">Status</th><th>Última actualización</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
 
-  const totalPagado=pagos.reduce((s,p)=>s+(parseFloat(p.monto_pagado)||0),0);
-  const totalISR=pagos.reduce((s,p)=>s+(parseFloat(p.isr_determinado)||((parseFloat(p.ingresos_acumulados)||0)*(parseFloat(p.coeficiente_utilidad)||0)*0.30)),0);
-
-  document.getElementById('pp-detalle-content').innerHTML=`
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:1rem">
-      <div class="kpi"><div class="kpi-label">ISR Determinado Est.</div><div class="kpi-val" style="color:#dc2626">${fmtMXN(totalISR)}</div></div>
-      <div class="kpi"><div class="kpi-label">Pagado en el año</div><div class="kpi-val" style="color:#3B6D11">${fmtMXN(totalPagado)}</div></div>
-      <div class="kpi"><div class="kpi-label">Saldo pendiente</div><div class="kpi-val" style="color:${totalISR-totalPagado>0?'#dc2626':'#3B6D11'}">${fmtMXN(Math.max(0,totalISR-totalPagado))}</div></div>
-    </div>
-    <div class="card" style="padding:0;overflow:hidden">
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;min-width:700px">
-          <thead style="background:#72243E;color:#fff">
-            <tr>
-              <th style="padding:8px 8px;font-size:11px;text-align:left">Mes</th>
-              <th style="padding:8px 8px;font-size:11px;text-align:right">Ingresos Acum.</th>
-              <th style="padding:8px 8px;font-size:11px;text-align:right">CU</th>
-              <th style="padding:8px 8px;font-size:11px;text-align:right">Base Grav.</th>
-              <th style="padding:8px 8px;font-size:11px;text-align:right">ISR Retenido</th>
-              <th style="padding:8px 8px;font-size:11px;text-align:right">Monto Pagado</th>
-              <th style="padding:8px 8px;font-size:11px;text-align:left">Fecha Pago</th>
-              <th style="padding:8px 8px;font-size:11px;text-align:center">Status</th>
-            </tr>
-          </thead>
-          <tbody>${filas}</tbody>
-          <tfoot>
-            <tr style="background:#f5f5f3;font-weight:700">
-              <td style="padding:8px 8px;font-size:12px">TOTAL</td>
-              <td colspan="4"></td>
-              <td style="padding:8px 8px;font-size:12px;text-align:right;color:#72243E">${fmtMXN(totalPagado)}</td>
-              <td colspan="2"></td>
-            </tr>
-          </tfoot>
-        </table>
+// ===== TAB: INFORME DE REVISIÓN =====
+function ppRenderInforme(el) {
+  const ejercicios = [...new Set(ppCache.filter(p=>p.client_id===ppClienteActivo.id).map(p=>p.ejercicio))].sort((a,b)=>b-a);
+  const ejActual = ejercicios[0] || new Date().getFullYear();
+  el.innerHTML = `
+  <div class="card" style="margin-bottom:12px">
+    <div class="sec-label">CONFIGURAR INFORME</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div>
+        <div style="font-size:11px;color:#888;font-weight:600;margin-bottom:4px">EJERCICIO</div>
+        <select id="pp-inf-ej" style="width:100%;font-size:14px;padding:8px 10px;border:1px solid #e0e0db;border-radius:8px">
+          ${ejercicios.map(e=>`<option value="${e}">${e}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#888;font-weight:600;margin-bottom:4px">PERÍODO</div>
+        <select id="pp-inf-per" style="width:100%;font-size:14px;padding:8px 10px;border:1px solid #e0e0db;border-radius:8px">
+          <option value="0">Anual (todos los meses)</option>
+          ${PP_MESES_LARGO.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('')}
+        </select>
       </div>
     </div>
-    <div class="card" style="background:#FBEAF0;border-color:#e8b4c8">
-      <div style="font-size:11px;color:#72243E;font-weight:600">📌 Art. 14 LISR — Pagos provisionales</div>
-      <div style="font-size:11px;color:#72243E;margin-top:4px;line-height:1.5">CU = Utilidad fiscal / Ingresos acumulables del ejercicio anterior. Base gravable = Ingresos acumulados × CU. ISR a pagar = Base × 30% menos ISR retenido y pagos anteriores. Fecha límite: día 17 del mes siguiente.</div>
-    </div>`;
+    <button class="btn btn-primary" onclick="ppGenerarInforme()">🖨 Imprimir / exportar</button>
+  </div>
+  <div id="pp-informe-preview" class="card" style="min-height:120px">
+    ${ppCache.filter(p=>p.client_id===ppClienteActivo.id&&p.ejercicio===ejActual).length
+      ? ppBuildInformeHTML(ejActual, 0)
+      : '<div style="text-align:center;padding:2rem;color:#888;font-size:13px">Sin datos para el período.</div>'}
+  </div>`;
 }
 
-let ppUpdateTimer={};
-function ppUpdateField(clientId,mes,ejercicio,campo,valor){
-  const key=`${clientId}-${mes}-${ejercicio}`;
-  clearTimeout(ppUpdateTimer[key]);
-  ppUpdateTimer[key]=setTimeout(async()=>{
-    const idx=ppCache.findIndex(p=>p.client_id===clientId&&p.mes===mes&&p.ejercicio===ejercicio);
-    if(idx>=0){
-      ppCache[idx]={...ppCache[idx],[campo]:valor};
-      await sbPatch('pp_pagos',`?client_id=eq.${clientId}&mes=eq.${mes}&ejercicio=eq.${ejercicio}`,{[campo]:valor,updated_at:nowISO()});
-    } else {
-      const nuevo={client_id:clientId,mes,ejercicio,cliente_nombre:(clientesCache.find(c=>c.id===clientId)||{}).nombre||'',ingresos_acumulados:0,coeficiente_utilidad:0,isr_retenido:0,monto_pagado:0,fecha_pago:'',status:'pendiente',[campo]:valor,updated_at:nowISO()};
-      const res=await sbPost('pp_pagos',nuevo);
-      const data=await res.json();
-      if(data&&data[0])ppCache.push(data[0]);
-    }
-  },800);
+function ppBuildInformeHTML(ejercicio, mesFiltro) {
+  const periodos = ppCache.filter(p => p.client_id===ppClienteActivo.id && p.ejercicio===ejercicio && (mesFiltro===0||p.mes===mesFiltro)).sort((a,b)=>a.mes-b.mes);
+  if (!periodos.length) return '<div style="text-align:center;padding:1rem;color:#888">Sin datos para el período.</div>';
+  const rows = periodos.map(p => {
+    const imp = p.impuestos || {};
+    let det = 0, pag = 0, obs = [];
+    Object.entries(imp).forEach(([k,d])=>{ det+=parseFloat(d.isr_pagar||d.isn_pagar||d.importe_determinado||0); pag+=parseFloat(d.importe_pagado||0); if(d.observaciones)obs.push(d.observaciones); });
+    const dif = pag - det;
+    return `<tr><td style="padding:6px 8px;font-size:12px;font-weight:600">${PP_MESES_LARGO[p.mes-1]}</td>
+      <td style="padding:6px 8px;font-size:12px;text-align:right">${det>0?fmtMXN(det):'—'}</td>
+      <td style="padding:6px 8px;font-size:12px;text-align:right;color:${pag>0?'#3B6D11':'#888'}">${pag>0?fmtMXN(pag):'—'}</td>
+      <td style="padding:6px 8px;font-size:12px;text-align:right;color:${dif>=0?'#3B6D11':'#dc2626'}">${det>0||pag>0?fmtMXN(dif):'—'}</td>
+      <td style="padding:6px 8px;font-size:11px;color:#888">${obs.join(' | ')||''}</td>
+      <td style="padding:6px 8px;text-align:center"><span style="background:${p.revisado?'#EAF3DE':'#f5f5f3'};color:${p.revisado?'#3B6D11':'#888'};padding:1px 6px;border-radius:999px;font-size:10px;font-weight:600">${p.revisado?'✓':''}</span></td>
+    </tr>`;
+  }).join('');
+  return `<div style="font-size:12px;color:#888;margin-bottom:8px">Informe de revisión — ${ejercicio} · ${escH(ppClienteActivo.nombre)}</div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#72243E;color:#fff"><th style="padding:6px 8px;text-align:left">Mes</th><th style="padding:6px 8px;text-align:right">Determinado</th><th style="padding:6px 8px;text-align:right">Pagado</th><th style="padding:6px 8px;text-align:right">Diferencia</th><th style="padding:6px 8px;text-align:left">Observaciones</th><th style="padding:6px 8px;text-align:center">Rev.</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
 }
 
-async function ppGenerarMeses(clientId,nombreCliente,ejercicio){
-  const existentes=ppCache.filter(p=>p.client_id===clientId&&p.ejercicio===ejercicio);
-  const mesesExist=new Set(existentes.map(p=>p.mes));
-  const nuevos=[];
-  for(let m=1;m<=12;m++){
-    if(!mesesExist.has(m)){
-      nuevos.push({client_id:clientId,mes:m,ejercicio,cliente_nombre:nombreCliente,ingresos_acumulados:0,coeficiente_utilidad:0,isr_retenido:0,monto_pagado:0,fecha_pago:'',status:'pendiente',updated_at:nowISO()});
-    }
+function ppGenerarInforme() {
+  const ej = parseInt(document.getElementById('pp-inf-ej')?.value) || new Date().getFullYear();
+  const per = parseInt(document.getElementById('pp-inf-per')?.value) || 0;
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Informe PP ${ej} — ${ppClienteActivo.nombre}</title>
+  <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,sans-serif;padding:20px;color:#1a1a1a}
+  .header{display:flex;justify-content:space-between;border-bottom:2px solid #72243E;padding-bottom:10px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse}th{background:#72243E;color:#fff;padding:6px 8px;font-size:10px;text-align:left}
+  td{padding:5px 8px;border-bottom:1px solid #f0f0ec;font-size:11px}.footer{margin-top:16px;font-size:9px;color:#aaa;display:flex;justify-content:space-between;border-top:1px solid #e5e5e0;padding-top:8px}
+  @page{size:letter landscape;margin:12mm}@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>
+  <div class="header"><div><div style="font-size:11px;color:#888">MSST Consulting SC · TaxIA</div><div style="font-size:18px;font-weight:700">Informe de Revisión — Pagos Provisionales</div>
+  <div style="font-size:13px;color:#555;margin-top:2px">${escH(ppClienteActivo.nombre)} · Ejercicio ${ej}${per?' · '+PP_MESES_LARGO[per-1]:''}</div></div>
+  <div style="text-align:right"><div style="font-size:9px;color:#888">CONFIDENCIAL</div><div style="font-size:9px;color:#888">Generado: ${new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',day:'numeric',month:'long',year:'numeric'})}</div></div></div>
+  ${ppBuildInformeHTML(ej, per)}
+  <div class="footer"><span>Art. 14 LISR · Art. 5-D LIVA · Arts. 96, 106 y 116 LISR · Art. 40 LHBC</span><span>TaxIA · MSST Consulting SC</span></div>
+  </body></html>`);
+  win.document.close(); setTimeout(() => win.print(), 500);
+}
+
+// ===== TAB: CONFIGURACIÓN =====
+function ppRenderConfig(el) {
+  const cfg = ppConfigCache[ppClienteActivo.id] || { impuestos_fed:['isr_pm','iva','ret_s','ret_h'], impuestos_est:['isn_bc'], cu:0, tasa_isr:30 };
+  const fedChecks = PP_IMPUESTOS_FED.map(imp => `
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 0;border-bottom:1px solid #f0f0ec">
+      <input type="checkbox" id="cfg-fed-${imp.id}" ${cfg.impuestos_fed.includes(imp.id)?'checked':''}
+        style="width:18px;height:18px;margin-top:2px;accent-color:#3B4BC8;flex-shrink:0">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:#1a1a1a">${imp.label}</div>
+        <div style="font-size:11px;color:#888;margin-top:1px">${imp.ley}</div>
+      </div>
+    </div>`).join('');
+
+  const estChecks = PP_IMPUESTOS_EST.map(imp => `
+    <div style="border:1.5px solid ${cfg.impuestos_est.includes(imp.id)?'#3B6D11':'#e5e5e0'};border-radius:10px;padding:14px;margin-bottom:8px;background:${cfg.impuestos_est.includes(imp.id)?'#f0f7f0':'#fafafa'}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:${cfg.impuestos_est.includes(imp.id)?'10px':'0'}">
+        <input type="checkbox" id="cfg-est-${imp.id}" ${cfg.impuestos_est.includes(imp.id)?'checked':''}
+          style="width:18px;height:18px;accent-color:#3B6D11;flex-shrink:0">
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:600">${imp.label} <span style="background:#e5e5e0;color:#555;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700">${imp.estado}</span></div>
+          <div style="font-size:11px;color:#5a8a1a;font-weight:600">Estado: ${imp.estado==='BC'?'Baja California':imp.estado} · Tasa ${imp.tasa_default}%</div>
+          <div style="font-size:11px;color:#888;margin-top:2px">${imp.ley}</div>
+          <div style="font-size:11px;color:#888">${imp.vence} · ${imp.sistema||''}</div>
+        </div>
+      </div>
+      ${cfg.impuestos_est.includes(imp.id)?`<div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:4px">CAMPOS DE CAPTURA MENSUAL</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${(imp.campos||[]).map(c=>`<span style="background:#fff;border:1px solid #ddd;border-radius:6px;padding:3px 8px;font-size:11px">${c.replace(/_/g,' ')}</span>`).join('')}</div>`:''}
+    </div>`).join('');
+
+  el.innerHTML = `
+  <div class="card" style="margin-bottom:12px">
+    <div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">IMPUESTOS FEDERALES APLICABLES A ${escH(ppClienteActivo.nombre.toUpperCase())}</div>
+    ${fedChecks}
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">OBLIGACIONES FISCALES ESTATALES FIJAS</div>
+    <div style="font-size:12px;color:#888;margin-bottom:12px">Estas obligaciones se incluyen automáticamente en cada período mensual nuevo. Su cédula aparece en la sección de revisión junto a los impuestos federales.</div>
+    ${estChecks}
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:10px">PARÁMETROS FISCALES DEL CLIENTE</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px">Coeficiente de Utilidad (CU) — Art. 14 LISR</div>
+        <input type="number" id="cfg-cu" value="${cfg.cu||0}" step="0.0001" min="0" max="1"
+          style="width:100%;padding:8px 10px;font-size:14px;border:1px solid #e0e0db;border-radius:8px;font-family:inherit">
+        <div style="font-size:10px;color:#888;margin-top:3px">Determinado en la declaración anual del ejercicio anterior</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:#888;margin-bottom:4px">Tasa ISR (%)</div>
+        <input type="number" id="cfg-tasa" value="${cfg.tasa_isr||30}" min="0" max="100"
+          style="width:100%;padding:8px 10px;font-size:14px;border:1px solid #e0e0db;border-radius:8px;font-family:inherit">
+      </div>
+    </div>
+  </div>
+  <button class="btn btn-primary" onclick="ppGuardarConfig()" style="width:100%;padding:12px;font-size:14px">💾 Guardar configuración</button>
+  <div style="font-size:11px;color:#888;margin-top:8px;text-align:center">Los cambios aplican a nuevos períodos. Los períodos ya guardados conservan sus datos.</div>`;
+}
+
+async function ppGuardarConfig() {
+  const clientId = ppClienteActivo.id;
+  const fed = PP_IMPUESTOS_FED.filter(i=>document.getElementById('cfg-fed-'+i.id)?.checked).map(i=>i.id);
+  const est = PP_IMPUESTOS_EST.filter(i=>document.getElementById('cfg-est-'+i.id)?.checked).map(i=>i.id);
+  const cu = parseFloat(document.getElementById('cfg-cu')?.value) || 0;
+  const tasa = parseFloat(document.getElementById('cfg-tasa')?.value) || 30;
+  ppConfigCache[clientId] = { impuestos_fed:fed, impuestos_est:est, cu, tasa_isr:tasa };
+  // Upsert en Supabase
+  const existing = await sbGet('pp_config', `?client_id=eq.${clientId}&select=id`);
+  if (existing && existing.length) {
+    await sbPatch('pp_config', `?client_id=eq.${clientId}`, { impuestos_fed:JSON.stringify(fed), impuestos_est:JSON.stringify(est), cu, tasa_isr:tasa, updated_at:nowISO() });
+  } else {
+    await sbPost('pp_config', { client_id:clientId, cliente_nombre:ppClienteActivo.nombre, impuestos_fed:JSON.stringify(fed), impuestos_est:JSON.stringify(est), cu, tasa_isr:tasa, updated_at:nowISO() });
   }
-  if(nuevos.length){
-    const res=await fetch(`${SB_URL}/rest/v1/pp_pagos`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(nuevos)});
-    const data=await res.json();
-    if(Array.isArray(data)) ppCache.push(...data);
-  }
-  const pagos=ppCache.filter(p=>p.client_id===clientId&&p.ejercicio===ejercicio);
-  renderPPTabla(pagos,clientId,nombreCliente,ejercicio);
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#3B6D11;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:9999';
+  t.textContent = '✓ Configuración guardada'; document.body.appendChild(t); setTimeout(() => t.remove(), 2000);
+  ppRenderConfig(document.getElementById('pp-tab-content'));
 }
 
-async function ppNuevoEjercicio(){
-  const ej=prompt('Ejercicio fiscal (año):',new Date().getFullYear());
-  if(!ej||isNaN(parseInt(ej)))return;
-  renderPPList(parseInt(ej));
+async function ppNuevoPeriodo() {
+  const ej = parseInt(prompt('Ejercicio fiscal:', new Date().getFullYear())); if (!ej) return;
+  const mes = parseInt(prompt('Mes (1-12):', new Date().getMonth()+1)); if (!mes || mes<1||mes>12) return;
+  await ppAbrirMes(ej, mes);
+  ppTabActiva = 'revision';
+  ppRenderCliente();
+}
+
+function ppAgregarEstatal() {
+  alert('Configura los impuestos estatales en la pestaña Configuración.');
 }
 
 
