@@ -5931,18 +5931,39 @@ window.onerror = function(msg, src, line, col, err) {
 // ===== MÓDULO DOCUMENTACIÓN DEL CLIENTE =================
 // ========================================================
 
-const DOC_TIPOS_GENERAL=[
-  {id:'acta_constitutiva',label:'Acta Constitutiva',icon:'📜',req:true},
-  {id:'acta_asamblea',label:'Actas de Asamblea',icon:'📋',req:false},
-  {id:'poder_notarial',label:'Poder Notarial',icon:'⚖️',req:false},
-  {id:'constancia_sf',label:'Constancia de Situación Fiscal',icon:'🏛️',req:true},
-  {id:'fiel',label:'FIEL / e.firma (.cer + .key)',icon:'🔐',req:true},
-  {id:'csd',label:'CSD / Sello Digital (.cer)',icon:'🔏',req:false},
-  {id:'rfc_doc',label:'Documento RFC',icon:'📄',req:true},
-  {id:'contrato_social',label:'Contrato Social / Estatutos',icon:'📃',req:false},
-  {id:'opinion_cumplimiento',label:'Opinión de Cumplimiento SAT',icon:'✅',req:false},
-  {id:'otro_general',label:'Otro documento general',icon:'📎',req:false},
+// Documentos generales por tipo de persona
+const DOC_TIPOS_GENERAL_PM=[
+  {id:'acta_constitutiva',    label:'Acta Constitutiva',                icon:'📜', req:true},
+  {id:'acta_asamblea',        label:'Actas de Asamblea',                icon:'📋', req:false},
+  {id:'poder_notarial',       label:'Poder Notarial',                   icon:'⚖️', req:false},
+  {id:'constancia_sf',        label:'Constancia de Situación Fiscal',   icon:'🏛️', req:true},
+  {id:'fiel',                 label:'FIEL / e.firma (.cer + .key)',      icon:'🔐', req:true},
+  {id:'csd',                  label:'CSD / Sello Digital (.cer)',        icon:'🔏', req:false},
+  {id:'rfc_doc',              label:'Documento RFC',                     icon:'📄', req:true},
+  {id:'contrato_social',      label:'Contrato Social / Estatutos',      icon:'📃', req:false},
+  {id:'opinion_cumplimiento', label:'Opinión de Cumplimiento SAT',      icon:'✅', req:false},
+  {id:'comprobante_domicilio',label:'Comprobante de Domicilio',         icon:'🏠', req:false},
+  {id:'otro_general',         label:'Otro documento general',           icon:'📎', req:false},
 ];
+const DOC_TIPOS_GENERAL_PF=[
+  {id:'ine',                  label:'INE / Identificación Oficial',     icon:'🪪', req:true},
+  {id:'curp',                 label:'CURP',                             icon:'📋', req:true},
+  {id:'rfc_doc',              label:'Documento RFC',                     icon:'📄', req:true},
+  {id:'constancia_sf',        label:'Constancia de Situación Fiscal',   icon:'🏛️', req:true},
+  {id:'fiel',                 label:'FIEL / e.firma (.cer + .key)',      icon:'🔐', req:true},
+  {id:'csd',                  label:'CSD / Sello Digital (.cer)',        icon:'🔏', req:false},
+  {id:'comprobante_domicilio',label:'Comprobante de Domicilio',         icon:'🏠', req:true},
+  {id:'acta_matrimonio',      label:'Acta de Matrimonio (si aplica)',    icon:'💒', req:false},
+  {id:'poder_notarial',       label:'Poder Notarial',                   icon:'⚖️', req:false},
+  {id:'opinion_cumplimiento', label:'Opinión de Cumplimiento SAT',      icon:'✅', req:false},
+  {id:'contrato_arrendamiento',label:'Contrato de Arrendamiento',       icon:'🏢', req:false},
+  {id:'otro_general',         label:'Otro documento general',           icon:'📎', req:false},
+];
+// Helper: obtener lista según tipo de cliente actual
+function docTiposGeneral(){
+  const t=(docClienteActual?.tipo||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  return t.includes('fisica')?DOC_TIPOS_GENERAL_PF:DOC_TIPOS_GENERAL_PM;
+}
 const DOC_MESES_L=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const DOC_MESES_C=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const DOC_TIPOS_FIN=[
@@ -5978,20 +5999,34 @@ async function renderDocumentacion(){
   renderDocLista();
 }
 
+let docTipoPers='pm'; // 'pm' | 'pf'
+
 function renderDocLista(){
-  const lista=clientesCache.filter(c=>c.activo!==false).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
+  const esPM=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t.includes('moral')||!t; };
+  const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t.includes('fisica'); };
+  const listaPM=clientesCache.filter(c=>c.activo!==false&&esPM(c)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
+  const listaPF=clientesCache.filter(c=>c.activo!==false&&esPF(c)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
+  const lista=docTipoPers==='pm'?listaPM:listaPF;
   app.innerHTML=renderTopNav('doc')+
   '<div style="max-width:700px;margin:0 auto">'+
   '<div style="margin-bottom:1.25rem">'+
   '<div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.04em">MSST Consulting · TaxIA</div>'+
   '<div style="font-size:22px;font-weight:700;margin-top:2px">Documentación del Cliente</div>'+
   '<div style="font-size:12px;color:#888;margin-top:2px">Expediente digital — estados financieros y documentos generales</div></div>'+
+  // Selector PM/PF
+  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1rem">'+
+  '<div onclick="docTipoPers=\'pm\';renderDocLista()" style="border:2px solid '+(docTipoPers==='pm'?'#0f4c81':'#e5e5e0')+';border-radius:12px;padding:14px 16px;cursor:pointer;background:'+(docTipoPers==='pm'?'#dbeafe':'#fff')+'">'+
+  '<div style="font-size:13px;font-weight:700;color:'+(docTipoPers==='pm'?'#0f4c81':'#1a1a1a')+'">🏢 Personas Morales</div>'+
+  '<div style="font-size:11px;color:#888;margin-top:2px">'+listaPM.length+' clientes · Acta constitutiva, FIEL, RFC</div></div>'+
+  '<div onclick="docTipoPers=\'pf\';renderDocLista()" style="border:2px solid '+(docTipoPers==='pf'?'#72243E':'#e5e5e0')+';border-radius:12px;padding:14px 16px;cursor:pointer;background:'+(docTipoPers==='pf'?'#FBEAF0':'#fff')+'">'+
+  '<div style="font-size:13px;font-weight:700;color:'+(docTipoPers==='pf'?'#72243E':'#1a1a1a')+'">👤 Personas Físicas</div>'+
+  '<div style="font-size:11px;color:#888;margin-top:2px">'+listaPF.length+' clientes · INE, CURP, FIEL</div></div></div>'+
   '<div class="card">'+
-  '<div class="sec-label">Seleccionar cliente</div>'+
+  '<div class="sec-label" style="margin-bottom:8px">'+(docTipoPers==='pm'?'Personas Morales':'Personas Físicas')+'</div>'+
   '<div style="position:relative;margin-bottom:10px">'+
   '<span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;pointer-events:none">🔍</span>'+
   '<input type="text" id="doc-buscar" placeholder="Buscar cliente..." oninput="docFiltrar(this.value)" style="padding-left:32px"></div>'+
-  '<div id="doc-lista" style="max-height:420px;overflow-y:auto">'+docRenderLista(lista)+'</div></div></div>';
+  '<div id="doc-lista" style="max-height:380px;overflow-y:auto">'+docRenderLista(lista)+'</div></div></div>';
 }
 
 function docRenderLista(lista){
@@ -6006,12 +6041,16 @@ function docRenderLista(lista){
 }
 
 function docFiltrar(q){
-  const lista=clientesCache.filter(c=>c.activo!==false&&(!q||(c.nombre||'').toLowerCase().includes(q.toLowerCase())));
+  const esPM=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t.includes('moral')||!t; };
+  const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t.includes('fisica'); };
+  const base=clientesCache.filter(c=>c.activo!==false&&(docTipoPers==='pm'?esPM(c):esPF(c)));
+  const lista=base.filter(c=>!q||(c.nombre||'').toLowerCase().includes(q.toLowerCase()));
   const el=document.getElementById('doc-lista');if(el)el.innerHTML=docRenderLista(lista);
 }
 
 async function docSelCliente(id,nombre){
-  docClienteActual={id,nombre};docTab='generales';
+  const cli=clientesCache.find(c=>String(c.id)===String(id));
+  docClienteActual={id,nombre,tipo:cli?.tipo||''};docTab='generales';
   // Usar el año actual por defecto; se ajustará al primer ejercicio con datos al cargar
   docEjercicio=new Date().getFullYear();
   app.innerHTML=renderTopNav('doc')+'<div class="loading"><span class="spinner"></span>Cargando expediente...</div>';
@@ -6065,7 +6104,7 @@ function docTabContent(ejercicios){
 
 function docRenderGenerales(){
   const docMap={};docCacheGen.forEach(d=>{docMap[d.tipo]=d;});
-  const rows=DOC_TIPOS_GENERAL.map(function(t){
+  const rows=docTiposGeneral().map(function(t){
     const d=docMap[t.id]||null, ok=!!(d&&d.archivo_url), ext=(d&&d.archivo_ext)||'';
     const extClr=ext==='pdf'?'#dc2626':ext==='csv'?'#3B6D11':'#185FA5';
     let html='<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f0f0ec">';
