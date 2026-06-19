@@ -158,17 +158,17 @@ let session=null,usersCache={},clientesCache=[],gruposCache=[];
 
 // ===== MÓDULOS DEL SISTEMA =====
 const ALL_MODULES=[
-  {id:'plan',       label:'Mis Tareas',            icon:'✅', desc:'Planeación diaria y seguimiento de tareas',       color:'#3B4BC8', bg:'#EEEDFE'},
-  {id:'devoluciones',label:'Devoluciones IVA',     icon:'🔄', desc:'Gestión de trámites de devolución ante el SAT',  color:'#0C447C', bg:'#E6F1FB'},
-  {id:'proyeccion', label:'Proyección Fiscal',     icon:'📊', desc:'Estimación de ISR y escenarios fiscales',        color:'#5a8a1a', bg:'#EAF3DE'},
-  {id:'da_pm',      label:'Declaración Anual',     icon:'📋', desc:'Papeles de trabajo Declaración Anual PM',        color:'#633806', bg:'#FAEEDA'},
-  {id:'pp',         label:'Pagos Provisionales',   icon:'💳', desc:'Cálculo y control de pagos provisionales',       color:'#72243E', bg:'#FBEAF0'},
-  {id:'dashboard',  label:'Dashboard',             icon:'📈', desc:'Métricas y resumen general del despacho',        color:'#1a1a1a', bg:'#f5f5f3'},
-  {id:'clientes',   label:'Clientes',              icon:'🏢', desc:'Directorio de clientes y grupos',               color:'#374151', bg:'#f3f4f6'},
-  {id:'historial',  label:'Historial',             icon:'📅', desc:'Registro histórico de actividades',             color:'#374151', bg:'#f3f4f6'},
-  {id:'admin',      label:'Usuarios',              icon:'👥', desc:'Administración de usuarios y accesos',           color:'#374151', bg:'#f3f4f6'},
-  {id:'permisos',   label:'Permisos',              icon:'🔑', desc:'Control de acceso a módulos por usuario',       color:'#374151', bg:'#f3f4f6'},
-  {id:'doc',        label:'Documentación',         icon:'📁', desc:'Expediente digital: estados financieros y generales del cliente', color:'#0f4c81', bg:'#dbeafe'},
+  {id:'dashboard',   num:1,  label:'Dashboard',              icon:'📈', desc:'Métricas y resumen general del despacho',                              color:'#1a1a1a', bg:'#f5f5f3'},
+  {id:'plan',        num:2,  label:'Mis Tareas',             icon:'✅', desc:'Planeación diaria y seguimiento de tareas del equipo',                 color:'#3B4BC8', bg:'#EEEDFE'},
+  {id:'clientes',    num:3,  label:'Clientes',               icon:'🏢', desc:'Directorio de clientes, grupos y datos generales',                     color:'#374151', bg:'#f3f4f6'},
+  {id:'doc',         num:4,  label:'Documentación',          icon:'📁', desc:'Expediente digital: estados financieros y generales del cliente',       color:'#0f4c81', bg:'#dbeafe'},
+  {id:'devoluciones',num:5,  label:'Devoluciones IVA',       icon:'🔄', desc:'Gestión de trámites de devolución ante el SAT',                        color:'#0C447C', bg:'#E6F1FB'},
+  {id:'pp',          num:6,  label:'Pagos Provisionales',    icon:'💳', desc:'Cálculo y revisión mensual de obligaciones federales y estatales',      color:'#72243E', bg:'#FBEAF0'},
+  {id:'proyeccion',  num:7,  label:'Proyección Anual',       icon:'📊', desc:'Estimación de ISR anual y escenarios fiscales por ejercicio',           color:'#5a8a1a', bg:'#EAF3DE'},
+  {id:'da_pm',       num:8,  label:'Declaración Anual',      icon:'📋', desc:'Papeles de trabajo y determinación de Declaración Anual PM',            color:'#633806', bg:'#FAEEDA'},
+  {id:'historial',   num:9,  label:'Historial',              icon:'📅', desc:'Registro histórico de actividades y cierres',                           color:'#374151', bg:'#f3f4f6'},
+  {id:'admin',       num:10, label:'Usuarios',               icon:'👥', desc:'Administración de usuarios y niveles de acceso',                        color:'#374151', bg:'#f3f4f6'},
+  {id:'permisos',    num:11, label:'Permisos',               icon:'🔑', desc:'Control de acceso a módulos por colaborador',                           color:'#374151', bg:'#f3f4f6'},
 ];
 // Módulos que el admin SIEMPRE tiene (no configurables)
 const ADMIN_ALWAYS=['plan','devoluciones','proyeccion','da_pm','pp','doc','dashboard','clientes','historial','admin','permisos'];
@@ -258,7 +258,7 @@ async function ensureArrastre(email){
 
 function renderTopNav(active){
   const navOrder=['dashboard','plan','clientes','historial','devoluciones','proyeccion','da_pm','pp','doc','admin','permisos'];
-  const navLabels={dashboard:'Dashboard',plan:'Mis Tareas',clientes:'Clientes',historial:'Historial',devoluciones:'Devoluciones IVA',proyeccion:'Proyección Fiscal',da_pm:'Dec. Anual',pp:'Pagos Prov.',doc:'Documentación',admin:'Usuarios',permisos:'Permisos'};
+  const navLabels={dashboard:'1. Dashboard',plan:'2. Mis Tareas',clientes:'3. Clientes',doc:'4. Documentación',devoluciones:'5. Devoluciones IVA',pp:'6. Pagos Prov.',proyeccion:'7. Proyección Anual',da_pm:'8. Dec. Anual',historial:'9. Historial',admin:'10. Usuarios',permisos:'11. Permisos'};
   const items=navOrder.filter(id=>userCanAccess(session.email,id)).map(id=>({id,label:navLabels[id]||id}));
   return `<div class="nav">
     <div style="display:flex;align-items:center;gap:10px">
@@ -3243,9 +3243,8 @@ function abrirCapturaMes(proyId,mes,mesId){
   overlay.id='modal-mes';
   const html='<div class="modal-box" style="max-width:560px;max-height:90vh;overflow-y:auto">'+
     '<div class="modal-title">'+MESES_NOMBRES[mes-1]+' — Captura de datos</div>'+
-    '<div style="display:flex;gap:0;border-bottom:0.5px solid #e5e5e0;margin-bottom:14px">'+
-      '<button id="tab-cifras" onclick="switchMesTab(\'cifras\')" style="padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#3B4BC8;border-bottom:2px solid #3B4BC8;font-weight:600">Cifras</button>'+
-      '<button id="tab-docs" onclick="switchMesTab(\'docs\')" style="padding:7px 14px;font-size:12px;border:none;background:none;cursor:pointer;color:#888;border-bottom:2px solid transparent">Documentos PDF</button>'+
+    '<div style="margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #e5e5e0">'+
+      '<div style="font-size:11px;color:#888;background:#E6F1FB;padding:6px 12px;border-radius:6px">📁 Para subir los estados financieros, usa el módulo <strong>4. Documentación</strong>.</div>'+
     '</div>'+
     '<div id="panel-cifras">'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'+
@@ -3259,19 +3258,11 @@ function abrirCapturaMes(proyId,mes,mesId){
         '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Pago provisional ISR</div><input id="ms-pp" type="number" placeholder="0.00"></div>'+
       '</div>'+
     '</div>'+
-    '<div id="panel-docs" style="display:none">'+
-      '<div style="font-size:12px;color:#888;margin-bottom:10px">Sube los estados financieros. Claude extraerá las cifras automáticamente.</div>'+
-      msPDFBox("er","Estado de Resultados")+
-      msPDFBox("bg","Balance General")+
-      msPDFBox("bc","Balanza de Comprobación")+
-      '<div id="ms-extract-status" style="font-size:12px;display:none;padding:8px;border-radius:6px;margin-bottom:8px"></div>'+
-    '</div>'+
+
     '<input type="hidden" id="ms-proy-id" value="'+proyId+'">'+
     '<input type="hidden" id="ms-mes" value="'+mes+'">'+
     '<input type="hidden" id="ms-id" value="'+(mesId||'')+'">'+
-    '<input type="hidden" id="ms-er-url" value=""><input type="hidden" id="ms-er-nombre" value="">'+
-    '<input type="hidden" id="ms-bg-url" value=""><input type="hidden" id="ms-bg-nombre" value="">'+
-    '<input type="hidden" id="ms-bc-url" value=""><input type="hidden" id="ms-bc-nombre" value="">'+
+
     '<div style="display:flex;gap:8px;margin-top:8px">'+
       '<button class="btn btn-full" id="btn-cancel-mes" style="flex:1;margin-top:0">Cancelar</button>'+
       '<button class="btn btn-primary btn-full" onclick="guardarMes()" style="flex:1;margin-top:0">Guardar</button>'+
@@ -4675,9 +4666,10 @@ function renderPortada(){
   const nombre=u.name?u.name.split(' ')[0]:session.email;
   const modItems=ALL_MODULES.filter(m=>mods.includes(m.id));
   const grid=modItems.map(m=>`
-    <div onclick="nav('${m.id}')" style="background:#fff;border:1.5px solid #e5e5e0;border-radius:14px;padding:20px 16px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;align-items:flex-start;gap:6px"
+    <div onclick="nav('${m.id}')" style="background:#fff;border:1.5px solid #e5e5e0;border-radius:14px;padding:20px 16px;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;align-items:flex-start;gap:6px;position:relative"
       onmouseover="this.style.borderColor='${m.color}';this.style.boxShadow='0 4px 16px rgba(0,0,0,.08)'"
       onmouseout="this.style.borderColor='#e5e5e0';this.style.boxShadow='none'">
+      ${m.num?`<div style="position:absolute;top:12px;right:14px;font-size:11px;font-weight:800;color:${m.color};opacity:.3;letter-spacing:.02em">${String(m.num).padStart(2,'0')}</div>`:''}
       <div style="width:40px;height:40px;border-radius:10px;background:${m.bg};display:flex;align-items:center;justify-content:center;font-size:20px">${m.icon}</div>
       <div style="font-size:14px;font-weight:700;color:#1a1a1a;margin-top:4px">${m.label}</div>
       <div style="font-size:11px;color:#888;line-height:1.4">${m.desc}</div>
