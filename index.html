@@ -239,8 +239,22 @@ function getNotifyEmails(){
   return [mgr,admin].filter(Boolean);
 }
 async function loadCaches(){
-  const [g,c]=await Promise.all([sbGet('grupos','?select=*&order=nombre.asc'),sbGet('clientes','?select=*,grupos(nombre)&order=nombre.asc')]);
-  gruposCache=g||[];clientesCache=c||[];
+  const [g,c]=await Promise.all([
+    sbGet('grupos','?select=*&order=nombre.asc'),
+    sbGet('clientes','?select=*,grupos(nombre)&order=nombre.asc')
+  ]);
+  gruposCache=g||[];
+  const todos=c||[];
+  // Admin ve todos los clientes; colaboradores solo los asignados
+  if(!session||session.role==='admin'){
+    clientesCache=todos;
+  } else {
+    try{
+      const accesos=await sbGet('cliente_usuarios','?user_email=eq.'+encodeURIComponent(session.email)+'&select=cliente_id');
+      const ids=new Set((accesos||[]).map(a=>String(a.cliente_id)));
+      clientesCache=todos.filter(c=>ids.has(String(c.id)));
+    }catch(e){ clientesCache=todos; }
+  }
 }
 
 async function getActiveTareas(email){
@@ -1738,6 +1752,87 @@ async function generarReporteDevPDF(soloCorreo=false){
 }
 
 /* ===== CLIENTES ===== */
+// ===== GESTIÓN DE ACCESOS POR CLIENTE =====
+
+async function cliAccesos(clienteId, clienteNombre){
+  // Cargar usuarios y accesos actuales en paralelo
+  const [usersArr, accesosArr] = await Promise.all([
+    sbGet('users','?select=email,name,role&order=name.asc'),
+    sbGet('cliente_usuarios','?cliente_id=eq.'+encodeURIComponent(String(clienteId))+'&select=*')
+  ]);
+  const users = (usersArr||[]).filter(u=>u.role!=='admin'); // admin siempre tiene acceso
+  const conAcceso = new Set((accesosArr||[]).map(a=>a.user_email));
+
+  const filas = users.map(u=>{
+    const tiene = conAcceso.has(u.email);
+    const nombre = u.name||u.email;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0ec">
+      <div>
+        <div style="font-size:13px;font-weight:600">${escH(nombre)}</div>
+        <div style="font-size:11px;color:#888">${escH(u.email)} · ${u.role||'colaborador'}</div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" data-email="${escH(u.email)}" ${tiene?'checked':''} 
+          style="width:16px;height:16px;cursor:pointer"
+          onchange="cliToggleAcceso('${escH(String(clienteId))}','${escH(u.email)}',this.checked)">
+        <span style="font-size:12px;color:${tiene?'#3B6D11':'#888'}">${tiene?'Con acceso':'Sin acceso'}</span>
+      </label>
+    </div>`;
+  }).join('');
+
+  const sinColabs = users.length===0 ?
+    '<div style="text-align:center;padding:1.5rem;color:#888;font-size:13px">No hay colaboradores registrados.<br>Agrega usuarios en el módulo 10 — Usuarios.</div>' : '';
+
+  const m = document.createElement('div');
+  m.className = 'modal-overlay';
+  m.id = 'modal-accesos';
+  m.innerHTML = `<div class="modal-box" style="max-width:520px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div>
+        <div style="font-size:15px;font-weight:700">👥 Accesos al cliente</div>
+        <div style="font-size:12px;color:#888;margin-top:2px">${escH(clienteNombre)}</div>
+      </div>
+      <button onclick="document.getElementById('modal-accesos').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button>
+    </div>
+
+    <div style="background:#EAF3DE;border-radius:8px;padding:8px 12px;font-size:11px;color:#3B6D11;margin:12px 0">
+      ✓ <strong>Admin (tú)</strong> siempre tiene acceso a todos los clientes.<br>
+      Activa o desactiva el acceso de cada colaborador a este cliente.
+    </div>
+
+    <div style="max-height:360px;overflow-y:auto">
+      ${sinColabs}${filas}
+    </div>
+
+    <button class="btn" style="width:100%;margin-top:14px" onclick="document.getElementById('modal-accesos').remove()">Cerrar</button>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+async function cliToggleAcceso(clienteId, email, dar){
+  const span = event?.target?.closest('label')?.querySelector('span');
+  try{
+    if(dar){
+      await sbPost('cliente_usuarios',{
+        cliente_id:String(clienteId), user_email:email,
+        created_at:nowISO(), created_by:session.email
+      },'return=minimal');
+      if(span){ span.textContent='Con acceso'; span.style.color='#3B6D11'; }
+    } else {
+      await fetch(SB_URL+'/rest/v1/cliente_usuarios?cliente_id=eq.'+encodeURIComponent(String(clienteId))+'&user_email=eq.'+encodeURIComponent(email),{
+        method:'DELETE',
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+      });
+      if(span){ span.textContent='Sin acceso'; span.style.color='#888'; }
+    }
+  }catch(e){
+    console.error('Error toggling acceso:',e);
+    // Revertir el checkbox
+    if(event?.target) event.target.checked = !dar;
+  }
+}
+
+
 async function renderClientes(){
   app.innerHTML=renderTopNav('clientes')+`
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
@@ -1799,15 +1894,15 @@ function renderClientesTabla(){
   const canEdit=session.role==='admin'||session.role==='manager';
   tbody.innerHTML=list.map(c=>{
     const grupoCell=c.grupos?'<span class="badge badge-group">'+escH(c.grupos.nombre)+'</span>':'—';
-    const editBtn=canEdit?'<button class="btn btn-sm" onclick="editCliente(\''+c.id+'\')">​Editar</button>':'';
-    const delBtn=canEdit?'<button class="btn btn-sm btn-danger" onclick="deleteCliente(\''+c.id+'\')">​Eliminar</button>':'';
+    const editBtn=canEdit?'<button class="btn btn-sm" onclick="editCliente(\''+c.id+'\')">Editar</button>':'';
+    const delBtn=canEdit?'<button class="btn btn-sm btn-danger" onclick="deleteCliente(\''+c.id+'\')">Eliminar</button>':'';
     return '<tr>'+
       '<td style="font-weight:500">'+escH(c.nombre)+'</td>'+
       '<td style="color:#888">'+escH(c.rfc||'—')+'</td>'+
       '<td>'+escH(c.tipo||'—')+'</td>'+
       '<td>'+grupoCell+'</td>'+
       '<td>'+escH(c.responsable||'—')+'</td>'+
-      '<td style="white-space:nowrap">'+editBtn+' '+delBtn+'</td>'+
+      '<td style="white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap">'+(session.role==="admin"?'<button class="btn btn-sm" style="background:#EEEDFE;color:#3B4BC8;border-color:#c5d0ff" onclick="cliAccesos(\''+c.id+'\',\''+escH(c.nombre)+'\')" title="Accesos">👥</button>':'')+ editBtn+' '+delBtn+'</td>'+
     '</tr>';
   }).join('');
 }
