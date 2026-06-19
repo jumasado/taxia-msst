@@ -257,7 +257,7 @@ async function ensureArrastre(email){
 }
 
 function renderTopNav(active){
-  const navOrder=['dashboard','plan','clientes','historial','devoluciones','proyeccion','da_pm','pp','doc','admin','permisos'];
+  const navOrder=['dashboard','plan','clientes','doc','devoluciones','pp','proyeccion','da_pm','historial','admin','permisos'];
   const navLabels={dashboard:'1. Dashboard',plan:'2. Mis Tareas',clientes:'3. Clientes',doc:'4. Documentación',devoluciones:'5. Devoluciones IVA',pp:'6. Pagos Prov.',proyeccion:'7. Proyección Anual',da_pm:'8. Dec. Anual',historial:'9. Historial',admin:'10. Usuarios',permisos:'11. Permisos'};
   const items=navOrder.filter(id=>userCanAccess(session.email,id)).map(id=>({id,label:navLabels[id]||id}));
   return `<div class="nav">
