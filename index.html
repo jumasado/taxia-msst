@@ -5028,10 +5028,6 @@ function pRender(){
 }
 
 
-// Helpers para evitar escaping en onclick
-function ppCliClick(el){ PAGOS.selCli(el.dataset.id, el.dataset.nombre); }
-function docCliClick(el){ docSelCliente(el.dataset.id, el.dataset.nombre); }
-
 let pTipoPersona='pm'; // 'pm' | 'pf'
 
 function pRenderClientes(){
@@ -5906,6 +5902,10 @@ return {
   },
 };
 })(); // fin PAGOS IIFE
+
+// ===== HELPERS GLOBALES =====
+function ppCliClick(el){ PAGOS.selCli(el.dataset.id, el.dataset.nombre); }
+function docCliClick(el){ docSelCliente(el.dataset.id, el.dataset.nombre); }
 
 // CSS adicional para pagos provisionales
 (function(){
