@@ -6011,7 +6011,9 @@ function docFiltrar(q){
 }
 
 async function docSelCliente(id,nombre){
-  docClienteActual={id,nombre};docTab='generales';docEjercicio=new Date().getFullYear();
+  docClienteActual={id,nombre};docTab='generales';
+  // Usar el año actual por defecto; se ajustará al primer ejercicio con datos al cargar
+  docEjercicio=new Date().getFullYear();
   app.innerHTML=renderTopNav('doc')+'<div class="loading"><span class="spinner"></span>Cargando expediente...</div>';
   try{
     [docCacheGen,docCacheFin]=await Promise.all([
@@ -6019,6 +6021,9 @@ async function docSelCliente(id,nombre){
       sbGet('client_documents','?cliente_id=eq.'+encodeURIComponent(id)+'&categoria=eq.financiero&select=*&order=ejercicio.desc,mes.asc'),
     ]);
     docCacheGen=docCacheGen||[];docCacheFin=docCacheFin||[];
+    // Ajustar al ejercicio más reciente con documentos
+    const ejConDatos=[...new Set(docCacheFin.map(d=>d.ejercicio).filter(Boolean))].sort((a,b)=>b-a);
+    if(ejConDatos.length>0) docEjercicio=ejConDatos[0];
   }catch(e){docCacheGen=[];docCacheFin=[];}
   docRenderCliente();
 }
@@ -6089,7 +6094,18 @@ function docRenderGenerales(){
 }
 
 function docRenderFinanciero(ejercicios){
-  const anioOpts=ejercicios.map(function(e){return '<option value="'+e+'"'+(e===docEjercicio?' selected':'')+'>'+e+'</option>';}).join('');
+  // Combinar ejercicios con datos + rango fijo 2020-año actual
+  const anioActual=new Date().getFullYear();
+  const todosAnios=new Set(ejercicios);
+  for(let y=2020;y<=anioActual;y++) todosAnios.add(y);
+  const aniosOrdenados=[...todosAnios].sort((a,b)=>b-a);
+  // Si docEjercicio tiene documentos, mantenerlo; si no, usar el más reciente con docs
+  if(!aniosOrdenados.includes(docEjercicio)) docEjercicio=aniosOrdenados[0]||anioActual;
+  const anioOpts=aniosOrdenados.map(function(e){
+    const tieneDocs=ejercicios.includes(e);
+    return '<option value="'+e+'"'+(e===docEjercicio?' selected':'')+'>'
+      +e+(tieneDocs?' ✓':'')+'</option>';
+  }).join('');
   const finEj=docCacheFin.filter(function(d){return d.ejercicio===docEjercicio;});
   const balMap={};finEj.filter(function(d){return d.tipo==='balanza';}).forEach(function(d){balMap[d.mes]=d;});
 
