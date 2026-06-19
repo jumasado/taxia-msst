@@ -6145,15 +6145,328 @@ function docRenderFinanciero(ejercicios){
     return html;
   }).join('');
 
+  // Estado del catálogo clasificado
+  const tieneClasif=docClasifCache&&Object.keys(docClasifCache).length>0;
+  const catDoc=docCacheFin.find(d=>d.tipo==='catalogo_cuentas');
+  const badgeClasif=tieneClasif
+    ?'<span style="background:#EAF3DE;color:#3B6D11;border:1px solid #b7d9a0;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">✓ Catálogo clasificado ('+Object.keys(docClasifCache).length+' cuentas)</span>'
+      +'<button class="btn btn-sm" style="font-size:10px" onclick="docReClasificar()">✏ Re-clasificar</button>'
+    :'<span style="background:#FAEEDA;color:#854F0B;border:1px solid #f0c97a;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">⚠ Sin catálogo clasificado</span>';
+
   return '<div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
     +'<div style="font-size:12px;color:#888;font-weight:600">EJERCICIO FISCAL</div>'
     +'<select onchange="docEjercicio=parseInt(this.value);docSetTab(\'financiero\')" style="font-size:13px;padding:6px 10px;border:1px solid #e0e0db;border-radius:8px;width:130px">'+anioOpts+'</select>'
-    +'<div style="font-size:11px;color:#888">'+finEj.length+' documentos en '+docEjercicio+'</div></div>'
+    +'<div style="font-size:11px;color:#888">'+finEj.length+' documentos en '+docEjercicio+'</div>'
+    +badgeClasif+'</div>'
     +'<div class="card"><div class="sec-label">Balanzas de comprobación — '+docEjercicio+'</div>'
     +'<div style="background:#E6F1FB;border-radius:8px;padding:8px 12px;font-size:11px;color:#185FA5;margin-bottom:12px">Sube en CSV o Excel para extracción automática. También acepta PDF.</div>'
     +'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">'+grid+'</div></div>'
     +'<div class="card"><div class="sec-label">Otros documentos financieros — '+docEjercicio+'</div>'+otros+'</div>';
 }
+
+// ===== CATÁLOGO DE CUENTAS — CLASIFICACIÓN =====
+
+const DOC_RUBROS=[
+  {id:'bancos',             label:'Bancos y Caja',                   grupo:'Activo',    cifra:'bancos'},
+  {id:'cuentas_por_cobrar', label:'Clientes / Cuentas por cobrar',   grupo:'Activo',    cifra:'cuentas_por_cobrar'},
+  {id:'inventarios',        label:'Inventarios / Almacén',           grupo:'Activo',    cifra:'inventarios'},
+  {id:'anticipo_prov',      label:'Anticipos a proveedores',         grupo:'Activo',    cifra:null},
+  {id:'activo_fijo',        label:'Activo fijo (bruto)',             grupo:'Activo',    cifra:'activo_fijo_bruto'},
+  {id:'depreciacion_acum',  label:'Depreciación acumulada',          grupo:'Activo',    cifra:'depreciacion_acumulada'},
+  {id:'otros_activos',      label:'Otros activos',                   grupo:'Activo',    cifra:null},
+  {id:'proveedores',        label:'Proveedores / Cuentas por pagar', grupo:'Pasivo',    cifra:'cuentas_por_pagar'},
+  {id:'impuestos_pagar',    label:'Impuestos por pagar',             grupo:'Pasivo',    cifra:null},
+  {id:'prestamos',          label:'Préstamos bancarios',             grupo:'Pasivo',    cifra:null},
+  {id:'otros_pasivos',      label:'Otros pasivos',                   grupo:'Pasivo',    cifra:null},
+  {id:'capital',            label:'Capital contable',                grupo:'Capital',   cifra:null},
+  {id:'ingresos',           label:'Ventas / Ingresos por servicios', grupo:'Ingresos',  cifra:'ingresos'},
+  {id:'otros_ingresos',     label:'Otros ingresos',                  grupo:'Ingresos',  cifra:'otros_ingresos'},
+  {id:'costo_ventas',       label:'Costo de ventas / obra',          grupo:'Costos',    cifra:'costo_ventas'},
+  {id:'gastos_operacion',   label:'Gastos de operación',             grupo:'Gastos',    cifra:'gastos_operacion'},
+  {id:'gastos_admin',       label:'Gastos de administración',        grupo:'Gastos',    cifra:'gastos_operacion'},
+  {id:'gastos_venta',       label:'Gastos de venta',                 grupo:'Gastos',    cifra:'gastos_operacion'},
+  {id:'gastos_financieros', label:'Gastos financieros',              grupo:'Gastos',    cifra:'otros_gastos'},
+  {id:'otros_gastos',       label:'Otros gastos',                    grupo:'Gastos',    cifra:'otros_gastos'},
+  {id:'no_aplica',          label:'No incluir en extracción',        grupo:'-',         cifra:null},
+];
+
+let docClasifCache=null; // clasificaciones cargadas del cliente actual
+
+// Auto-sugerir rubro por número y nombre de cuenta
+function docAutoRubro(num,nombre){
+  const n=nombre.toUpperCase();
+  const pre2=num.substring(0,2), pre3=num.substring(0,3), pre4=num.substring(0,4);
+  // Balance sheet
+  if(pre4==='1120'||/^BANCO|^CAJA/.test(n)) return 'bancos';
+  if(pre4==='1130'||pre3==='113'||/CLIENTE|DEUDOR/.test(n)) return 'cuentas_por_cobrar';
+  if(/INVENTARIO|MERCANCIA|ALMACEN/.test(n)||pre3==='114') return 'inventarios';
+  if(/DEPRECIA|AMORTIZA/.test(n)) return 'depreciacion_acum';
+  if(/MAQUINARIA|EQUIPO|EDIFICIO|TERRENO|VEHICULO|MOBILIARIO|ACTIVO.?FIJO/.test(n)||pre2==='12') return 'activo_fijo';
+  if(/ANTICIPO.?PROV|PAGO.?ANTICIP/.test(n)) return 'anticipo_prov';
+  if(pre2==='11') return 'otros_activos';
+  if(pre2==='1') return 'otros_activos';
+  // Pasivos
+  if(/PROVEEDOR/.test(n)||pre4==='2100') return 'proveedores';
+  if(/ACREEDOR/.test(n)||pre4==='2200') return 'proveedores';
+  if(/ISR|IVA|IMSS|INFONAVIT|IMPUESTO/.test(n)) return 'impuestos_pagar';
+  if(/PRESTAMO|CREDITO.?BANC|HIPOTECA/.test(n)) return 'prestamos';
+  if(pre2==='2') return 'otros_pasivos';
+  // Capital
+  if(pre2==='3') return 'capital';
+  // Resultados
+  if(pre2==='4'){
+    if(/FINANCIERO|INTERES|CAMBIARIO|COMISION.?BANC/.test(n)) return 'gastos_financieros';
+    if(/OTRO.?ING|PRODUCTO/.test(n)) return 'otros_ingresos';
+    return 'ingresos';
+  }
+  if(pre2==='5') return 'costo_ventas';
+  if(pre2==='6'){
+    if(/FINANCIERO|INTERES|CAMBIARIO/.test(n)) return 'gastos_financieros';
+    if(/VENTA|DISTRIBUC|COMERCIAL/.test(n)) return 'gastos_venta';
+    if(/ADMIN|DIRECCION|GERENCIA/.test(n)) return 'gastos_admin';
+    return 'gastos_operacion';
+  }
+  if(pre2==='7'){
+    if(/FINANCIERO|INTERES|CAMBIARIO/.test(n)) return 'gastos_financieros';
+    return 'otros_gastos';
+  }
+  return 'no_aplica';
+}
+
+// Extraer cuentas de mayor de un CSV de catálogo
+function docParseCatalogCSV(text){
+  const lines=text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
+  if(!lines.length) return [];
+  const sep=lines[0].includes(';')?';':',';
+  const header=lines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
+  let iC=0,iN=1;
+  header.forEach((h,i)=>{
+    if(/^CUENTA$|^COD|^NUMERO/.test(h)) iC=i;
+    else if(/^NOMBRE$|^DESCRIPCION|^CONCEPTO/.test(h)) iN=i;
+  });
+  const mayorMap={};
+  for(let i=1;i<lines.length;i++){
+    const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+    const num=(cols[iC]||'').trim();
+    const nom=(cols[iN]||'').trim();
+    if(!num) continue;
+    // Extraer cuenta de mayor = primer segmento (antes del primer -)
+    const mayor=num.split('-')[0];
+    if(!mayor||mayor.length<2) continue;
+    // Usar la cuenta que termina en 000 como nombre del mayor
+    const partes=num.split('-');
+    const esMayor=partes.slice(1).every(p=>/^0+$/.test(p));
+    if(esMayor&&nom&&!mayorMap[mayor]){
+      mayorMap[mayor]={cuenta_mayor:mayor, nombre_mayor:nom};
+    } else if(!mayorMap[mayor]){
+      mayorMap[mayor]={cuenta_mayor:mayor, nombre_mayor:nom};
+    }
+  }
+  return Object.values(mayorMap).sort((a,b)=>a.cuenta_mayor.localeCompare(b.cuenta_mayor,undefined,{numeric:true}));
+}
+
+// Procesar catálogo al subirse
+async function docProcesarCatalogo(file){
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(!['csv','txt'].includes(ext)){
+    docToast('Por ahora solo se aceptan CSV para clasificación automática. PDF y Excel en próxima versión.','warn');
+    return;
+  }
+  docToast('Procesando catálogo...','warn');
+  const text=await file.text();
+  const cuentas=docParseCatalogCSV(text);
+  if(!cuentas.length){docToast('No se encontraron cuentas en el archivo','err');return;}
+  // Cargar clasificaciones existentes
+  let clasifExist={};
+  try{
+    const rows=await sbGet('catalogo_clasificacion',
+      '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=*');
+    (rows||[]).forEach(r=>{clasifExist[r.cuenta_mayor]=r.rubro;});
+  }catch(e){}
+  docMostrarClasifDialog(cuentas,clasifExist);
+}
+
+// Diálogo de clasificación
+function docMostrarClasifDialog(cuentas,clasifExist){
+  const grupos=[...new Set(DOC_RUBROS.map(r=>r.grupo))];
+  const opts=DOC_RUBROS.map(r=>`<option value="${r.id}">${r.label}</option>`).join('');
+
+  const rows=cuentas.map(c=>{
+    const rubroExist=clasifExist[c.cuenta_mayor];
+    const rubroSug=rubroExist||docAutoRubro(c.cuenta_mayor,c.nombre_mayor||'');
+    const esNuevo=!rubroExist;
+    const colorFila=esNuevo?'#fffbf0':'#fff';
+    const selOpts=DOC_RUBROS.map(r=>`<option value="${r.id}"${r.id===rubroSug?' selected':''}>${r.grupo}: ${r.label}</option>`).join('');
+    return `<tr style="background:${colorFila};border-bottom:1px solid #f0f0ec">
+      <td style="padding:6px 10px;font-size:12px;font-weight:700;color:#3B4BC8;white-space:nowrap">${escD(c.cuenta_mayor)}</td>
+      <td style="padding:6px 10px;font-size:12px">${escD(c.nombre_mayor||'')}</td>
+      <td style="padding:4px 8px;min-width:240px">
+        <select id="clasif-${escD(c.cuenta_mayor)}" style="font-size:11px;width:100%;padding:4px 6px;border:1px solid ${esNuevo?'#e0b44a':'#c5d5c5'};border-radius:6px;background:${esNuevo?'#fffbf0':'#f0f7f0'}">
+          ${selOpts}
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const sinClasif=cuentas.filter(c=>!clasifExist[c.cuenta_mayor]).length;
+  const m=document.createElement('div');m.className='modal-overlay';m.id='doc-clasif-modal';
+  m.innerHTML=`<div class="modal-box" style="max-width:780px;max-height:92vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:16px;font-weight:700">📊 Clasificación del catálogo de cuentas</div>
+        <div style="font-size:12px;color:#888;margin-top:2px">${escD(docClienteActual.nombre)} · ${cuentas.length} cuentas de mayor${sinClasif?` · <span style="color:#854F0B">${sinClasif} nuevas (sugerencias automáticas)</span>`:' · Todas clasificadas'}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="docClasifTodas()">⚡ Aplicar sugerencias a todas</button>
+        <button class="btn btn-sm btn-primary" onclick="docGuardarClasif(${JSON.stringify(cuentas)})">💾 Guardar clasificación</button>
+        <button class="btn btn-sm" onclick="document.getElementById('doc-clasif-modal').remove()">✕</button>
+      </div>
+    </div>
+
+    <div style="background:#EEEDFE;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#3B4BC8">
+      <strong>Instrucciones:</strong> Asigna a cada cuenta de mayor el rubro correcto. 
+      Las <span style="background:#fffbf0;border:1px solid #e0b44a;padding:1px 5px;border-radius:3px">celdas amarillas</span> son nuevas con sugerencia automática — revísalas.
+      Una vez guardado, todas las balanzas de este cliente usarán esta clasificación automáticamente.
+    </div>
+
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#3B4BC8;color:#fff">
+          <th style="padding:8px 10px;font-size:11px;text-align:left">No. Cuenta</th>
+          <th style="padding:8px 10px;font-size:11px;text-align:left">Nombre de la cuenta</th>
+          <th style="padding:8px 10px;font-size:11px;text-align:left">Rubro</th>
+        </tr></thead>
+        <tbody id="clasif-tbody">${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  window._docClasifCuentas=cuentas;
+}
+
+function docClasifTodas(){
+  (window._docClasifCuentas||[]).forEach(c=>{
+    const el=document.getElementById('clasif-'+c.cuenta_mayor);
+    if(el&&el.style.borderColor==='#e0b44a'){
+      // ya tiene sugerencia — no cambiar, solo actualizar estilos
+      el.style.borderColor='#c5d5c5';
+      el.style.background='#f0f7f0';
+      el.closest('tr').style.background='#fff';
+    }
+  });
+  docToast('Sugerencias confirmadas','ok');
+}
+
+async function docGuardarClasif(cuentas){
+  docToast('Guardando clasificación...','warn');
+  const clienteId=String(docClienteActual.id);
+  const nombre=docClienteActual.nombre;
+  const rows=cuentas.map(c=>{
+    const el=document.getElementById('clasif-'+c.cuenta_mayor);
+    const rubro=el?el.value:'no_aplica';
+    return {cliente_id:clienteId,cliente_nombre:nombre,
+      cuenta_mayor:c.cuenta_mayor,nombre_mayor:c.nombre_mayor||'',
+      rubro,updated_at:nowISO()};
+  });
+  try{
+    // Upsert — insertar o actualizar por cliente_id + cuenta_mayor
+    const res=await fetch(SB_URL+'/rest/v1/catalogo_clasificacion',{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,
+        'Content-Type':'application/json',
+        'Prefer':'return=minimal,resolution=merge-duplicates'},
+      body:JSON.stringify(rows)
+    });
+    if(!res.ok) throw new Error(await res.text());
+    // Actualizar cache local
+    docClasifCache={};
+    rows.forEach(r=>{docClasifCache[r.cuenta_mayor]=r.rubro;});
+    document.getElementById('doc-clasif-modal')?.remove();
+    docToast('Clasificación guardada — '+rows.length+' cuentas','ok');
+    // Refrescar la vista para mostrar estado actualizado
+    const ejs=[...new Set(docCacheFin.map(d=>d.ejercicio).filter(Boolean))].sort((a,b)=>b-a);
+    if(!ejs.includes(docEjercicio))ejs.unshift(docEjercicio);
+    docSetTab('financiero');
+  }catch(e){docToast('Error guardando: '+e.message,'err');}
+}
+
+// Cargar clasificaciones del cliente
+async function docCargarClasif(){
+  try{
+    const rows=await sbGet('catalogo_clasificacion',
+      '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=cuenta_mayor,rubro');
+    docClasifCache={};
+    (rows||[]).forEach(r=>{docClasifCache[r.cuenta_mayor]=r.rubro;});
+  }catch(e){docClasifCache={};}
+}
+
+// Extractor CSV USANDO clasificaciones guardadas
+function docExtraerCSVConClasif(text, clasifMap){
+  const lines=text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
+  if(!lines.length)return{};
+  const sep=lines[0].includes(';')?';':',';
+  const header=lines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
+  let iC=0,iN=1,iS=-1;
+  header.forEach((h,i)=>{
+    if(/^CUENTA$|^COD|^NUMERO/.test(h)) iC=i;
+    else if(/^NOMBRE$|^DESCRIPCION|^CONCEPTO/.test(h)) iN=i;
+    else if(/SALDO.?ACTUAL$|^SALDO_ACTUAL$|SALDO.?FINAL$|SALDO.?NETO$/.test(h)) iS=i;
+  });
+  if(iS<0){
+    let iFirst=-1;
+    for(let i=0;i<header.length;i++){
+      if(/SALDO/i.test(header[i])){
+        if(/ACTUAL/i.test(header[i])){iS=i;break;}
+        if(iFirst<0)iFirst=i;
+      }
+    }
+    if(iS<0)iS=iFirst>=0?iFirst:header.length-1;
+  }
+
+  // Acumuladores por rubro → cifra
+  const acum={
+    bancos:0,cuentas_por_cobrar:0,inventarios:0,activo_fijo_bruto:0,
+    depreciacion_acumulada:0,cuentas_por_pagar:0,
+    ingresos:0,otros_ingresos:0,costo_ventas:0,
+    gastos_operacion:0,otros_gastos:0
+  };
+
+  for(let i=1;i<lines.length;i++){
+    const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+    const num=(cols[iC]||'').trim();
+    if(!num)continue;
+    const saldo=parseFloat((cols[iS]||'').replace(/[$, ]/g,''))||0;
+    if(saldo===0)continue;
+
+    // Excluir cuentas título
+    const partes=num.split('-');
+    if(partes.length>2&&partes.slice(-2).filter(p=>/^0+$/.test(p)).length>=2)continue;
+
+    // Encontrar cuenta mayor (primer segmento)
+    const mayor=num.split('-')[0];
+    const rubro=clasifMap[mayor];
+    if(!rubro||rubro==='no_aplica')continue;
+
+    // Mapear rubro → cifra
+    const rubroDef=DOC_RUBROS.find(r=>r.id===rubro);
+    const cifra=rubroDef?.cifra;
+    if(!cifra)continue;
+
+    if(cifra==='bancos') acum.bancos+=saldo;
+    else if(cifra==='cuentas_por_cobrar') acum.cuentas_por_cobrar+=saldo;
+    else if(cifra==='inventarios') acum.inventarios+=Math.abs(saldo);
+    else if(cifra==='activo_fijo_bruto') acum.activo_fijo_bruto+=Math.abs(saldo);
+    else if(cifra==='depreciacion_acumulada') acum.depreciacion_acumulada+=Math.abs(saldo);
+    else if(cifra==='cuentas_por_pagar') acum.cuentas_por_pagar+=Math.abs(saldo);
+    else if(cifra==='ingresos') { if(saldo>0)acum.ingresos+=saldo; else acum.otros_gastos+=Math.abs(saldo); }
+    else if(cifra==='otros_ingresos') acum.otros_ingresos+=Math.abs(saldo);
+    else if(cifra==='costo_ventas') acum.costo_ventas+=Math.abs(saldo);
+    else if(cifra==='gastos_operacion') acum.gastos_operacion+=Math.abs(saldo);
+    else if(cifra==='otros_gastos') acum.otros_gastos+=Math.abs(saldo);
+  }
+  return acum;
+}
+
 
 async function docUploadStorage(file,path){
   const AK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
@@ -6195,7 +6508,16 @@ async function docSubirBalanza(mes,ejercicio,input){
     const url=await docUploadStorage(file,'financiero/'+docClienteActual.id+'/'+ejercicio+'/balanza_'+mes+'-'+Date.now()+'.'+ext);
     const existing=docCacheFin.find(d=>d.tipo==='balanza'&&d.mes===mes&&d.ejercicio===ejercicio);
     let cifras={};
-    if(ext==='csv'){const text=await file.text();cifras=docExtraerCSV(text);}
+    if(ext==='csv'){
+      const text=await file.text();
+      // Usar clasificación guardada si existe, si no usar parser genérico
+      if(!docClasifCache) await docCargarClasif();
+      if(docClasifCache&&Object.keys(docClasifCache).length>0){
+        cifras=docExtraerCSVConClasif(text,docClasifCache);
+      } else {
+        cifras=docExtraerCSV(text);
+      }
+    }
     const payload={cliente_id:String(docClienteActual.id),cliente_nombre:docClienteActual.nombre,
       categoria:'financiero',tipo:'balanza',mes,ejercicio,tipo_label:'Balanza '+DOC_MESES_L[mes-1],
       nombre_archivo:file.name,archivo_url:url,archivo_ext:ext,
@@ -6217,6 +6539,28 @@ async function docSubirBalanza(mes,ejercicio,input){
 async function docSubirFinanciero(tipoId,tipoLabel,ejercicio,input){
   const file=input.files[0];if(!file)return;
   const ext=file.name.split('.').pop().toLowerCase();
+  // Si es catálogo de cuentas, abrir diálogo de clasificación en vez de subir normal
+  if(tipoId==='catalogo_cuentas'){
+    await docProcesarCatalogo(file);
+    // También subir el archivo para tener referencia
+    try{
+      const url=await docUploadStorage(file,'financiero/'+docClienteActual.id+'/catalogo-'+Date.now()+'.'+ext);
+      const existing=docCacheFin.find(d=>d.tipo==='catalogo_cuentas');
+      const payload={cliente_id:String(docClienteActual.id),cliente_nombre:docClienteActual.nombre,
+        categoria:'financiero',tipo:'catalogo_cuentas',tipo_label:'Catálogo de Cuentas',
+        ejercicio,mes:null,nombre_archivo:file.name,archivo_url:url,archivo_ext:ext,
+        cifras:{},status:'cargado',updated_at:nowISO()};
+      if(existing?.id){
+        await sbPatch('client_documents','?id=eq.'+existing.id,payload);
+        const idx=docCacheFin.findIndex(d=>d.tipo==='catalogo_cuentas');
+        if(idx>=0)docCacheFin[idx]={...existing,...payload};
+      }else{
+        const res=await sbPost('client_documents',{...payload,created_at:nowISO()},'return=representation');
+        const data=await res.json();const nuevo=Array.isArray(data)?data[0]:data;if(nuevo)docCacheFin.push(nuevo);
+      }
+    }catch(e){console.warn('No se pudo guardar referencia del catálogo:',e);}
+    return;
+  }
   docToast('Subiendo '+file.name+'...','warn');
   try{
     const url=await docUploadStorage(file,'financiero/'+docClienteActual.id+'/'+ejercicio+'/'+tipoId+'-'+Date.now()+'.'+ext);
@@ -6381,6 +6725,31 @@ function docVerCifras(id,nombre){
 
 function docCerrarCifras(){const m=document.getElementById('doc-cifras-modal');if(m)m.remove();}
 function docVerDoc(id,url,nombre){if(url)window.open(url,'_blank');else docToast('URL no disponible','warn');}
+
+async function docReClasificar(){
+  // Cargar cuentas del catálogo ya subido
+  const catDoc=docCacheFin.find(d=>d.tipo==='catalogo_cuentas');
+  if(!catDoc||!catDoc.archivo_url){
+    docToast('Primero sube el Catálogo de Cuentas en la sección de documentos financieros','warn');
+    return;
+  }
+  docToast('Cargando catálogo...','warn');
+  try{
+    const AK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+    const r=await fetch(catDoc.archivo_url,{headers:{'Authorization':'Bearer '+AK,'apikey':AK}});
+    if(!r.ok) throw new Error('No se pudo cargar el archivo del catálogo');
+    const text=await r.text();
+    const cuentas=docParseCatalogCSV(text);
+    if(!cuentas.length){docToast('No se encontraron cuentas en el catálogo','err');return;}
+    let clasifExist={};
+    try{
+      const rows=await sbGet('catalogo_clasificacion',
+        '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=*');
+      (rows||[]).forEach(row=>{clasifExist[row.cuenta_mayor]=row.rubro;});
+    }catch(e){}
+    docMostrarClasifDialog(cuentas,clasifExist);
+  }catch(e){docToast('Error: '+e.message,'err');}
+}
 
 // ===== API para consulta desde otros módulos =====
 async function docGetCifrasCliente(clienteId,ejercicio,tipo,mes){
