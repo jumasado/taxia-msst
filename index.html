@@ -6278,32 +6278,74 @@ async function docExtraerCifras(docId,tipo,ejercicio,mes){
 }
 
 function docExtraerCSV(text){
+  // Soporta formato: cuenta,nombre,saldo_inicial,cargos,abonos,saldo_actual
   const lines=text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
   if(!lines.length)return{};
   const sep=lines[0].includes(';')?';':',';
   const header=lines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
+
+  // Detectar columnas — preferir saldo_actual sobre saldo_inicial
   let iC=0,iN=1,iS=-1;
-  header.forEach((h,i)=>{if(/^CUENTA$|^COD/.test(h))iC=i;else if(/^NOMBRE$|^DESCRIPCION/.test(h))iN=i;else if(/SALDO.?ACTUAL.?NETO|SALDO.?FINAL|SALDO.?NETO|BALANCE$/.test(h))iS=i;});
-  if(iS<0){for(let i=0;i<header.length;i++){if(/SALDO/i.test(header[i])){iS=i;break;}}if(iS<0)iS=header.length-1;}
-  let ingresos=0,costo_ventas=0,gastos_operacion=0,otros_gastos=0,activo_fijo_bruto=0,depreciacion_acumulada=0,cuentas_por_cobrar=0,cuentas_por_pagar=0,inventarios=0,bancos=0;
+  header.forEach((h,i)=>{
+    if(/^CUENTA$|^COD|^NUMERO/.test(h)) iC=i;
+    else if(/^NOMBRE$|^DESCRIPCION|^CONCEPTO/.test(h)) iN=i;
+    // Buscar columna de saldo final/actual (no inicial)
+    else if(/SALDO.?ACTUAL$|^SALDO_ACTUAL$|SALDO.?FINAL$|SALDO.?NETO$|SALDO.?ACTUAL.?NETO$|^BALANCE$/.test(h)) iS=i;
+  });
+  // Fallback: buscar ACTUAL primero, luego cualquier SALDO
+  if(iS<0){
+    let iFirst=-1;
+    for(let i=0;i<header.length;i++){
+      if(/SALDO/i.test(header[i])){
+        if(/ACTUAL/i.test(header[i])){iS=i;break;} // Preferir saldo_actual
+        if(iFirst<0) iFirst=i;
+      }
+    }
+    if(iS<0) iS=iFirst>=0?iFirst:header.length-1;
+  }
+
+  let ingresos=0,costo_ventas=0,gastos_operacion=0,otros_ingresos=0,otros_gastos=0;
+  let activo_fijo_bruto=0,depreciacion_acumulada=0,cuentas_por_cobrar=0;
+  let cuentas_por_pagar=0,inventarios=0,bancos=0;
+
   for(let i=1;i<lines.length;i++){
     const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
-    const num=(cols[iC]||'').trim(),nom=(cols[iN]||'').toUpperCase();
+    const num=(cols[iC]||'').trim();
+    const nom=(cols[iN]||'').toUpperCase();
     const saldo=parseFloat((cols[iS]||'').replace(/[$, ]/g,''))||0;
-    if(!num||saldo===0)continue;
+    if(!num||saldo===0) continue;
+
+    // Excluir cuentas título (últimos 2 segmentos son todos ceros)
+    const partes=num.split('-');
+    if(partes.length>2){
+      const ult=partes.slice(-2);
+      if(ult.filter(p=>/^0+$/.test(p)).length>=2) continue;
+    }
+
     const p=num.charAt(0);
-    if(p==='4')ingresos+=Math.abs(saldo);
-    else if(p==='5')costo_ventas+=Math.abs(saldo);
-    else if(p==='6'||p==='7'){if(/FINANCIERO|INTERES|CAMBIARIO/.test(nom))otros_gastos+=Math.abs(saldo);else gastos_operacion+=Math.abs(saldo);}
-    else if(p==='1'){
-      if(/BANCO|CAJA/.test(nom))bancos+=Math.abs(saldo);
-      else if(/CLIENTE|DEUDOR/.test(nom))cuentas_por_cobrar+=Math.abs(saldo);
-      else if(/INVENTARIO|MERCANCIA/.test(nom))inventarios+=Math.abs(saldo);
-      else if(/TERRENO|EDIFICIO|MAQUINARIA|EQUIPO|VEHICULO/.test(nom)&&!/DEPRECIA/.test(nom))activo_fijo_bruto+=Math.abs(saldo);
-      else if(/DEPRECIA/.test(nom))depreciacion_acumulada+=Math.abs(saldo);
-    }else if(p==='2'){if(/PROVEEDOR|ACREEDOR/.test(nom))cuentas_por_pagar+=Math.abs(saldo);}
+
+    if(p==='4'){
+      // Cuentas 4xxx: saldo positivo=ingreso, negativo=gasto financiero
+      if(saldo>0) ingresos+=saldo;
+      else otros_gastos+=Math.abs(saldo);
+    } else if(p==='5'){
+      costo_ventas+=Math.abs(saldo);
+    } else if(p==='6'||p==='7'){
+      if(/FINANCIERO|INTERES|CAMBIARIO|BANCARI/.test(nom)) otros_gastos+=Math.abs(saldo);
+      else gastos_operacion+=Math.abs(saldo);
+    } else if(p==='1'){
+      if(/BANCO|CAJA/.test(nom)||/^112/.test(num)) bancos+=saldo;
+      else if(/CLIENTE|DEUDOR/.test(nom)||/^113/.test(num)) cuentas_por_cobrar+=saldo;
+      else if(/INVENTARIO|MERCANCIA|ALMACEN/.test(nom)) inventarios+=Math.abs(saldo);
+      else if(/TERRENO|EDIFICIO|MAQUINARIA|EQUIPO|MOBILIARIO|VEHICULO/.test(nom)&&!/DEPRECIA/.test(nom)) activo_fijo_bruto+=Math.abs(saldo);
+      else if(/DEPRECIA|AMORTIZA/.test(nom)) depreciacion_acumulada+=Math.abs(saldo);
+    } else if(p==='2'){
+      if(/PROVEEDOR|ACREEDOR/.test(nom)||/^220|^201|^202/.test(num)) cuentas_por_pagar+=Math.abs(saldo);
+    }
   }
-  return{ingresos,costo_ventas,gastos_operacion,otros_gastos,activo_fijo_bruto,depreciacion_acumulada,cuentas_por_cobrar,cuentas_por_pagar,inventarios,bancos};
+  return{ingresos,costo_ventas,gastos_operacion,otros_ingresos,otros_gastos,
+         activo_fijo_bruto,depreciacion_acumulada,cuentas_por_cobrar,
+         cuentas_por_pagar,inventarios,bancos};
 }
 
 async function docElimDoc(id,cat){
