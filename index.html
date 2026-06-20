@@ -1774,7 +1774,7 @@ async function cliAccesos(clienteId, clienteNombre){
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
         <input type="checkbox" data-email="${escH(u.email)}" ${tiene?'checked':''} 
           style="width:16px;height:16px;cursor:pointer"
-          onchange="cliToggleAcceso('${escH(String(clienteId))}','${escH(u.email)}',this.checked)">
+          onchange="cliToggleAcceso('${escH(String(clienteId))}','${escH(u.email)}',this.checked,this)">
         <span style="font-size:12px;color:${tiene?'#3B6D11':'#888'}">${tiene?'Con acceso':'Sin acceso'}</span>
       </label>
     </div>`;
@@ -1809,26 +1809,42 @@ async function cliAccesos(clienteId, clienteNombre){
   document.body.appendChild(m);
 }
 
-async function cliToggleAcceso(clienteId, email, dar){
-  const span = event?.target?.closest('label')?.querySelector('span');
+async function cliToggleAcceso(clienteId, email, dar, el){
+  const span = el?.closest('label')?.querySelector('span');
+  const toast=(msg,ok)=>{
+    const t=document.createElement('div');
+    t.style.cssText='position:fixed;bottom:60px;right:16px;z-index:9999;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.2);background:'+(ok?'#EAF3DE':'#FCEBEB')+';color:'+(ok?'#3B6D11':'#A32D2D');
+    t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);
+  };
   try{
     if(dar){
-      await sbPost('cliente_usuarios',{
-        cliente_id:String(clienteId), user_email:email,
-        created_at:nowISO(), created_by:session.email
-      },'return=minimal');
-      if(span){ span.textContent='Con acceso'; span.style.color='#3B6D11'; }
+      // Usar Prefer: resolution=ignore-duplicates para evitar error de constraint único
+      const r=await fetch(SB_URL+'/rest/v1/cliente_usuarios',{
+        method:'POST',
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,
+          'Content-Type':'application/json',
+          'Prefer':'return=minimal,resolution=ignore-duplicates'},
+        body:JSON.stringify({cliente_id:String(clienteId),user_email:email,
+          created_at:nowISO(),created_by:session.email})
+      });
+      if(!r.ok){const err=await r.text();throw new Error(err);}
+      if(span){span.textContent='Con acceso';span.style.color='#3B6D11';}
+      toast('✓ Acceso activado — '+email, true);
     } else {
-      await fetch(SB_URL+'/rest/v1/cliente_usuarios?cliente_id=eq.'+encodeURIComponent(String(clienteId))+'&user_email=eq.'+encodeURIComponent(email),{
+      const r=await fetch(SB_URL+'/rest/v1/cliente_usuarios'
+        +'?cliente_id=eq.'+encodeURIComponent(String(clienteId))
+        +'&user_email=eq.'+encodeURIComponent(email),{
         method:'DELETE',
         headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
       });
-      if(span){ span.textContent='Sin acceso'; span.style.color='#888'; }
+      if(!r.ok){const err=await r.text();throw new Error(err);}
+      if(span){span.textContent='Sin acceso';span.style.color='#888';}
+      toast('✓ Acceso removido — '+email, true);
     }
   }catch(e){
-    console.error('Error toggling acceso:',e);
-    // Revertir el checkbox
-    if(event?.target) event.target.checked = !dar;
+    console.error('Error acceso:',e);
+    if(el) el.checked=!dar; // revertir checkbox
+    toast('✕ Error: '+e.message, false);
   }
 }
 
