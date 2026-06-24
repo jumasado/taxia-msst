@@ -1,73 +1,54 @@
-// Netlify Function — Proxy a Supabase usando https nativo de Node.js
-// No depende de fetch ni de paquetes externos
-
 const https = require('https');
-
 const SB_HOST = 'ysctgzbqaducghivamff.supabase.co';
 
-exports.handler = async (event) => {
-  try {
-    // Extraer ruta Supabase: /.netlify/functions/supabase/rest/v1/... → /rest/v1/...
-    const sbPath = event.path.replace('/.netlify/functions/supabase', '') || '/';
-    const qs     = event.rawQuery ? '?' + event.rawQuery : '';
-    const path   = sbPath + qs;
+exports.handler = function(event, context, callback) {
+  // Extraer ruta y query
+  const sbPath = event.path.replace('/.netlify/functions/supabase', '') || '/rest/v1/';
+  const qs = event.rawQuery ? '?' + event.rawQuery : '';
+  const fullPath = sbPath + qs;
+  const h = event.headers || {};
 
-    // Cabeceras a reenviar
-    const h = event.headers || {};
-    const headers = {
-      'apikey':         h['apikey']         || '',
-      'Authorization':  h['authorization']  || h['Authorization']  || '',
-      'Content-Type':   h['content-type']   || 'application/json',
-      'Accept':         'application/json',
-    };
-    if (h['prefer'])   headers['Prefer']   = h['prefer'];
-    if (h['x-upsert']) headers['x-upsert'] = h['x-upsert'];
+  const options = {
+    hostname: SB_HOST,
+    port: 443,
+    path: fullPath,
+    method: event.httpMethod || 'GET',
+    headers: {
+      'apikey': h['apikey'] || h['Apikey'] || '',
+      'Authorization': h['authorization'] || h['Authorization'] || '',
+      'Content-Type': h['content-type'] || 'application/json',
+      'Accept': 'application/json',
+      'Prefer': h['prefer'] || h['Prefer'] || '',
+    }
+  };
 
-    const body = !['GET','HEAD','OPTIONS'].includes(event.httpMethod) && event.body
-      ? (event.isBase64Encoded ? Buffer.from(event.body, 'base64') : event.body)
-      : null;
-
-    // Hacer la petición a Supabase con https nativo
-    const result = await new Promise((resolve, reject) => {
-      const opts = {
-        hostname: SB_HOST,
-        port: 443,
-        path: path,
-        method: event.httpMethod || 'GET',
-        headers: headers,
-      };
-
-      const req = https.request(opts, (res) => {
-        const chunks = [];
-        res.on('data', chunk => chunks.push(chunk));
-        res.on('end', () => resolve({
-          status: res.statusCode,
-          contentType: res.headers['content-type'] || 'application/json',
-          body: Buffer.concat(chunks).toString('utf-8'),
-        }));
+  const req = https.request(options, function(res) {
+    var body = '';
+    res.setEncoding('utf8');
+    res.on('data', function(chunk) { body += chunk; });
+    res.on('end', function() {
+      callback(null, {
+        statusCode: res.statusCode,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'apikey, authorization, content-type, prefer',
+        },
+        body: body
       });
-
-      req.on('error', reject);
-      if (body) req.write(body);
-      req.end();
     });
+  });
 
-    return {
-      statusCode: result.status,
-      headers: {
-        'Content-Type':                  result.contentType,
-        'Access-Control-Allow-Origin':   '*',
-        'Access-Control-Allow-Methods':  'GET, POST, PATCH, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers':  'apikey, authorization, content-type, prefer, x-upsert',
-      },
-      body: result.body,
-    };
-
-  } catch (err) {
-    return {
+  req.on('error', function(e) {
+    callback(null, {
       statusCode: 502,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Proxy error', detail: err.message }),
-    };
+      body: JSON.stringify({ error: e.message })
+    });
+  });
+
+  if (event.body && event.httpMethod !== 'GET') {
+    req.write(event.body);
   }
+  req.end();
 };

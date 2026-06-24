@@ -2,7 +2,4 @@
   publish = "."
 
 [functions]
-  node_bundler = "zisi"
-
-[context.production.environment]
-  NODE_VERSION = "18"
+  directory = "netlify/functions"
