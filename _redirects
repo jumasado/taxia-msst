@@ -1,0 +1,4 @@
+# Proxy de Supabase — todo el tráfico pasa por taxia.msstconsulting.com
+/api/*  https://ysctgzbqaducghivamff.supabase.co/:splat  200
+
+/*  /index.html  200
