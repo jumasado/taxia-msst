@@ -1,4 +1,5 @@
-# Proxy de Supabase — todo el tráfico pasa por taxia.msstconsulting.com
-/api/*  https://ysctgzbqaducghivamff.supabase.co/:splat  200
-
-/*  /index.html  200
+# Proxy Supabase — rutas explícitas con ! para forzar prioridad
+/api/rest/v1/*        https://ysctgzbqaducghivamff.supabase.co/rest/v1/:splat        200!
+/api/storage/v1/*     https://ysctgzbqaducghivamff.supabase.co/storage/v1/:splat     200!
+/api/functions/v1/*   https://ysctgzbqaducghivamff.supabase.co/functions/v1/:splat   200!
+/api/auth/v1/*        https://ysctgzbqaducghivamff.supabase.co/auth/v1/:splat        200!
