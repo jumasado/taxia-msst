@@ -203,8 +203,13 @@ const COLORS={'av-m':'#7F77DD','av-a':'#8DC63F','av-y':'#EF9F27','av-b':'#D4537E
 const app=document.getElementById('app');
 
 async function sbGet(t,p=''){
-  const r=await fetch(`${SB_URL}/rest/v1/${t}${p}`,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
-  return r.json();
+  const url=`${SB_URL}/rest/v1/${t}${p}`;
+  const r=await fetch(url,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/json'}});
+  const txt=await r.text();
+  if(!txt||txt.trim()==='') throw new Error('Servidor sin respuesta — verifica la conexión ('+r.status+')');
+  if(txt.trim().startsWith('<')) throw new Error('El servidor devolvió HTML en vez de JSON. URL: '+url);
+  if(!r.ok) throw new Error(txt);
+  return JSON.parse(txt);
 }
 async function sbPost(t,d,pref='return=representation'){
   return fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':pref},body:JSON.stringify(d)});
