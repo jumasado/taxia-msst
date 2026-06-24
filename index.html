@@ -150,7 +150,7 @@ const NEWS_POOL=[
   {src:'INFONAVIT',date:'Nov 2025',title:'INFONAVIT actualiza tabla de aportaciones patronales 2026',summary:'Las aportaciones al INFONAVIT se mantienen en 5% del SBC, pero se actualizan los topes conforme a los cambios en la UMA y el salario mínimo 2026.',url:'https://www.infonavit.org.mx'},
   {src:'El Informador',date:'Ene 2026',title:'Buzón Tributario: SAT intensifica notificaciones electrónicas en 2026',summary:'El SAT ha incrementado el uso del Buzón Tributario para enviar requerimientos. Se recomienda revisar el buzón al menos cada 3 días para evitar notificaciones por estrados.',url:'https://www.informador.mx'}
 ];
-const SB_URL='/api'; // Cloudflare Pages proxy
+const SB_URL='https://ysctgzbqaducghivamff.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
 const RESEND_KEY='re_af8ioNRf_PL4mNcXJTDq7eRk6t8HM7DZr';
 const FROM_EMAIL='onboarding@resend.dev';
@@ -203,13 +203,9 @@ const COLORS={'av-m':'#7F77DD','av-a':'#8DC63F','av-y':'#EF9F27','av-b':'#D4537E
 const app=document.getElementById('app');
 
 async function sbGet(t,p=''){
-  const url=`${SB_URL}/rest/v1/${t}${p}`;
-  const r=await fetch(url,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Accept':'application/json'}});
-  const txt=await r.text();
-  if(!txt||txt.trim()==='') throw new Error('Servidor sin respuesta — verifica la conexión ('+r.status+')');
-  if(txt.trim().startsWith('<')) throw new Error('El servidor devolvió HTML en vez de JSON. URL: '+url);
-  if(!r.ok) throw new Error(txt);
-  return JSON.parse(txt);
+  const r=await fetch(`${SB_URL}/rest/v1/${t}${p}`,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
 }
 async function sbPost(t,d,pref='return=representation'){
   return fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':pref},body:JSON.stringify(d)});
