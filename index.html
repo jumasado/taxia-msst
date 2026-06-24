@@ -155,6 +155,8 @@ const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 const RESEND_KEY='re_af8ioNRf_PL4mNcXJTDq7eRk6t8HM7DZr';
 const FROM_EMAIL='onboarding@resend.dev';
 let session=null,usersCache={},clientesCache=[],gruposCache=[];
+let _cacheTs=0; // timestamp del último loadCaches()
+const CACHE_TTL=5*60*1000; // 5 minutos de caché
 
 // ===== MÓDULOS DEL SISTEMA =====
 const ALL_MODULES=[
@@ -241,7 +243,12 @@ function getNotifyEmails(){
   if(session.role==='manager') return [mgr,admin].filter(Boolean);
   return [mgr,admin].filter(Boolean);
 }
-async function loadCaches(){
+async function loadCaches(force=false){
+  const now=Date.now();
+  // Usar caché si los datos tienen menos de 5 minutos y no se fuerza recarga
+  if(!force&&_cacheTs>0&&(now-_cacheTs)<CACHE_TTL&&clientesCache.length>0){
+    return; // datos en caché — no consultar DB
+  }
   const [g,c]=await Promise.all([
     sbGet('grupos','?select=*&order=nombre.asc'),
     sbGet('clientes','?select=*,grupos(nombre)&order=nombre.asc')
@@ -258,6 +265,7 @@ async function loadCaches(){
       clientesCache=todos.filter(c=>ids.has(String(c.id)));
     }catch(e){ clientesCache=todos; }
   }
+  _cacheTs=Date.now(); // actualizar timestamp
 }
 
 async function getActiveTareas(email){
@@ -321,7 +329,7 @@ async function registrarLogout(){
 
 async function doLogout(porInactividad=false){
   await registrarLogout();
-  session=null;usersCache={};clientesCache=[];gruposCache=[];
+  session=null;usersCache={};clientesCache=[];gruposCache=[];_cacheTs=0;
   clearInactivityTimer();
   if(porInactividad){
     renderLogin();
