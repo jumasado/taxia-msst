@@ -1,5 +1,2 @@
-# Proxy Supabase — rutas explícitas con ! para forzar prioridad
-/api/rest/v1/*        https://ysctgzbqaducghivamff.supabase.co/rest/v1/:splat        200!
-/api/storage/v1/*     https://ysctgzbqaducghivamff.supabase.co/storage/v1/:splat     200!
-/api/functions/v1/*   https://ysctgzbqaducghivamff.supabase.co/functions/v1/:splat   200!
-/api/auth/v1/*        https://ysctgzbqaducghivamff.supabase.co/auth/v1/:splat        200!
+# SPA fallback — todas las rutas sirven index.html excepto funciones
+/*  /index.html  200
