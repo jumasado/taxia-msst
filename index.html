@@ -155,8 +155,6 @@ const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 const RESEND_KEY='re_af8ioNRf_PL4mNcXJTDq7eRk6t8HM7DZr';
 const FROM_EMAIL='onboarding@resend.dev';
 let session=null,usersCache={},clientesCache=[],gruposCache=[];
-let _cacheTs=0; // timestamp del último loadCaches()
-const CACHE_TTL=5*60*1000; // 5 minutos de caché
 
 // ===== MÓDULOS DEL SISTEMA =====
 const ALL_MODULES=[
@@ -185,13 +183,10 @@ function getUserModules(email){
   const u=usersCache[email]||session;
   if(!u) return [];
   if(u.role==='admin') return ADMIN_ALWAYS;
-  // Normalizar modulos: puede llegar como array JSONB o string legacy (JSON.stringify)
-  let mods=u.modulos;
-  if(typeof mods==='string'){try{mods=JSON.parse(mods);}catch(e){mods=null;}}
-  if(Array.isArray(mods)&&mods.length) return mods;
+  // leer campo modulos del usuario (array guardado en Supabase)
+  if(u.modulos&&u.modulos.length) return u.modulos;
   return DEFAULT_MODULES_BY_ROLE[u.role]||['plan'];
 }
-
 
 function userCanAccess(email,moduleId){
   const u=usersCache[email]||session;
@@ -204,7 +199,6 @@ const app=document.getElementById('app');
 
 async function sbGet(t,p=''){
   const r=await fetch(`${SB_URL}/rest/v1/${t}${p}`,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
-  if(!r.ok) throw new Error(await r.text());
   return r.json();
 }
 async function sbPost(t,d,pref='return=representation'){
@@ -244,12 +238,7 @@ function getNotifyEmails(){
   if(session.role==='manager') return [mgr,admin].filter(Boolean);
   return [mgr,admin].filter(Boolean);
 }
-async function loadCaches(force=false){
-  const now=Date.now();
-  // Usar caché si los datos tienen menos de 5 minutos y no se fuerza recarga
-  if(!force&&_cacheTs>0&&(now-_cacheTs)<CACHE_TTL&&clientesCache.length>0){
-    return; // datos en caché — no consultar DB
-  }
+async function loadCaches(){
   const [g,c]=await Promise.all([
     sbGet('grupos','?select=*&order=nombre.asc'),
     sbGet('clientes','?select=*,grupos(nombre)&order=nombre.asc')
@@ -266,7 +255,6 @@ async function loadCaches(force=false){
       clientesCache=todos.filter(c=>ids.has(String(c.id)));
     }catch(e){ clientesCache=todos; }
   }
-  _cacheTs=Date.now(); // actualizar timestamp
 }
 
 async function getActiveTareas(email){
@@ -330,7 +318,7 @@ async function registrarLogout(){
 
 async function doLogout(porInactividad=false){
   await registrarLogout();
-  session=null;usersCache={};clientesCache=[];gruposCache=[];_cacheTs=0;
+  session=null;usersCache={};clientesCache=[];gruposCache=[];
   clearInactivityTimer();
   if(porInactividad){
     renderLogin();
@@ -517,7 +505,6 @@ async function renderLogin(){
         </div>
         <div class="login-err" id="lerr">Correo o contraseña incorrectos.</div>
         <button class="login-btn-main" onclick="doLogin()" id="lbtn">Entrar</button>
-        <div style="text-align:center;margin-top:12px"><button onclick="renderOlvidePass()" style="background:none;border:none;color:#3B4BC8;font-size:12px;cursor:pointer;text-decoration:underline;opacity:.8">¿Olvidé mi contraseña?</button></div>
       </div>
 
       <!-- Noticias -->
@@ -550,135 +537,6 @@ async function renderLogin(){
       }
     }).catch(function(){});
   }, 2000);
-}
-
-
-// ===== RECUPERACIÓN DE CONTRASEÑA =====
-
-function renderOlvidePass(){
-  const loginBox = document.getElementById('login-box') || app.querySelector('.login-content');
-  document.getElementById('app').innerHTML = document.getElementById('app').innerHTML; // keep bg
-  app.innerHTML = app.innerHTML.replace(
-    document.getElementById('login-page')?.outerHTML || '',
-    ''
-  );
-  // Reemplazar contenido del login con el formulario de recuperación
-  const lc = document.querySelector('.login-content');
-  if(!lc) return;
-  lc.innerHTML = `
-    <style>
-      .login-card{background:#fff;border-radius:20px;padding:2.5rem 2rem;box-shadow:0 8px 40px rgba(59,75,200,.13);width:100%;max-width:380px;margin:0 auto}
-    </style>
-    <div class="login-card">
-      <div style="text-align:center;margin-bottom:1.5rem">
-        <div style="font-size:32px;margin-bottom:8px">🔐</div>
-        <div style="font-size:20px;font-weight:800;color:#1a1a1a">Recuperar contraseña</div>
-        <div style="font-size:13px;color:#888;margin-top:4px">Te enviaremos un código a tu correo</div>
-      </div>
-      <div id="rec-step1">
-        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Correo electrónico</label>
-        <input id="rec-email" type="email" placeholder="tu@correo.com" style="width:100%;padding:11px 14px;border:1.5px solid #e0e0db;border-radius:10px;font-size:14px;margin-bottom:14px;box-sizing:border-box">
-        <button onclick="solicitarCodigo()" id="rec-btn1" class="btn btn-primary" style="width:100%;padding:11px;font-size:14px;font-weight:700">Enviar código</button>
-        <div id="rec-err1" style="display:none;background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:10px;font-size:12px;margin-top:10px"></div>
-      </div>
-      <div id="rec-step2" style="display:none">
-        <div style="background:#EAF3DE;border-radius:8px;padding:10px 14px;font-size:12px;color:#3B6D11;margin-bottom:14px">
-          ✓ Código enviado a tu correo. Revisa tu bandeja de entrada.
-        </div>
-        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Código de 6 dígitos</label>
-        <input id="rec-codigo" type="text" placeholder="000000" maxlength="6" style="width:100%;padding:11px 14px;border:1.5px solid #e0e0db;border-radius:10px;font-size:18px;text-align:center;letter-spacing:8px;margin-bottom:14px;box-sizing:border-box">
-        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Nueva contraseña</label>
-        <input id="rec-newpass" type="password" placeholder="Nueva contraseña" style="width:100%;padding:11px 14px;border:1.5px solid #e0e0db;border-radius:10px;font-size:14px;margin-bottom:14px;box-sizing:border-box">
-        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Confirmar contraseña</label>
-        <input id="rec-confpass" type="password" placeholder="Confirmar contraseña" style="width:100%;padding:11px 14px;border:1.5px solid #e0e0db;border-radius:10px;font-size:14px;margin-bottom:14px;box-sizing:border-box">
-        <button onclick="cambiarPassword()" id="rec-btn2" class="btn btn-primary" style="width:100%;padding:11px;font-size:14px;font-weight:700">Cambiar contraseña</button>
-        <div id="rec-err2" style="display:none;background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:10px;font-size:12px;margin-top:10px"></div>
-      </div>
-      <div style="text-align:center;margin-top:16px">
-        <button onclick="renderLogin()" style="background:none;border:none;color:#888;font-size:13px;cursor:pointer">← Volver al inicio de sesión</button>
-      </div>
-    </div>`;
-}
-
-async function solicitarCodigo(){
-  const email = (document.getElementById('rec-email')?.value||'').trim().toLowerCase();
-  const btn = document.getElementById('rec-btn1');
-  const err = document.getElementById('rec-err1');
-  if(!email){ err.textContent='Ingresa tu correo'; err.style.display='block'; return; }
-  btn.innerHTML='<span class="spinner"></span> Enviando...'; btn.disabled=true;
-  try{
-    // Verificar que el email existe
-    const users = await sbGet('users', '?email=eq.'+encodeURIComponent(email)+'&select=email,name');
-    if(!users||!users.length){
-      err.textContent='No existe una cuenta con ese correo'; err.style.display='block';
-      btn.innerHTML='Enviar código'; btn.disabled=false; return;
-    }
-    // Generar código de 6 dígitos
-    const codigo = String(Math.floor(100000 + Math.random()*900000));
-    // Expiración en 15 minutos
-    const exp = new Date(Date.now() + 15*60*1000).toISOString();
-    // Guardar en DB
-    await sbPatch('users','?email=eq.'+encodeURIComponent(email),{reset_code:codigo, reset_exp:exp});
-    // Enviar por correo
-    const nombre = users[0].name || email;
-    await fetch('https://api.resend.com/emails',{
-      method:'POST',
-      headers:{'Authorization':'Bearer '+RESEND_KEY,'Content-Type':'application/json'},
-      body:JSON.stringify({
-        from: FROM_EMAIL,
-        to: [email],
-        subject: 'TaxIA — Código de recuperación de contraseña',
-        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:2rem">
-          <h2 style="color:#3B4BC8">Recuperación de contraseña</h2>
-          <p>Hola ${nombre},</p>
-          <p>Tu código de recuperación es:</p>
-          <div style="font-size:36px;font-weight:800;letter-spacing:12px;color:#3B4BC8;background:#EEEDFE;padding:1.5rem;border-radius:12px;text-align:center;margin:1.5rem 0">${codigo}</div>
-          <p style="color:#888;font-size:13px">Este código expira en 15 minutos. Si no solicitaste este cambio, ignora este correo.</p>
-          <p style="color:#888;font-size:12px">— TaxIA · MSST Consulting</p>
-        </div>`
-      })
-    });
-    // Mostrar paso 2
-    document.getElementById('rec-step1').style.display='none';
-    document.getElementById('rec-step2').style.display='block';
-    // Guardar email para el siguiente paso
-    window._recEmail = email;
-  }catch(e){
-    err.textContent='Error: '+e.message; err.style.display='block';
-    btn.innerHTML='Enviar código'; btn.disabled=false;
-  }
-}
-
-async function cambiarPassword(){
-  const codigo = (document.getElementById('rec-codigo')?.value||'').trim();
-  const newpass = document.getElementById('rec-newpass')?.value||'';
-  const confpass = document.getElementById('rec-confpass')?.value||'';
-  const btn = document.getElementById('rec-btn2');
-  const err = document.getElementById('rec-err2');
-  err.style.display='none';
-  if(!codigo||codigo.length!==6){ err.textContent='Ingresa el código de 6 dígitos'; err.style.display='block'; return; }
-  if(!newpass||newpass.length<4){ err.textContent='La contraseña debe tener al menos 4 caracteres'; err.style.display='block'; return; }
-  if(newpass!==confpass){ err.textContent='Las contraseñas no coinciden'; err.style.display='block'; return; }
-  btn.innerHTML='<span class="spinner"></span> Verificando...'; btn.disabled=true;
-  try{
-    const email = window._recEmail;
-    // Verificar código y expiración
-    const users = await sbGet('users','?email=eq.'+encodeURIComponent(email)+'&select=reset_code,reset_exp');
-    if(!users||!users.length) throw new Error('Usuario no encontrado');
-    const u = users[0];
-    if(u.reset_code !== codigo) throw new Error('Código incorrecto');
-    if(!u.reset_exp||new Date(u.reset_exp)<new Date()) throw new Error('El código expiró — solicita uno nuevo');
-    // Actualizar contraseña y limpiar código
-    await sbPatch('users','?email=eq.'+encodeURIComponent(email),{pass:newpass, reset_code:null, reset_exp:null});
-    // Mostrar éxito y regresar al login
-    err.style.background='#EAF3DE'; err.style.color='#3B6D11';
-    err.textContent='✓ Contraseña actualizada correctamente'; err.style.display='block';
-    btn.style.display='none';
-    setTimeout(()=>renderLogin(), 2500);
-  }catch(e){
-    err.textContent='Error: '+e.message; err.style.display='block';
-    btn.innerHTML='Cambiar contraseña'; btn.disabled=false;
-  }
 }
 
 
@@ -4961,10 +4819,7 @@ async function renderPermisos(){
   }
   const availMods=ALL_MODULES.filter(m=>!['admin','permisos'].includes(m.id));
   const cards=nonAdmin.map(u=>{
-    // Normalizar modulos: puede venir como array o string (legacy)
-    let rawMods=u.modulos;
-    if(typeof rawMods==='string'){try{rawMods=JSON.parse(rawMods);}catch(e){rawMods=null;}}
-    const mods=Array.isArray(rawMods)&&rawMods.length?rawMods:DEFAULT_MODULES_BY_ROLE[u.role]||['plan'];
+    const mods=u.modulos&&u.modulos.length?u.modulos:DEFAULT_MODULES_BY_ROLE[u.role]||['plan'];
     const checks=availMods.map(m=>`
       <label style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;cursor:pointer;background:#fafafa;border:1px solid #f0f0ec;font-size:12px">
         <input type="checkbox" data-email="${escH(u.email)}" data-mod="${m.id}" ${mods.includes(m.id)?'checked':''} onchange="permToggle(this)">
@@ -4996,15 +4851,12 @@ async function permToggle(checkbox){
   const mod=checkbox.dataset.mod;
   const u=usersCache[email];
   if(!u) return;
-  // Normalizar modulos antes de modificar (puede ser string o array)
-  let rawMods=u.modulos;
-  if(typeof rawMods==='string'){try{rawMods=JSON.parse(rawMods);}catch(e){rawMods=null;}}
-  let mods=Array.isArray(rawMods)&&rawMods.length?[...rawMods]:[...(DEFAULT_MODULES_BY_ROLE[u.role]||['plan'])];
+  let mods=u.modulos&&u.modulos.length?[...u.modulos]:[...(DEFAULT_MODULES_BY_ROLE[u.role]||['plan'])];
   if(checkbox.checked){if(!mods.includes(mod))mods.push(mod);}
   else{mods=mods.filter(m=>m!==mod);}
   u.modulos=mods;
   usersCache[email]=u;
-  await sbPatch('users','?email=eq.'+encodeURIComponent(email),{modulos:mods}); // JSONB array — sin stringify
+  await sbPatch('users','?email=eq.'+encodeURIComponent(email),{modulos:JSON.stringify(mods)});
   // Feedback visual
   const lbl=checkbox.closest('label');
   if(lbl){lbl.style.background=checkbox.checked?'#EAF3DE':'#fafafa';lbl.style.borderColor=checkbox.checked?'#3B6D11':'#f0f0ec';setTimeout(()=>{lbl.style.background='#fafafa';lbl.style.borderColor='#f0f0ec';},800);}
@@ -6528,59 +6380,31 @@ function docParseCatalogCSV(text){
   const lines=text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
   if(!lines.length) return [];
   const sep=lines[0].includes(';')?';':',';
-
-  // Normalizar: quitar acentos y espacios (CONTPAQi usa "C ó d i g o")
-  const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'').toUpperCase();
-
-  // Limpiar nombres espaciados: "A C T I V O   A   C O R T O" → "ACTIVO A CORTO"
-  const limpiarNom=s=>s.split(/\s{2,}/).map(g=>{
-    const ws=g.trim().split(/\s+/);
-    return ws.every(w=>w.length<=1)?ws.join(''):g.trim();
-  }).join(' ').trim();
-
-  // Buscar fila de encabezado (tiene CODIGO y/o NOMBRE normalizados)
-  let headerIdx=-1,iC=-1,iN=-1;
-  for(let i=0;i<Math.min(lines.length,10);i++){
-    const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
-    cols.forEach((h,j)=>{
-      const hn=norm(h);
-      if(['CODIGO','CUENTA','COD','NUMERODECUENTA','CUENTACONTABLE'].includes(hn)) iC=j;
-      if(['NOMBRE','DESCRIPCION','CONCEPTO','DENOMINACION'].includes(hn)) iN=j;
-    });
-    if(iC>=0){headerIdx=i;break;}
-  }
-  // Fallback CONTPAQi: col0=Nivel(1-9), col1=código XXXX-...
-  if(iC<0){
-    for(let i=0;i<Math.min(lines.length,15);i++){
-      const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
-      if(/^[1-9]$/.test(cols[0])&&/^\d{3,6}[-.]/.test(cols[1])){
-        iC=1;iN=2;headerIdx=i-1;
-        break;
-      }
-    }
-  }
-  if(iC<0) iC=0;
-  if(iN<0) iN=iC+1;
-
+  const header=lines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
+  let iC=0,iN=1;
+  header.forEach((h,i)=>{
+    if(/^CUENTA$|^COD|^NUMERO/.test(h)) iC=i;
+    else if(/^NOMBRE$|^DESCRIPCION|^CONCEPTO/.test(h)) iN=i;
+  });
   const mayorMap={};
-  const start=headerIdx>=0?headerIdx+1:1;
-  for(let i=start;i<lines.length;i++){
+  for(let i=1;i<lines.length;i++){
     const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
     const num=(cols[iC]||'').trim();
     const nom=(cols[iN]||'').trim();
-    // Solo cuentas reales: 3-6 dígitos seguidos de - o fin de campo
-    if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
-    const mayor=num.split(/[-. ]/)[0];
-    if(!mayor||mayor.length<3||mayor.length>6) continue;
+    if(!num) continue;
+    // Extraer cuenta de mayor = primer segmento (antes del primer -)
+    const mayor=num.split('-')[0];
+    if(!mayor||mayor.length<2) continue;
+    // Usar la cuenta que termina en 000 como nombre del mayor
     const partes=num.split('-');
-    const esMayor=partes.length===1||partes.slice(1).every(p=>/^0+$/.test(p));
-    const nomL=limpiarNom(nom);
-    if(!nomL) continue;
-    if(esMayor&&!mayorMap[mayor]) mayorMap[mayor]={cuenta_mayor:mayor,nombre_mayor:nomL};
-    else if(!mayorMap[mayor]) mayorMap[mayor]={cuenta_mayor:mayor,nombre_mayor:nomL};
+    const esMayor=partes.slice(1).every(p=>/^0+$/.test(p));
+    if(esMayor&&nom&&!mayorMap[mayor]){
+      mayorMap[mayor]={cuenta_mayor:mayor, nombre_mayor:nom};
+    } else if(!mayorMap[mayor]){
+      mayorMap[mayor]={cuenta_mayor:mayor, nombre_mayor:nom};
+    }
   }
-  return Object.values(mayorMap).sort((a,b)=>
-    a.cuenta_mayor.localeCompare(b.cuenta_mayor,undefined,{numeric:true}));
+  return Object.values(mayorMap).sort((a,b)=>a.cuenta_mayor.localeCompare(b.cuenta_mayor,undefined,{numeric:true}));
 }
 
 // Procesar catálogo al subirse
@@ -7042,12 +6866,7 @@ function docVerCifras(id,nombre){
 }
 
 function docCerrarCifras(){const m=document.getElementById('doc-cifras-modal');if(m)m.remove();}
-function docVerDoc(id,url,nombre){
-  if(!url){docToast('URL no disponible','warn');return;}
-  // Convertir URL absoluta de Supabase a ruta proxiada si aplica
-  const proxied=url.replace('https://ysctgzbqaducghivamff.supabase.co','/api');
-  window.open(proxied,'_blank');
-}
+function docVerDoc(id,url,nombre){if(url)window.open(url,'_blank');else docToast('URL no disponible','warn');}
 
 async function docReClasificar(){
   // Cargar cuentas del catálogo ya subido
