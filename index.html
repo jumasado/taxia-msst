@@ -155,6 +155,9 @@ const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 const RESEND_KEY='re_af8ioNRf_PL4mNcXJTDq7eRk6t8HM7DZr';
 const FROM_EMAIL='onboarding@resend.dev';
 let session=null,usersCache={},clientesCache=[],gruposCache=[];
+let accesosCache=null; // IDs de clientes asignados al usuario (carga una vez al login)
+let _cacheTs=0;
+const CACHE_TTL=5*60*1000;
 
 // ===== MÓDULOS DEL SISTEMA =====
 const ALL_MODULES=[
@@ -238,23 +241,22 @@ function getNotifyEmails(){
   if(session.role==='manager') return [mgr,admin].filter(Boolean);
   return [mgr,admin].filter(Boolean);
 }
-async function loadCaches(){
+async function loadCaches(force=false){
+  const now=Date.now();
+  if(!force&&_cacheTs>0&&(now-_cacheTs)<CACHE_TTL&&clientesCache.length>0) return;
   const [g,c]=await Promise.all([
     sbGet('grupos','?select=*&order=nombre.asc'),
     sbGet('clientes','?select=*,grupos(nombre)&order=nombre.asc')
   ]);
   gruposCache=g||[];
   const todos=c||[];
-  // Admin ve todos los clientes; colaboradores solo los asignados
-  if(!session||session.role==='admin'){
+  // Filtrar por accesosCache cargado al login — sin query extra en cada navegación
+  if(!session||session.role==='admin'||!accesosCache){
     clientesCache=todos;
   } else {
-    try{
-      const accesos=await sbGet('cliente_usuarios','?user_email=eq.'+encodeURIComponent(session.email)+'&select=cliente_id');
-      const ids=new Set((accesos||[]).map(a=>String(a.cliente_id)));
-      clientesCache=todos.filter(c=>ids.has(String(c.id)));
-    }catch(e){ clientesCache=todos; }
+    clientesCache=todos.filter(c=>accesosCache.has(String(c.id)));
   }
+  _cacheTs=Date.now();
 }
 
 async function getActiveTareas(email){
@@ -318,7 +320,7 @@ async function registrarLogout(){
 
 async function doLogout(porInactividad=false){
   await registrarLogout();
-  session=null;usersCache={};clientesCache=[];gruposCache=[];
+  session=null;usersCache={};clientesCache=[];gruposCache=[];accesosCache=null;_cacheTs=0;
   clearInactivityTimer();
   if(porInactividad){
     renderLogin();
@@ -505,6 +507,9 @@ async function renderLogin(){
         </div>
         <div class="login-err" id="lerr">Correo o contraseña incorrectos.</div>
         <button class="login-btn-main" onclick="doLogin()" id="lbtn">Entrar</button>
+        <div style="text-align:center;margin-top:12px">
+          <button onclick="renderOlvidePass()" style="background:none;border:none;color:#3B4BC8;font-size:13px;cursor:pointer;text-decoration:underline;opacity:.8">¿Olvidé mi contraseña?</button>
+        </div>
       </div>
 
       <!-- Noticias -->
@@ -540,6 +545,99 @@ async function renderLogin(){
 }
 
 
+// ===== RECUPERACIÓN DE CONTRASEÑA =====
+function renderOlvidePass(){
+  const lc=document.querySelector('.login-content');
+  if(!lc)return;
+  lc.innerHTML=`
+    <div class="login-card">
+      <div style="text-align:center;margin-bottom:1.5rem">
+        <div style="font-size:32px;margin-bottom:8px">🔐</div>
+        <div style="font-size:20px;font-weight:800;color:#1a1a1a">Recuperar contraseña</div>
+        <div style="font-size:13px;color:#888;margin-top:4px">Te enviaremos un código a tu correo</div>
+      </div>
+      <div id="rec-step1">
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Correo electrónico</label>
+        <input id="rec-email" type="email" placeholder="tu@correo.com" style="width:100%;padding:11px 14px;border:1.5px solid #e0e0db;border-radius:10px;font-size:14px;margin-bottom:14px;box-sizing:border-box">
+        <button onclick="solicitarCodigo()" id="rec-btn1" class="login-btn-main">Enviar código</button>
+        <div id="rec-err1" style="display:none;background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:10px;font-size:12px;margin-top:10px"></div>
+      </div>
+      <div id="rec-step2" style="display:none">
+        <div style="background:#EAF3DE;border-radius:8px;padding:10px 14px;font-size:12px;color:#3B6D11;margin-bottom:14px">✓ Código enviado. Revisa tu correo.</div>
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Código de 6 dígitos</label>
+        <input id="rec-codigo" type="text" placeholder="000000" maxlength="6" style="width:100%;padding:11px 14px;border:1.5px solid #e0e0db;border-radius:10px;font-size:18px;text-align:center;letter-spacing:8px;margin-bottom:14px;box-sizing:border-box">
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Nueva contraseña</label>
+        <input id="rec-newpass" type="password" placeholder="Nueva contraseña" style="width:100%;padding:11px 14px;border:1.5px solid #e0e0db;border-radius:10px;font-size:14px;margin-bottom:14px;box-sizing:border-box">
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Confirmar contraseña</label>
+        <input id="rec-confpass" type="password" placeholder="Confirmar contraseña" style="width:100%;padding:11px 14px;border:1.5px solid #e0e0db;border-radius:10px;font-size:14px;margin-bottom:14px;box-sizing:border-box">
+        <button onclick="cambiarPassword()" id="rec-btn2" class="login-btn-main">Cambiar contraseña</button>
+        <div id="rec-err2" style="display:none;background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:10px;font-size:12px;margin-top:10px"></div>
+      </div>
+      <div style="text-align:center;margin-top:16px">
+        <button onclick="renderLogin()" style="background:none;border:none;color:#888;font-size:13px;cursor:pointer">← Volver al login</button>
+      </div>
+    </div>`;
+}
+
+async function solicitarCodigo(){
+  const email=(document.getElementById('rec-email')?.value||'').trim().toLowerCase();
+  const btn=document.getElementById('rec-btn1');
+  const err=document.getElementById('rec-err1');
+  if(!email){err.textContent='Ingresa tu correo';err.style.display='block';return;}
+  btn.innerHTML='<span class="spinner"></span> Enviando...';btn.disabled=true;
+  try{
+    const users=await sbGet('users','?email=eq.'+encodeURIComponent(email)+'&select=email,name');
+    if(!users||!users.length){err.textContent='No existe una cuenta con ese correo';err.style.display='block';btn.innerHTML='Enviar código';btn.disabled=false;return;}
+    const codigo=String(Math.floor(100000+Math.random()*900000));
+    const exp=new Date(Date.now()+15*60*1000).toISOString();
+    await sbPatch('users','?email=eq.'+encodeURIComponent(email),{reset_code:codigo,reset_exp:exp});
+    await fetch('https://api.resend.com/emails',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+RESEND_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        from:FROM_EMAIL,to:[email],
+        subject:'TaxIA — Código de recuperación',
+        html:`<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:2rem">
+          <h2 style="color:#3B4BC8">Recuperación de contraseña</h2>
+          <p>Hola ${users[0].name||email},</p>
+          <p>Tu código de recuperación es:</p>
+          <div style="font-size:36px;font-weight:800;letter-spacing:12px;color:#3B4BC8;background:#EEEDFE;padding:1.5rem;border-radius:12px;text-align:center;margin:1.5rem 0">${codigo}</div>
+          <p style="color:#888;font-size:13px">Válido por 15 minutos.</p>
+          <p style="color:#888;font-size:12px">— TaxIA · MSST Consulting</p>
+        </div>`
+      })
+    });
+    document.getElementById('rec-step1').style.display='none';
+    document.getElementById('rec-step2').style.display='block';
+    window._recEmail=email;
+  }catch(e){err.textContent='Error: '+e.message;err.style.display='block';btn.innerHTML='Enviar código';btn.disabled=false;}
+}
+
+async function cambiarPassword(){
+  const codigo=(document.getElementById('rec-codigo')?.value||'').trim();
+  const newpass=document.getElementById('rec-newpass')?.value||'';
+  const confpass=document.getElementById('rec-confpass')?.value||'';
+  const btn=document.getElementById('rec-btn2');
+  const err=document.getElementById('rec-err2');
+  err.style.display='none';
+  if(!codigo||codigo.length!==6){err.textContent='Ingresa el código de 6 dígitos';err.style.display='block';return;}
+  if(newpass.length<4){err.textContent='La contraseña debe tener al menos 4 caracteres';err.style.display='block';return;}
+  if(newpass!==confpass){err.textContent='Las contraseñas no coinciden';err.style.display='block';return;}
+  btn.innerHTML='<span class="spinner"></span> Verificando...';btn.disabled=true;
+  try{
+    const users=await sbGet('users','?email=eq.'+encodeURIComponent(window._recEmail)+'&select=reset_code,reset_exp');
+    if(!users||!users.length) throw new Error('Usuario no encontrado');
+    if(users[0].reset_code!==codigo) throw new Error('Código incorrecto');
+    if(!users[0].reset_exp||new Date(users[0].reset_exp)<new Date()) throw new Error('El código expiró — solicita uno nuevo');
+    await sbPatch('users','?email=eq.'+encodeURIComponent(window._recEmail),{pass:newpass,reset_code:null,reset_exp:null});
+    err.style.background='#EAF3DE';err.style.color='#3B6D11';
+    err.textContent='✓ Contraseña actualizada correctamente';err.style.display='block';
+    btn.style.display='none';
+    setTimeout(()=>renderLogin(),2500);
+  }catch(e){err.textContent='Error: '+e.message;err.style.display='block';btn.innerHTML='Cambiar contraseña';btn.disabled=false;}
+}
+
+
 async function doLogin(){
   const em=document.getElementById('lemail').value.trim().toLowerCase();
   const pw=document.getElementById('lpass').value;
@@ -551,6 +649,13 @@ async function doLogin(){
     session={...data[0]};
     const [allU]=await Promise.all([sbGet('users','?select=*'),loadCaches()]);
     allU.forEach(u=>{usersCache[u.email]=u;});
+    // Cargar accesos del usuario una sola vez al login
+    if(session.role!=='admin'){
+      try{
+        const acc=await sbGet('cliente_usuarios','?user_email=eq.'+encodeURIComponent(session.email)+'&select=cliente_id');
+        accesosCache=new Set((acc||[]).map(a=>String(a.cliente_id)));
+      }catch(e){accesosCache=null;}
+    } else { accesosCache=null; }
     await registrarLogin(session.email);
     startInactivityWatcher();
     initReporteGerencial();
