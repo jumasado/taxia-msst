@@ -6912,66 +6912,91 @@ function docExtraerCSVConClasif(text, clasifMap){
   if(!rawLines.length)return{};
   const sep=rawLines[0].includes(';')?';':',';
   const header=rawLines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
-
-  let iC=0,iN=1,iS=-1;
   const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
+
+  // Detectar columnas
+  let iC=0, iN=1, iSI=-1, iCargos=-1, iAbonos=-1, iSA=-1;
   header.forEach((h,i)=>{
     const hn=norm(h);
-    if(['CODIGO','CUENTA','COD','NUMERODECUENTA','CUENTACONTABLE'].includes(hn)) iC=i;
-    if(['NOMBRE','DESCRIPCION','CONCEPTO','DENOMINACION'].includes(hn)) iN=i;
-    if(/SALDOACTUAL$|SALDOFINAL$|SALDONETO$/.test(hn)) iS=i;
+    if(['CODIGO','CUENTA','COD','NUMERODECUENTA'].includes(hn)) iC=i;
+    if(['NOMBRE','DESCRIPCION','CONCEPTO'].includes(hn)) iN=i;
+    if(/SALDOINICIAL|SALDOINI|SALDO_INI/.test(hn)&&!/DEUDOR|ACREEDOR/.test(hn)) iSI=i;
+    if(/^CARGOS$|DEBITOS|MOVIMIENTODEBE/.test(hn)) iCargos=i;
+    if(/^ABONOS$|CREDITOS|MOVIMIENTOHABER/.test(hn)) iAbonos=i;
+    if(/SALDOACTUAL|SALDOFINAL|SALDO_ACT|SALDONETO/.test(hn)&&!/DEUDOR|ACREEDOR/.test(hn)) iSA=i;
+    // También detectar columnas separadas Deudor/Acreedor
+    if(/SALDOACTUAL.*DEUDOR|DEUDOR.*SALDOACTUAL/.test(hn)) iSA=i;
   });
-  if(iS<0){
-    let iFirst=-1;
-    for(let i=0;i<header.length;i++){
-      if(/SALDO/i.test(header[i])){
-        if(/ACTUAL/i.test(header[i])){iS=i;break;}
-        if(iFirst<0)iFirst=i;
-      }
-    }
-    if(iS<0)iS=iFirst>=0?iFirst:header.length-1;
+
+  // Si no encontramos por nombre, detectar por posición (CONTPAQi: Cuenta,Nombre,SaldoIni,Cargos,Abonos,SaldoAct)
+  const numericCols=[];
+  for(let row=1;row<Math.min(rawLines.length,5);row++){
+    const cols=rawLines[row].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+    cols.forEach((v,i)=>{ if(i>1&&parseFloat(v.replace(/[$, ]/g,''))||v==='0.00'||v==='0') numericCols.push(i); });
+    if(numericCols.length>=3) break;
   }
+  const uniqueNum=[...new Set(numericCols)].sort((a,b)=>a-b);
+  if(iSI<0&&uniqueNum.length>=4) iSI=uniqueNum[0];
+  if(iCargos<0&&uniqueNum.length>=4) iCargos=uniqueNum[1];
+  if(iAbonos<0&&uniqueNum.length>=4) iAbonos=uniqueNum[2];
+  if(iSA<0&&uniqueNum.length>=4) iSA=uniqueNum[uniqueNum.length-1];
+  if(iSA<0) iSA=header.length-1;
 
   const catMap={};
   DOC_RUBROS.forEach(r=>{catMap[r.id]=r.cat;});
+  const RESULTADO_CATS=new Set(['resultado_acreedor','resultado_deudor']);
 
-  // PASO 1: recopilar todas las filas válidas con su mayor, saldo y si es cuenta mayor (last seg = 0)
-  const filas=[];
-  const mayorConCero=new Set(); // mayors que SÍ tienen cuenta "XXX-0000"
-
+  // Paso 1: detectar qué mayors tienen cuenta "XXX-0000"
+  const mayorConCero=new Set();
   for(let i=1;i<rawLines.length;i++){
     const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
     const num=(cols[iC]||'').trim();
     if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
     const partes=num.split(/[-. ]/);
     const mayor=partes[0];
-    if(mayor==='000') continue; // excluir encabezados 000-XXXX
-    const saldo=parseFloat((cols[iS]||'').replace(/[$, ]/g,''))||0;
-    const esCero=partes.length>=2&&partes.slice(1).every(p=>/^0+$/.test(p));
-    if(esCero) mayorConCero.add(mayor);
-    filas.push({mayor,saldo,esCero});
+    if(mayor==='000') continue;
+    if(partes.length>=2&&partes.slice(1).every(p=>/^0+$/.test(p))) mayorConCero.add(mayor);
   }
 
   const acum={activo:0,pasivo:0,capital:0,resultado_acreedor:0,resultado_deudor:0,detalle:{}};
 
-  // PASO 2: para cada fila, incluir según regla
-  filas.forEach(({mayor,saldo,esCero})=>{
-    if(!saldo) return;
+  // Paso 2: procesar filas
+  for(let i=1;i<rawLines.length;i++){
+    const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+    const num=(cols[iC]||'').trim();
+    if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
+    const partes=num.split(/[-. ]/);
+    const mayor=partes[0];
+    if(mayor==='000') continue;
+
+    const esCero=partes.length>=2&&partes.slice(1).every(p=>/^0+$/.test(p));
+    if(mayorConCero.has(mayor)&&!esCero) continue;
+
     const subId=clasifMap[mayor];
-    if(!subId||subId==='no_aplica') return;
-
-    // Regla:
-    // - Si existe "XXX-0000" para este mayor → usar SOLO esa (esCero===true)
-    // - Si NO existe "XXX-0000" → usar TODAS las subcuentas (cualquier segmento)
-    if(mayorConCero.has(mayor)&&!esCero) return; // skip detalle si existe cuenta mayor
-    if(!mayorConCero.has(mayor)&&esCero) return;  // nunca debería pasar, pero por seguridad
-
+    if(!subId||subId==='no_aplica') continue;
     const cat=catMap[subId]||subId;
-    if(acum.hasOwnProperty(cat)) acum[cat]+=saldo;
-    if(!acum.detalle[subId]) acum.detalle[subId]=0;
-    acum.detalle[subId]+=saldo;
-  });
 
+    let valor=0;
+    if(RESULTADO_CATS.has(cat)){
+      // Para resultados: usar MOVIMIENTOS DEL PERÍODO (no el saldo acumulado)
+      const cargos=parseFloat((cols[iCargos]||'').replace(/[$, ]/g,''))||0;
+      const abonos=parseFloat((cols[iAbonos]||'').replace(/[$, ]/g,''))||0;
+      if(cat==='resultado_acreedor'){
+        valor=abonos-cargos; // Ingresos = abonos netos del período
+      } else {
+        valor=cargos-abonos; // Gastos = cargos netos del período
+      }
+    } else {
+      // Para balance general: usar Saldo Actual
+      const sa=parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0;
+      valor=sa;
+    }
+
+    if(!valor) continue;
+    if(acum.hasOwnProperty(cat)) acum[cat]+=valor;
+    if(!acum.detalle[subId]) acum.detalle[subId]=0;
+    acum.detalle[subId]+=valor;
+  }
   return acum;
 }
 
