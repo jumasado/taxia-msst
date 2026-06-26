@@ -6560,31 +6560,59 @@ function docParseCatalogCSV(text){
   const lines=text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
   if(!lines.length) return [];
   const sep=lines[0].includes(';')?';':',';
-  const header=lines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
-  let iC=0,iN=1;
-  header.forEach((h,i)=>{
-    if(/^CUENTA$|^COD|^NUMERO/.test(h)) iC=i;
-    else if(/^NOMBRE$|^DESCRIPCION|^CONCEPTO/.test(h)) iN=i;
-  });
+
+  // Normalizar encabezados: quitar acentos y espacios (CONTPAQi usa "C ó d i g o")
+  const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'').toUpperCase();
+
+  // Limpiar nombres espaciados: "A C T I V O   A   C O R T O" → "ACTIVO A CORTO"
+  const limpiarNom=s=>s.split(/\s{2,}/).map(g=>{
+    const ws=g.trim().split(/\s+/);
+    return ws.every(w=>w.length<=1)?ws.join(''):g.trim();
+  }).join(' ').trim();
+
+  // Buscar fila de encabezado (tiene CODIGO y/o NOMBRE normalizados)
+  let headerIdx=-1,iC=-1,iN=-1;
+  for(let i=0;i<Math.min(lines.length,10);i++){
+    const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+    cols.forEach((h,j)=>{
+      const hn=norm(h);
+      if(['CODIGO','CUENTA','COD','NUMERODECUENTA','CUENTACONTABLE'].includes(hn)) iC=j;
+      if(['NOMBRE','DESCRIPCION','CONCEPTO','DENOMINACION'].includes(hn)) iN=j;
+    });
+    if(iC>=0){headerIdx=i;break;}
+  }
+  // Fallback CONTPAQi: col0=Nivel(1-9), col1=código XXXX-...
+  if(iC<0){
+    for(let i=0;i<Math.min(lines.length,15);i++){
+      const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+      if(/^[1-9]$/.test(cols[0])&&/^\d{3,6}[-.]/.test(cols[1])){
+        iC=1;iN=2;headerIdx=i-1;
+        break;
+      }
+    }
+  }
+  if(iC<0) iC=0;
+  if(iN<0) iN=iC+1;
+
   const mayorMap={};
-  for(let i=1;i<lines.length;i++){
+  const start=headerIdx>=0?headerIdx+1:1;
+  for(let i=start;i<lines.length;i++){
     const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
     const num=(cols[iC]||'').trim();
     const nom=(cols[iN]||'').trim();
-    if(!num) continue;
-    // Extraer cuenta de mayor = primer segmento (antes del primer -)
-    const mayor=num.split('-')[0];
-    if(!mayor||mayor.length<2) continue;
-    // Usar la cuenta que termina en 000 como nombre del mayor
+    // FILTRO CLAVE: solo cuentas reales (3-6 dígitos seguidos de - o fin)
+    if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
+    const mayor=num.split(/[-. ]/)[0];
+    if(!mayor||mayor.length<3||mayor.length>6) continue;
     const partes=num.split('-');
-    const esMayor=partes.slice(1).every(p=>/^0+$/.test(p));
-    if(esMayor&&nom&&!mayorMap[mayor]){
-      mayorMap[mayor]={cuenta_mayor:mayor, nombre_mayor:nom};
-    } else if(!mayorMap[mayor]){
-      mayorMap[mayor]={cuenta_mayor:mayor, nombre_mayor:nom};
-    }
+    const esMayor=partes.length===1||partes.slice(1).every(p=>/^0+$/.test(p));
+    const nomL=limpiarNom(nom);
+    if(!nomL) continue;
+    if(esMayor&&!mayorMap[mayor]) mayorMap[mayor]={cuenta_mayor:mayor,nombre_mayor:nomL};
+    else if(!mayorMap[mayor]) mayorMap[mayor]={cuenta_mayor:mayor,nombre_mayor:nomL};
   }
-  return Object.values(mayorMap).sort((a,b)=>a.cuenta_mayor.localeCompare(b.cuenta_mayor,undefined,{numeric:true}));
+  return Object.values(mayorMap).sort((a,b)=>
+    a.cuenta_mayor.localeCompare(b.cuenta_mayor,undefined,{numeric:true}));
 }
 
 // Procesar catálogo al subirse
