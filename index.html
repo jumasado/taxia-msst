@@ -6779,12 +6779,17 @@ async function docGuardarClasif(){
       rubro,cedulas,updated_at:nowISO()};
   });
   try{
-    // Upsert — insertar o actualizar por cliente_id + cuenta_mayor
+    // Primero eliminar clasificaciones existentes del cliente
+    await fetch(SB_URL+'/rest/v1/catalogo_clasificacion?cliente_id=eq.'+encodeURIComponent(clienteId),{
+      method:'DELETE',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    // Luego insertar todas las nuevas
     const res=await fetch(SB_URL+'/rest/v1/catalogo_clasificacion',{
       method:'POST',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,
         'Content-Type':'application/json',
-        'Prefer':'return=minimal,resolution=merge-duplicates'},
+        'Prefer':'return=minimal'},
       body:JSON.stringify(rows)
     });
     if(!res.ok) throw new Error(await res.text());
