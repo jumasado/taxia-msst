@@ -6821,53 +6821,75 @@ async function docCargarClasif(){
 
 // Extractor CSV USANDO clasificaciones guardadas
 function docExtraerCSVConClasif(text, clasifMap){
-  const lines=text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
-  if(!lines.length)return{};
-  const sep=lines[0].includes(';')?';':',';
-  const header=lines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
+  const rawLines=text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
+  if(!rawLines.length)return{};
+  const sep=rawLines[0].includes(';')?';':',';
+  const header=rawLines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
+
+  // Detectar columnas de cuenta, nombre y saldo
   let iC=0,iN=1,iS=-1;
+  const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
   header.forEach((h,i)=>{
-    const hn=h.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
-    if(['CODIGO','CUENTA','COD','NUMERODECUENTA'].includes(hn)) iC=i;
-    if(['NOMBRE','DESCRIPCION','CONCEPTO'].includes(hn)) iN=i;
-    if(/SALDO.?ACTUAL$|^SALDO_ACTUAL$|SALDO.?FINAL$/.test(hn)) iS=i;
+    const hn=norm(h);
+    if(['CODIGO','CUENTA','COD','NUMERODECUENTA','CUENTACONTABLE'].includes(hn)) iC=i;
+    if(['NOMBRE','DESCRIPCION','CONCEPTO','DENOMINACION'].includes(hn)) iN=i;
+    if(/SALDOACTUAL$|SALDOFINAL$|SALDONETO$/.test(hn)) iS=i;
   });
+
+  // Fallback CONTPAQi: buscar columna "SaldosActuales Deudor" (penúltima de importes)
   if(iS<0){
-    let iFirst=-1;
-    for(let i=0;i<header.length;i++){
-      if(/SALDO/i.test(header[i])){
-        if(/ACTUAL/i.test(header[i])){iS=i;break;}
-        if(iFirst<0)iFirst=i;
+    // CONTPAQi tiene: SaldoInicDeudor | SaldoInicAcreedor | Cargos | Abonos | SaldoActDeudor | SaldoActAcreedor
+    // Detectar columnas numéricas — tomar la columna del saldo actual deudor (penúltima numérica)
+    const numCols=[];
+    const testRow=rawLines[1]?.split(sep)||[];
+    testRow.forEach((v,i)=>{
+      if(parseFloat(v.replace(/[$, ]/g,''))!==0||v.trim()==='0.00') numCols.push(i);
+    });
+    // En CONTPAQi el saldo actual deudor es la 5ta columna numérica (índice 4)
+    if(numCols.length>=5) iS=numCols[4];
+    else{
+      let iFirst=-1;
+      for(let i=0;i<header.length;i++){
+        if(/SALDO/i.test(header[i])){
+          if(/ACTUAL/i.test(header[i])){iS=i;break;}
+          if(iFirst<0)iFirst=i;
+        }
       }
+      if(iS<0)iS=iFirst>=0?iFirst:header.length-1;
     }
-    if(iS<0)iS=iFirst>=0?iFirst:header.length-1;
   }
 
-  // Mapa de sub-categoría → categoría principal
+  // Mapa sub-categoría → categoría principal
   const catMap={};
   DOC_RUBROS.forEach(r=>{catMap[r.id]=r.cat;});
 
-  // Acumuladores por categoría y sub-categoría
-  const acum={
-    activo:0, pasivo:0, capital:0,
-    resultado_acreedor:0, resultado_deudor:0,
-    detalle:{}
-  };
+  const acum={activo:0,pasivo:0,capital:0,resultado_acreedor:0,resultado_deudor:0,detalle:{}};
 
-  for(let i=1;i<lines.length;i++){
-    const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+  for(let i=1;i<rawLines.length;i++){
+    const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
     const num=(cols[iC]||'').trim();
     if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
+
+    // REGLA CLAVE: solo incluir cuentas de mayor
+    // Para formato "XXX-YYYY": solo si TODOS los segmentos después del primero son ceros
+    // Así "102-0000" SÍ, "102-0101" NO, "000-0100" NO
+    const partes=num.split(/[-. ]/);
+    if(partes.length>=2){
+      const esMayor=partes.slice(1).every(p=>/^0+$/.test(p));
+      if(!esMayor) continue; // Skip cuentas de detalle y cabeceras
+    }
+
     const saldo=parseFloat((cols[iS]||'').replace(/[$, ]/g,''))||0;
-    if(saldo===0) continue;
-    const partes=num.split('-');
-    if(partes.length>2&&partes.slice(-2).filter(p=>/^0+$/.test(p)).length>=2) continue;
-    const mayor=num.split(/[-. ]/)[0];
+    if(!saldo) continue;
+
+    const mayor=partes[0];
+    // Excluir cuentas de encabezado (mayor=000 u otras sin clasificación)
+    if(mayor==='000') continue;
+
     const subId=clasifMap[mayor];
     if(!subId||subId==='no_aplica') continue;
     const cat=catMap[subId]||subId;
     if(acum.hasOwnProperty(cat)) acum[cat]+=saldo;
-    // Detalle por sub-categoría
     if(!acum.detalle[subId]) acum.detalle[subId]=0;
     acum.detalle[subId]+=saldo;
   }
