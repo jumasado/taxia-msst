@@ -6914,53 +6914,59 @@ function docExtraerCSVConClasif(text, clasifMap){
   const header=rawLines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
   const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
 
-  // Detectar columnas
-  let iC=0, iN=1, iSI=-1, iCargos=-1, iAbonos=-1, iSA=-1;
+  let iC=0,iN=1,iSI=-1,iCargos=-1,iAbonos=-1,iSA=-1;
   header.forEach((h,i)=>{
     const hn=norm(h);
     if(['CODIGO','CUENTA','COD','NUMERODECUENTA'].includes(hn)) iC=i;
     if(['NOMBRE','DESCRIPCION','CONCEPTO'].includes(hn)) iN=i;
-    if(/SALDOINICIAL|SALDOINI|SALDO_INI/.test(hn)&&!/DEUDOR|ACREEDOR/.test(hn)) iSI=i;
     if(/^CARGOS$|DEBITOS|MOVIMIENTODEBE/.test(hn)) iCargos=i;
     if(/^ABONOS$|CREDITOS|MOVIMIENTOHABER/.test(hn)) iAbonos=i;
-    if(/SALDOACTUAL|SALDOFINAL|SALDO_ACT|SALDONETO/.test(hn)&&!/DEUDOR|ACREEDOR/.test(hn)) iSA=i;
-    // También detectar columnas separadas Deudor/Acreedor
-    if(/SALDOACTUAL.*DEUDOR|DEUDOR.*SALDOACTUAL/.test(hn)) iSA=i;
+    if(/SALDOACTUAL|SALDOFINAL|SALDO_ACT/.test(hn)&&!/DEUDOR|ACREEDOR/.test(hn)) iSA=i;
   });
 
-  // Si no encontramos por nombre, detectar por posición (CONTPAQi: Cuenta,Nombre,SaldoIni,Cargos,Abonos,SaldoAct)
-  const numericCols=[];
-  for(let row=1;row<Math.min(rawLines.length,5);row++){
-    const cols=rawLines[row].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
-    cols.forEach((v,i)=>{ if(i>1&&parseFloat(v.replace(/[$, ]/g,''))||v==='0.00'||v==='0') numericCols.push(i); });
-    if(numericCols.length>=3) break;
+  // Detección por posición (CONTPAQi: Cuenta,Nombre,SaldoIni,Cargos,Abonos,SaldoAct)
+  if(iCargos<0||iAbonos<0||iSA<0){
+    const numericCols=new Set();
+    for(let row=1;row<Math.min(rawLines.length,5);row++){
+      const cols=rawLines[row].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+      cols.forEach((v,i)=>{ if(i>1&&(parseFloat(v.replace(/[$, ]/g,''))!==0||v==='0.00'||v==='0')) numericCols.add(i); });
+    }
+    const un=[...numericCols].sort((a,b)=>a-b);
+    if(un.length>=4){
+      if(iSI<0) iSI=un[0];
+      if(iCargos<0) iCargos=un[1];
+      if(iAbonos<0) iAbonos=un[2];
+      if(iSA<0) iSA=un[un.length-1];
+    }
   }
-  const uniqueNum=[...new Set(numericCols)].sort((a,b)=>a-b);
-  if(iSI<0&&uniqueNum.length>=4) iSI=uniqueNum[0];
-  if(iCargos<0&&uniqueNum.length>=4) iCargos=uniqueNum[1];
-  if(iAbonos<0&&uniqueNum.length>=4) iAbonos=uniqueNum[2];
-  if(iSA<0&&uniqueNum.length>=4) iSA=uniqueNum[uniqueNum.length-1];
   if(iSA<0) iSA=header.length-1;
 
   const catMap={};
   DOC_RUBROS.forEach(r=>{catMap[r.id]=r.cat;});
   const RESULTADO_CATS=new Set(['resultado_acreedor','resultado_deudor']);
 
-  // Paso 1: detectar qué mayors tienen cuenta "XXX-0000"
+  // Paso 1: detectar mayors con cuenta "XXX-0000"
   const mayorConCero=new Set();
   for(let i=1;i<rawLines.length;i++){
     const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
     const num=(cols[iC]||'').trim();
     if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
     const partes=num.split(/[-. ]/);
-    const mayor=partes[0];
-    if(mayor==='000') continue;
-    if(partes.length>=2&&partes.slice(1).every(p=>/^0+$/.test(p))) mayorConCero.add(mayor);
+    if(partes[0]==='000') continue;
+    if(partes.length>=2&&partes.slice(1).every(p=>/^0+$/.test(p))) mayorConCero.add(partes[0]);
   }
 
-  const acum={activo:0,pasivo:0,capital:0,resultado_acreedor:0,resultado_deudor:0,detalle:{}};
+  // Acumuladores: movimientos del período Y saldos acumulados
+  const acum={
+    activo:0, pasivo:0, capital:0,
+    resultado_acreedor:0,        // movimientos del MES
+    resultado_deudor:0,          // movimientos del MES
+    resultado_acreedor_acum:0,   // saldo ACUMULADO (año)
+    resultado_deudor_acum:0,     // saldo ACUMULADO (año)
+    detalle:{}, detalle_acum:{}
+  };
 
-  // Paso 2: procesar filas
+  // Paso 2: procesar
   for(let i=1;i<rawLines.length;i++){
     const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
     const num=(cols[iC]||'').trim();
@@ -6975,27 +6981,35 @@ function docExtraerCSVConClasif(text, clasifMap){
     const subId=clasifMap[mayor];
     if(!subId||subId==='no_aplica') continue;
     const cat=catMap[subId]||subId;
+    if(!acum.hasOwnProperty(cat)) return;
 
-    let valor=0;
     if(RESULTADO_CATS.has(cat)){
-      // Para resultados: usar MOVIMIENTOS DEL PERÍODO (no el saldo acumulado)
+      // Movimiento del período
       const cargos=parseFloat((cols[iCargos]||'').replace(/[$, ]/g,''))||0;
       const abonos=parseFloat((cols[iAbonos]||'').replace(/[$, ]/g,''))||0;
-      if(cat==='resultado_acreedor'){
-        valor=abonos-cargos; // Ingresos = abonos netos del período
-      } else {
-        valor=cargos-abonos; // Gastos = cargos netos del período
+      const mov=cat==='resultado_acreedor'?(abonos-cargos):(cargos-abonos);
+      if(mov){
+        acum[cat]+=mov;
+        if(!acum.detalle[subId]) acum.detalle[subId]=0;
+        acum.detalle[subId]+=mov;
+      }
+      // Saldo acumulado
+      const sa=Math.abs(parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0);
+      if(sa){
+        const acumKey=cat+'_acum';
+        acum[acumKey]=(acum[acumKey]||0)+sa;
+        if(!acum.detalle_acum[subId]) acum.detalle_acum[subId]=0;
+        acum.detalle_acum[subId]+=sa;
       }
     } else {
-      // Para balance general: usar Saldo Actual
+      // Balance general: saldo actual
       const sa=parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0;
-      valor=sa;
+      if(sa){
+        acum[cat]+=sa;
+        if(!acum.detalle[subId]) acum.detalle[subId]=0;
+        acum.detalle[subId]+=sa;
+      }
     }
-
-    if(!valor) continue;
-    if(acum.hasOwnProperty(cat)) acum[cat]+=valor;
-    if(!acum.detalle[subId]) acum.detalle[subId]=0;
-    acum.detalle[subId]+=valor;
   }
   return acum;
 }
@@ -7283,22 +7297,62 @@ async function docElimDoc(id,cat){
 function docVerCifras(id,nombre){
   const d=[...docCacheGen,...docCacheFin].find(x=>String(x.id)===String(id));
   if(!d)return;
-  const cifras=d.cifras||{};
-  if(!Object.keys(cifras).length){docToast('Sin cifras. Usa ✨ IA para extraerlas.','warn');return;}
-  const filas=Object.entries(cifras).filter(([k])=>k!=='_raw').map(([k,v])=>
-    '<tr><td style="padding:5px 10px;font-size:12px;color:#555;text-transform:capitalize">'+escD(k.replace(/_/g,' '))+'</td>'+
-    '<td style="padding:5px 10px;font-size:12px;font-weight:600;text-align:right">'+
-    (typeof v==='number'?new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0}).format(v):escD(String(v)))+
-    '</td></tr>'
-  ).join('');
+  const c=d.cifras||{};
+  if(!Object.keys(c).length){docToast('Sin cifras. Usa ✨ IA para extraerlas.','warn');return;}
+  const fmt=v=>typeof v==='number'?new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:2}).format(v):escD(String(v||0));
+  const row=(label,val,color)=>'<tr style="border-bottom:1px solid #f0f0ec">'+
+    '<td style="padding:6px 12px;font-size:12px;color:#555">'+escD(label)+'</td>'+
+    '<td style="padding:6px 12px;font-size:12px;font-weight:700;text-align:right;color:'+(color||'#1a1a1a')+'">'+fmt(val)+'</td></tr>';
+  const sep=(label)=>'<tr style="background:#f5f5f3"><td colspan="2" style="padding:4px 12px;font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px">'+label+'</td></tr>';
+
+  // Vista 1: Saldos Acumulados (Balance General + ER acumulado)
+  const det=c.detalle||{};
+  const detA=c.detalle_acum||{};
+  const tieneAcum=c.resultado_acreedor_acum>0||c.resultado_deudor_acum>0;
+
+  const tabBG=sep('Balance General')+
+    row('Activo',c.activo,'#185FA5')+
+    row('Pasivo',c.pasivo,'#A32D2D')+
+    row('Capital',c.capital,'#3B6D11')+
+    (tieneAcum?sep('Estado de Resultados Acumulado')+
+      row('Ingresos acumulados',c.resultado_acreedor_acum,'#3C3489')+
+      row('Gastos acumulados',c.resultado_deudor_acum,'#854F0B')+
+      row('Utilidad acumulada',(c.resultado_acreedor_acum||0)-(c.resultado_deudor_acum||0),(c.resultado_acreedor_acum>c.resultado_deudor_acum?'#3B6D11':'#A32D2D')):'');
+
+  // Vista 2: Movimientos del período (ER mensual)
+  const tabMov=sep('Estado de Resultados del Período')+
+    row('Ingresos del período',c.resultado_acreedor,'#3C3489')+
+    row('Gastos del período',c.resultado_deudor,'#854F0B')+
+    row('Utilidad del período',(c.resultado_acreedor||0)-(c.resultado_deudor||0),((c.resultado_acreedor||0)>(c.resultado_deudor||0)?'#3B6D11':'#A32D2D'))+
+    (c.activo?sep('Balance General (saldos)')+row('Activo',c.activo,'#185FA5')+row('Pasivo',c.pasivo,'#A32D2D')+row('Capital',c.capital,'#3B6D11'):'');
+
   const m=document.createElement('div');m.className='modal-overlay';m.id='doc-cifras-modal';
-  m.innerHTML='<div class="modal-box" style="max-width:480px">'+
-  '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
-  '<div><div style="font-size:15px;font-weight:700">Cifras extraídas — ✨ IA</div><div style="font-size:11px;color:#888">'+escD(nombre)+'</div></div>'+
-  '<button onclick="docCerrarCifras()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button></div>'+
-  '<div style="overflow-y:auto;max-height:400px"><table style="width:100%;border-collapse:collapse"><tbody>'+filas+'</tbody></table></div>'+
-  '<button class="btn" style="width:100%;margin-top:12px" onclick="docCerrarCifras()">Cerrar</button></div>';
+  m.innerHTML='<div class="modal-box" style="max-width:500px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'+
+      '<div><div style="font-size:15px;font-weight:700">📊 Cifras de la balanza</div>'+
+      '<div style="font-size:11px;color:#888">'+escD(nombre)+'</div></div>'+
+      '<button onclick="docCerrarCifras()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button>'+
+    '</div>'+
+    // Tabs
+    '<div style="display:flex;gap:4px;margin-bottom:12px">'+
+      '<button id="tab-acum" onclick="docCifrasTab(this,\'acum\')" style="flex:1;padding:8px;border-radius:8px;border:2px solid #3B4BC8;background:#E6F1FB;color:#3B4BC8;font-size:12px;font-weight:700;cursor:pointer">📈 Saldos Acumulados</button>'+
+      '<button id="tab-mes" onclick="docCifrasTab(this,\'mes\')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid #ddd;background:#fff;color:#888;font-size:12px;font-weight:600;cursor:pointer">📅 Movimientos del Mes</button>'+
+    '</div>'+
+    '<div style="overflow-y:auto;max-height:380px">'+
+      '<table id="tabla-acum" style="width:100%;border-collapse:collapse"><tbody>'+tabBG+'</tbody></table>'+
+      '<table id="tabla-mes" style="width:100%;border-collapse:collapse;display:none"><tbody>'+tabMov+'</tbody></table>'+
+    '</div>'+
+    '<button class="btn" style="width:100%;margin-top:12px" onclick="docCerrarCifras()">Cerrar</button>'+
+  '</div>';
   document.body.appendChild(m);
+}
+
+function docCifrasTab(btn,tab){
+  const isAcum=tab==='acum';
+  document.getElementById('tabla-acum').style.display=isAcum?'table':'none';
+  document.getElementById('tabla-mes').style.display=isAcum?'none':'table';
+  document.getElementById('tab-acum').style.cssText='flex:1;padding:8px;border-radius:8px;border:'+(isAcum?'2px solid #3B4BC8;background:#E6F1FB;color:#3B4BC8':'1.5px solid #ddd;background:#fff;color:#888')+';font-size:12px;font-weight:'+(isAcum?'700':'600')+';cursor:pointer';
+  document.getElementById('tab-mes').style.cssText='flex:1;padding:8px;border-radius:8px;border:'+(isAcum?'1.5px solid #ddd;background:#fff;color:#888':'2px solid #3B4BC8;background:#E6F1FB;color:#3B4BC8')+';font-size:12px;font-weight:'+(isAcum?'600':'700')+';cursor:pointer';
 }
 
 function docCerrarCifras(){const m=document.getElementById('doc-cifras-modal');if(m)m.remove();}
