@@ -2072,9 +2072,16 @@ async function generarPapel(tipo){
         headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},
         body:JSON.stringify({prompt})
       });
-      const apiData=await apiRes.json();
-      if(!apiRes.ok) throw new Error(apiData.error||'Error API');
+      const apiTxt=await apiRes.text();
+      if(!apiTxt||apiTxt.trim()===''){
+        throw new Error('La función de análisis no respondió (HTTP '+apiRes.status+'). Verifica que la Edge Function claude-analysis esté desplegada en Supabase.');
+      }
+      let apiData;
+      try{ apiData=JSON.parse(apiTxt); }
+      catch(e){ throw new Error('Respuesta inválida del servidor ('+apiRes.status+'): '+apiTxt.substring(0,200)); }
+      if(!apiRes.ok) throw new Error(apiData.error||apiData.message||'Error API '+apiRes.status);
       const raw=(apiData.text||'').replace(/```json|```/g,'').trim();
+      if(!raw) throw new Error('La función devolvió respuesta vacía. Verifica la configuración de la API de Claude.');
       datos=JSON.parse(raw);
     }
 
