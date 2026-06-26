@@ -6426,10 +6426,12 @@ function docRenderFinanciero(ejercicios){
 const DOC_RUBROS=[
   // ===== ACTIVO (NIF C-1 a C-15, NIF A-5) =====
   {id:'activo_caja',           cat:'activo',            label:'Caja y bancos'},
-  {id:'activo_clientes',       cat:'activo',            label:'Clientes y documentos por cobrar'},
+  {id:'activo_clientes',       cat:'activo',            label:'Clientes'},
+  {id:'activo_doc_cobrar',     cat:'activo',            label:'Documentos por cobrar'},
   {id:'activo_inventarios',    cat:'activo',            label:'Inventarios y almacén'},
   {id:'activo_anticipos_prov', cat:'activo',            label:'Anticipos a proveedores'},
-  {id:'activo_iva',            cat:'activo',            label:'IVA acreditable / Impuestos a favor'},
+  {id:'activo_iva',            cat:'activo',            label:'IVA acreditable'},
+  {id:'activo_impuestos_fav',  cat:'activo',            label:'Impuestos a favor (ISR, IETU, otros)'},
   {id:'activo_pagos_prov',     cat:'activo',            label:'Pagos provisionales ISR'},
   {id:'activo_otros_circ',     cat:'activo',            label:'Otros activos circulantes'},
   {id:'activo_fijo',           cat:'activo',            label:'Inmuebles, maquinaria y equipo'},
@@ -6491,17 +6493,18 @@ const DOC_RUBROS=[
 
 // Cédulas para Declaración Anual (PM)
 const DOC_CEDULAS=[
-  {id:'J3', label:'J3 — Deducción de inversiones (dep. fiscal)'},
-  {id:'J4', label:'J4 — PTU deducible del ejercicio'},
-  {id:'J5', label:'J5 — Pagos provisionales acreditables'},
-  {id:'J6', label:'J6 — ISR del ejercicio'},
-  {id:'J7', label:'J7 — Dividendos percibidos y retenidos'},
-  {id:'J8', label:'J8 — Gastos no deducibles'},
-  {id:'J9', label:'J9 — Pérdidas fiscales de ejercicios anteriores'},
-  {id:'J10',label:'J10 — Capital Contable Fiscal (CUFIN)'},
-  {id:'J11',label:'J11 — Cuenta de Capital de Aportación (CUCA)'},
-  {id:'J12',label:'J12 — Operaciones con partes relacionadas'},
-  {id:'J13',label:'J13 — Integración de gastos: deducibles, contables y no deducibles'},
+  {id:'J2', label:'J2  — Estado de resultados'},
+  {id:'J3', label:'J3  — Coeficiente de utilidad'},
+  {id:'J4', label:'J4  — Integración de pagos mensuales ISR/IVA/Retenciones'},
+  {id:'J5', label:'J5  — Resultado Fiscal de ISR'},
+  {id:'J6', label:'J6  — Conciliación contable-fiscal'},
+  {id:'J8', label:'J8  — Ajuste anual por inflación'},
+  {id:'J11',label:'J11 — Depreciaciones contables / fiscales'},
+  {id:'J13',label:'J13 — Integración de gastos'},
+  {id:'J15',label:'J15 — Productos y gastos financieros'},
+  {id:'J17',label:'J17 — Pérdidas fiscales'},
+  {id:'J19',label:'J19 — Cuenta de capital de aportación actualizada (CUCA)'},
+  {id:'J20',label:'J20 — Cuenta de utilidad fiscal neta actualizada (CUFIN)'},
 ];
 
 // Mapa de categorías principales
