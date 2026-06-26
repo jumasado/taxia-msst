@@ -6298,6 +6298,14 @@ function docSetTab(tab){
   docTab=tab;
   const ejercicios=[...new Set(docCacheFin.map(d=>d.ejercicio).filter(Boolean))].sort((a,b)=>b-a);
   if(!ejercicios.includes(docEjercicio))ejercicios.unshift(docEjercicio);
+  // Cargar clasificaciones si entramos a la pestaña financiero
+  if(tab==='financiero'&&!docClasifCache){
+    docCargarClasif().then(()=>{
+      const el=document.getElementById('doc-tab-content');
+      if(el)el.innerHTML=docTabContent(ejercicios);
+    });
+    return;
+  }
   const el=document.getElementById('doc-tab-content');
   if(el)el.innerHTML=docTabContent(ejercicios);
   document.querySelectorAll('.tab-row .tab').forEach(b=>{
@@ -6382,6 +6390,8 @@ function docRenderFinanciero(ejercicios){
     html+=ok?('<div style="font-size:11px;color:#888">'+escD(d.nombre_archivo||'')+(hasCifras?' · Con cifras':'')+'</div>'):('<div style="font-size:11px;color:#bbb">Sin documento</div>');
     html+='</div><div style="display:flex;gap:5px;flex-shrink:0">';
     if(ok&&t.extractable&&!hasCifras) html+='<button class="btn btn-sm" style="background:#EEEDFE;color:#3B4BC8;border-color:#c5d0ff;font-size:10px" data-did="'+escD(String(d.id))+'" data-tipo="'+escD(t.id)+'" onclick="docExtraerCifras(this.dataset.did,this.dataset.tipo,'+docEjercicio+',null)">✨ IA</button>';
+    // Botón Clasificar especial para catálogo de cuentas
+    if(t.id==='catalogo_cuentas') html+='<button class="btn btn-sm" style="background:#EAF3DE;color:#3B6D11;border-color:#b7d9a0;font-size:11px;font-weight:600" onclick="docReClasificar()">📊 Clasificar</button>';
     if(ok){
       html+='<button class="btn btn-sm" data-did="'+escD(String(d.id))+'" data-url="'+escD(d.archivo_url||'')+'" data-nombre="'+escD(d.nombre_archivo||'')+'" onclick="docVerDoc(this.dataset.did,this.dataset.url,this.dataset.nombre)">Ver</button>';
       html+='<button class="btn btn-sm" style="background:#fef2f2;color:#dc2626;border-color:#fca5a5" data-did="'+escD(String(d.id))+'" onclick="docElimDoc(this.dataset.did,\'financiero\')">✕</button>';
