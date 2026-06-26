@@ -6375,6 +6375,7 @@ function docRenderFinanciero(ejercicios){
     html+='<div style="margin-top:5px;display:flex;flex-direction:column;gap:3px">';
     if(ok) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px" data-did="'+escD(String(d.id))+'" data-nombre="'+escD(d.nombre_archivo||'')+'" onclick="docVerCifras(this.dataset.did,this.dataset.nombre)">Ver</button>';
     if(ok&&!hasCifras) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#EEEDFE;color:#3B4BC8;border-color:#c5d0ff" data-did="'+escD(String(d.id))+'" onclick="docExtraerCifras(this.dataset.did,\'balanza\','+docEjercicio+','+n+')">✨ IA</button>';
+    if(ok) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#FCEBEB;color:#A32D2D;border-color:#f5c0c0" data-did="'+escD(String(d.id))+'" data-mes="'+n+'" onclick="docBorrarBalanza(this.dataset.did,parseInt(this.dataset.mes))">✕</button>';
     html+='<label class="btn btn-sm" style="font-size:9px;padding:2px 4px;cursor:pointer;justify-content:center;margin:0">'+(ok?'↑':'↑ Subir');
     html+='<input type="file" accept=".pdf,.csv,.xlsx,.xls" style="display:none" data-mes="'+n+'" data-ej="'+docEjercicio+'" onchange="docSubirBalanza(parseInt(this.dataset.mes),parseInt(this.dataset.ej),this)"></label>';
     html+='</div></div>';
@@ -6905,6 +6906,23 @@ async function docSubirGeneral(tipoId,tipoLabel,input){
     docSetTab('generales');docToast('Archivo subido','ok');
   }catch(e){docToast('Error: '+e.message,'err');}
 }
+
+async function docBorrarBalanza(docId,mes){
+  if(!confirm('¿Borrar la balanza de '+DOC_MESES_L[mes-1]+'? Esta acción no se puede deshacer.'))return;
+  try{
+    await fetch(SB_URL+'/rest/v1/client_documents?id=eq.'+encodeURIComponent(docId),{
+      method:'DELETE',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    const idx=docCacheFin.findIndex(d=>String(d.id)===String(docId));
+    if(idx>=0)docCacheFin.splice(idx,1);
+    const ejs=[...new Set(docCacheFin.map(d=>d.ejercicio).filter(Boolean))].sort((a,b)=>b-a);
+    if(!ejs.includes(docEjercicio))ejs.unshift(docEjercicio);
+    docSetTab('financiero');
+    docToast('Balanza de '+DOC_MESES_L[mes-1]+' eliminada','ok');
+  }catch(e){docToast('Error al borrar: '+e.message,'err');}
+}
+
 
 async function docSubirBalanza(mes,ejercicio,input){
   const file=input.files[0];if(!file)return;
