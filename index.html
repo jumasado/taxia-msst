@@ -6971,7 +6971,29 @@ function docVerCifras(id,nombre){
 }
 
 function docCerrarCifras(){const m=document.getElementById('doc-cifras-modal');if(m)m.remove();}
-function docVerDoc(id,url,nombre){if(url)window.open(url,'_blank');else docToast('URL no disponible','warn');}
+async function docVerDoc(id,url,nombre){
+  if(!url){docToast('URL no disponible','warn');return;}
+  try{
+    // Extraer el path del bucket desde la URL
+    const match=url.match(/documentos-clientes\/(.+)$/);
+    if(!match){window.open(url,'_blank');return;}
+    const path=match[1];
+    // Generar URL firmada válida por 1 hora
+    const AK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+    const r=await fetch(SB_URL+'/storage/v1/object/sign/documentos-clientes/'+path,{
+      method:'POST',
+      headers:{'apikey':AK,'Authorization':'Bearer '+AK,'Content-Type':'application/json'},
+      body:JSON.stringify({expiresIn:3600})
+    });
+    if(!r.ok) throw new Error('No se pudo generar URL de acceso');
+    const data=await r.json();
+    const signedUrl=SB_URL+'/storage/v1'+data.signedURL;
+    window.open(signedUrl,'_blank');
+  }catch(e){
+    // Si falla, intentar abrir la URL original
+    window.open(url,'_blank');
+  }
+}
 
 async function docReClasificar(){
   // Cargar cuentas del catálogo ya subido
