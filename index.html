@@ -3459,10 +3459,19 @@ function abrirCapturaMes(proyId,mes,mesId){
   overlay.id='modal-mes';
   const html='<div class="modal-box" style="max-width:560px;max-height:90vh;overflow-y:auto">'+
     '<div class="modal-title">'+MESES_NOMBRES[mes-1]+' — Captura de datos</div>'+
-    '<div style="margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #e5e5e0">'+
-      '<div style="font-size:11px;color:#888;background:#E6F1FB;padding:6px 12px;border-radius:6px">📁 Para subir los estados financieros, usa el módulo <strong>4. Documentación</strong>.</div>'+
+
+    // OPCIONES: Importar del Módulo 4 o Captura Manual
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #e5e5e0">'+
+      '<button onclick="msImportarMod4('+mes+')" style="padding:10px;border:2px solid #3B4BC8;border-radius:8px;background:#E6F1FB;color:#3B4BC8;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:4px">'+
+        '<span style="font-size:20px">📥</span>Importar del<br><strong>Módulo 4</strong>'+
+      '</button>'+
+      '<button onclick="msActivarManual()" style="padding:10px;border:2px solid #5a8a1a;border-radius:8px;background:#EAF3DE;color:#5a8a1a;cursor:pointer;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:4px">'+
+        '<span style="font-size:20px">✏️</span>Captura<br><strong>Manual</strong>'+
+      '</button>'+
     '</div>'+
-    '<div id="panel-cifras">'+
+    '<div id="ms-status-msg" style="display:none;margin-bottom:10px;font-size:12px;padding:8px 12px;border-radius:6px"></div>'+
+
+    '<div id="panel-cifras" style="display:none">'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'+
         '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Ingresos</div><input id="ms-ing" type="number" placeholder="0.00"></div>'+
         '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Costo de ventas</div><input id="ms-cv" type="number" placeholder="0.00"></div>'+
@@ -3479,14 +3488,18 @@ function abrirCapturaMes(proyId,mes,mesId){
     '<input type="hidden" id="ms-mes" value="'+mes+'">'+
     '<input type="hidden" id="ms-id" value="'+(mesId||'')+'">'+
 
-    '<div style="display:flex;gap:8px;margin-top:8px">'+
+    '<div id="ms-save-row" style="display:none;gap:8px;margin-top:8px">'+
       '<button class="btn btn-full" id="btn-cancel-mes" style="flex:1;margin-top:0">Cancelar</button>'+
-      '<button class="btn btn-primary btn-full" onclick="guardarMes()" style="flex:1;margin-top:0">Guardar</button>'+
+      '<button class="btn btn-primary btn-full" onclick="guardarMes()" style="flex:1;margin-top:0">💾 Guardar</button>'+
+    '</div>'+
+    '<div id="ms-cancel-row" style="margin-top:8px">'+
+      '<button class="btn btn-full" id="btn-cancel-mes2" style="width:100%;margin-top:0">Cancelar</button>'+
     '</div>'+
   '</div>';
   overlay.innerHTML=html;
   document.body.appendChild(overlay);
-  document.getElementById('btn-cancel-mes').addEventListener('click',()=>overlay.remove());
+  document.getElementById('btn-cancel-mes')?.addEventListener('click',()=>overlay.remove());
+  document.getElementById('btn-cancel-mes2')?.addEventListener('click',()=>overlay.remove());
   if(mesId){
     sbGet('pf_meses','?id=eq.'+mesId+'&select=*').then(data=>{
       const m=data?.[0];if(!m)return;
@@ -3500,6 +3513,80 @@ function abrirCapturaMes(proyId,mes,mesId){
     });
   }
 }
+
+function msActivarManual(){
+  document.getElementById('panel-cifras').style.display='block';
+  document.getElementById('ms-save-row').style.display='flex';
+  document.getElementById('ms-cancel-row').style.display='none';
+  const msg=document.getElementById('ms-status-msg');
+  msg.style.display='block';
+  msg.style.background='#EAF3DE';
+  msg.style.color='#3B6D11';
+  msg.innerHTML='✏️ <strong>Captura manual</strong> — Ingresa las cifras directamente.';
+}
+
+async function msImportarMod4(mes){
+  const proyId=document.getElementById('ms-proy-id').value;
+  const msg=document.getElementById('ms-status-msg');
+  msg.style.display='block';
+  msg.style.background='#E6F1FB';
+  msg.style.color='#3B4BC8';
+  msg.innerHTML='⏳ Buscando balanza en Módulo 4...';
+  try{
+    // Obtener proyección para saber cliente y ejercicio
+    const proy=(await sbGet('pf_proyecciones','?id=eq.'+encodeURIComponent(proyId)+'&select=cliente_id,ejercicio'))||[];
+    if(!proy.length) throw new Error('Proyección no encontrada');
+    const {cliente_id,ejercicio}=proy[0];
+    // Buscar balanza del mes en client_documents
+    const docs=await sbGet('client_documents',
+      '?cliente_id=eq.'+encodeURIComponent(String(cliente_id))+
+      '&tipo=eq.balanza&mes=eq.'+mes+
+      '&ejercicio=eq.'+ejercicio+
+      '&select=cifras,nombre_archivo,status');
+    if(!docs||!docs.length) throw new Error('No hay balanza cargada para '+MESES_NOMBRES[mes-1]+' '+ejercicio+' en Módulo 4. Súbela primero.');
+    const doc=docs[0];
+    if(!doc.cifras||!Object.keys(doc.cifras).length) throw new Error('La balanza de '+MESES_NOMBRES[mes-1]+' no tiene cifras extraídas. Extráelas primero en Módulo 4.');
+    // Mapear cifras NIF → campos del ER
+    const c=doc.cifras;
+    const det=c.detalle||{};
+    // Ingresos = resultado_acreedor (total ingresos de la balanza)
+    const ingresos=c.resultado_acreedor||det.ing_ventas||0;
+    // Costo de ventas
+    const costoVentas=det.gasto_costo||0;
+    // Gastos financieros
+    const gastosFinancieros=det.gasto_financiero||0;
+    // PTU/ISR = resultado deudor específico
+    const isr=det.gasto_isr||0;
+    const ptu=det.gasto_ptu||0;
+    // Gastos de operación = resultado_deudor - costo_ventas - gastos_financieros - isr - ptu
+    const gastosOp=Math.max(0,(c.resultado_deudor||0)-costoVentas-gastosFinancieros-isr-ptu);
+    // Activo fijo bruto = suma de todos los activo_fijo_* en detalle
+    const activoFijo=Object.entries(det).filter(([k])=>k.startsWith('activo_fijo')).reduce((s,[,v])=>s+v,0);
+    // Depreciación acumulada
+    const depreciacion=det.activo_depreciacion||0;
+    // Mostrar panel y rellenar campos
+    document.getElementById('panel-cifras').style.display='block';
+    document.getElementById('ms-save-row').style.display='flex';
+    document.getElementById('ms-cancel-row').style.display='none';
+    document.getElementById('ms-ing').value=ingresos.toFixed(2);
+    document.getElementById('ms-cv').value=costoVentas.toFixed(2);
+    document.getElementById('ms-go').value=gastosOp.toFixed(2);
+    document.getElementById('ms-oi').value='0.00';
+    document.getElementById('ms-og').value=gastosFinancieros.toFixed(2);
+    document.getElementById('ms-afb').value=activoFijo.toFixed(2);
+    document.getElementById('ms-dac').value=Math.abs(depreciacion).toFixed(2);
+    document.getElementById('ms-pp').value='0.00';
+    msg.style.background='#EAF3DE';
+    msg.style.color='#3B6D11';
+    msg.innerHTML='✅ <strong>Cifras importadas del Módulo 4</strong> — '+doc.nombre_archivo+
+      '<br><span style="font-size:11px;color:#555">Revisa y ajusta si es necesario antes de guardar.</span>';
+  }catch(e){
+    msg.style.background='#FCEBEB';
+    msg.style.color='#A32D2D';
+    msg.innerHTML='⚠️ '+e.message;
+  }
+}
+
 
 function msPDFBox(tipo,label){
   return '<div style="background:#f5f5f3;border-radius:8px;padding:10px;margin-bottom:8px">'+
