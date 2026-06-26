@@ -6414,69 +6414,35 @@ function docRenderFinanciero(ejercicios){
 // ===== CATÁLOGO DE CUENTAS — CLASIFICACIÓN =====
 
 const DOC_RUBROS=[
-  {id:'bancos',             label:'Bancos y Caja',                   grupo:'Activo',    cifra:'bancos'},
-  {id:'cuentas_por_cobrar', label:'Clientes / Cuentas por cobrar',   grupo:'Activo',    cifra:'cuentas_por_cobrar'},
-  {id:'inventarios',        label:'Inventarios / Almacén',           grupo:'Activo',    cifra:'inventarios'},
-  {id:'anticipo_prov',      label:'Anticipos a proveedores',         grupo:'Activo',    cifra:null},
-  {id:'activo_fijo',        label:'Activo fijo (bruto)',             grupo:'Activo',    cifra:'activo_fijo_bruto'},
-  {id:'depreciacion_acum',  label:'Depreciación acumulada',          grupo:'Activo',    cifra:'depreciacion_acumulada'},
-  {id:'otros_activos',      label:'Otros activos',                   grupo:'Activo',    cifra:null},
-  {id:'proveedores',        label:'Proveedores / Cuentas por pagar', grupo:'Pasivo',    cifra:'cuentas_por_pagar'},
-  {id:'impuestos_pagar',    label:'Impuestos por pagar',             grupo:'Pasivo',    cifra:null},
-  {id:'prestamos',          label:'Préstamos bancarios',             grupo:'Pasivo',    cifra:null},
-  {id:'otros_pasivos',      label:'Otros pasivos',                   grupo:'Pasivo',    cifra:null},
-  {id:'capital',            label:'Capital contable',                grupo:'Capital',   cifra:null},
-  {id:'ingresos',           label:'Ventas / Ingresos por servicios', grupo:'Ingresos',  cifra:'ingresos'},
-  {id:'otros_ingresos',     label:'Otros ingresos',                  grupo:'Ingresos',  cifra:'otros_ingresos'},
-  {id:'costo_ventas',       label:'Costo de ventas / obra',          grupo:'Costos',    cifra:'costo_ventas'},
-  {id:'gastos_operacion',   label:'Gastos de operación',             grupo:'Gastos',    cifra:'gastos_operacion'},
-  {id:'gastos_admin',       label:'Gastos de administración',        grupo:'Gastos',    cifra:'gastos_operacion'},
-  {id:'gastos_venta',       label:'Gastos de venta',                 grupo:'Gastos',    cifra:'gastos_operacion'},
-  {id:'gastos_financieros', label:'Gastos financieros',              grupo:'Gastos',    cifra:'otros_gastos'},
-  {id:'otros_gastos',       label:'Otros gastos',                    grupo:'Gastos',    cifra:'otros_gastos'},
-  {id:'no_aplica',          label:'No incluir en extracción',        grupo:'-',         cifra:null},
+  {id:'activo',                label:'Activo',                  grupo:'Balance General'},
+  {id:'pasivo',                label:'Pasivo',                  grupo:'Balance General'},
+  {id:'capital',               label:'Capital',                 grupo:'Balance General'},
+  {id:'resultado_acreedor',    label:'Resultados Acreedoras',   grupo:'Estado de Resultados'},
+  {id:'resultado_deudor',      label:'Resultados Deudoras',     grupo:'Estado de Resultados'},
+  {id:'no_aplica',             label:'No incluir',              grupo:'-'},
 ];
 
 let docClasifCache=null; // clasificaciones cargadas del cliente actual
 
 // Auto-sugerir rubro por número y nombre de cuenta
 function docAutoRubro(num,nombre){
-  const n=nombre.toUpperCase();
-  const pre2=num.substring(0,2), pre3=num.substring(0,3), pre4=num.substring(0,4);
-  // Balance sheet
-  if(pre4==='1120'||/^BANCO|^CAJA/.test(n)) return 'bancos';
-  if(pre4==='1130'||pre3==='113'||/CLIENTE|DEUDOR/.test(n)) return 'cuentas_por_cobrar';
-  if(/INVENTARIO|MERCANCIA|ALMACEN/.test(n)||pre3==='114') return 'inventarios';
-  if(/DEPRECIA|AMORTIZA/.test(n)) return 'depreciacion_acum';
-  if(/MAQUINARIA|EQUIPO|EDIFICIO|TERRENO|VEHICULO|MOBILIARIO|ACTIVO.?FIJO/.test(n)||pre2==='12') return 'activo_fijo';
-  if(/ANTICIPO.?PROV|PAGO.?ANTICIP/.test(n)) return 'anticipo_prov';
-  if(pre2==='11') return 'otros_activos';
-  if(pre2==='1') return 'otros_activos';
-  // Pasivos
-  if(/PROVEEDOR/.test(n)||pre4==='2100') return 'proveedores';
-  if(/ACREEDOR/.test(n)||pre4==='2200') return 'proveedores';
-  if(/ISR|IVA|IMSS|INFONAVIT|IMPUESTO/.test(n)) return 'impuestos_pagar';
-  if(/PRESTAMO|CREDITO.?BANC|HIPOTECA/.test(n)) return 'prestamos';
-  if(pre2==='2') return 'otros_pasivos';
-  // Capital
-  if(pre2==='3') return 'capital';
-  // Resultados
-  if(pre2==='4'){
-    if(/FINANCIERO|INTERES|CAMBIARIO|COMISION.?BANC/.test(n)) return 'gastos_financieros';
-    if(/OTRO.?ING|PRODUCTO/.test(n)) return 'otros_ingresos';
-    return 'ingresos';
+  // Sugerir rubro contable fundamental basado en número y nombre de cuenta
+  const n=nombre.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const p=num.charAt(0);
+  // Clase 1 = Activo
+  if(p==='1') return 'activo';
+  // Clase 2 = Pasivo
+  if(p==='2') return 'pasivo';
+  // Clase 3 = Capital
+  if(p==='3') return 'capital';
+  // Clase 4 = Ingresos (Resultados Acreedoras)
+  if(p==='4'){
+    // Excepciones: algunos sistemas ponen gastos en 4xxx
+    if(/GASTO|COSTO|COMPRA/.test(n)) return 'resultado_deudor';
+    return 'resultado_acreedor';
   }
-  if(pre2==='5') return 'costo_ventas';
-  if(pre2==='6'){
-    if(/FINANCIERO|INTERES|CAMBIARIO/.test(n)) return 'gastos_financieros';
-    if(/VENTA|DISTRIBUC|COMERCIAL/.test(n)) return 'gastos_venta';
-    if(/ADMIN|DIRECCION|GERENCIA/.test(n)) return 'gastos_admin';
-    return 'gastos_operacion';
-  }
-  if(pre2==='7'){
-    if(/FINANCIERO|INTERES|CAMBIARIO/.test(n)) return 'gastos_financieros';
-    return 'otros_gastos';
-  }
+  // Clase 5, 6, 7 = Gastos/Costos (Resultados Deudoras)
+  if(p==='5'||p==='6'||p==='7') return 'resultado_deudor';
   return 'no_aplica';
 }
 
@@ -6655,9 +6621,10 @@ function docExtraerCSVConClasif(text, clasifMap){
   const header=lines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
   let iC=0,iN=1,iS=-1;
   header.forEach((h,i)=>{
-    if(/^CUENTA$|^COD|^NUMERO/.test(h)) iC=i;
-    else if(/^NOMBRE$|^DESCRIPCION|^CONCEPTO/.test(h)) iN=i;
-    else if(/SALDO.?ACTUAL$|^SALDO_ACTUAL$|SALDO.?FINAL$|SALDO.?NETO$/.test(h)) iS=i;
+    const hn=h.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
+    if(['CODIGO','CUENTA','COD','NUMERODECUENTA'].includes(hn)) iC=i;
+    if(['NOMBRE','DESCRIPCION','CONCEPTO'].includes(hn)) iN=i;
+    if(/SALDO.?ACTUAL$|^SALDO_ACTUAL$|SALDO.?FINAL$/.test(hn)) iS=i;
   });
   if(iS<0){
     let iFirst=-1;
@@ -6670,46 +6637,25 @@ function docExtraerCSVConClasif(text, clasifMap){
     if(iS<0)iS=iFirst>=0?iFirst:header.length-1;
   }
 
-  // Acumuladores por rubro → cifra
+  // Acumuladores por categoría contable
   const acum={
-    bancos:0,cuentas_por_cobrar:0,inventarios:0,activo_fijo_bruto:0,
-    depreciacion_acumulada:0,cuentas_por_pagar:0,
-    ingresos:0,otros_ingresos:0,costo_ventas:0,
-    gastos_operacion:0,otros_gastos:0
+    activo:0, pasivo:0, capital:0,
+    resultado_acreedor:0, resultado_deudor:0
   };
 
   for(let i=1;i<lines.length;i++){
     const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
     const num=(cols[iC]||'').trim();
-    if(!num)continue;
+    if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
     const saldo=parseFloat((cols[iS]||'').replace(/[$, ]/g,''))||0;
-    if(saldo===0)continue;
-
+    if(saldo===0) continue;
     // Excluir cuentas título
     const partes=num.split('-');
-    if(partes.length>2&&partes.slice(-2).filter(p=>/^0+$/.test(p)).length>=2)continue;
-
-    // Encontrar cuenta mayor (primer segmento)
-    const mayor=num.split('-')[0];
+    if(partes.length>2&&partes.slice(-2).filter(p=>/^0+$/.test(p)).length>=2) continue;
+    const mayor=num.split(/[-. ]/)[0];
     const rubro=clasifMap[mayor];
-    if(!rubro||rubro==='no_aplica')continue;
-
-    // Mapear rubro → cifra
-    const rubroDef=DOC_RUBROS.find(r=>r.id===rubro);
-    const cifra=rubroDef?.cifra;
-    if(!cifra)continue;
-
-    if(cifra==='bancos') acum.bancos+=saldo;
-    else if(cifra==='cuentas_por_cobrar') acum.cuentas_por_cobrar+=saldo;
-    else if(cifra==='inventarios') acum.inventarios+=Math.abs(saldo);
-    else if(cifra==='activo_fijo_bruto') acum.activo_fijo_bruto+=Math.abs(saldo);
-    else if(cifra==='depreciacion_acumulada') acum.depreciacion_acumulada+=Math.abs(saldo);
-    else if(cifra==='cuentas_por_pagar') acum.cuentas_por_pagar+=Math.abs(saldo);
-    else if(cifra==='ingresos') { if(saldo>0)acum.ingresos+=saldo; else acum.otros_gastos+=Math.abs(saldo); }
-    else if(cifra==='otros_ingresos') acum.otros_ingresos+=Math.abs(saldo);
-    else if(cifra==='costo_ventas') acum.costo_ventas+=Math.abs(saldo);
-    else if(cifra==='gastos_operacion') acum.gastos_operacion+=Math.abs(saldo);
-    else if(cifra==='otros_gastos') acum.otros_gastos+=Math.abs(saldo);
+    if(!rubro||rubro==='no_aplica') continue;
+    if(acum.hasOwnProperty(rubro)) acum[rubro]+=saldo;
   }
   return acum;
 }
