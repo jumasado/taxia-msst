@@ -6479,8 +6479,30 @@ const DOC_RUBROS=[
   {id:'gasto_cambiario',       cat:'resultado_deudor',  label:'Diferencia en cambio desfavorable'},
   {id:'gasto_perdida_activos', cat:'resultado_deudor',  label:'Pérdida en venta o baja de activos'},
   {id:'gasto_otros',           cat:'resultado_deudor',  label:'Otros gastos / gastos no deducibles'},
+  {id:'gasto_isr',             cat:'resultado_deudor',  label:'ISR del ejercicio (NIF D-4)'},
+  {id:'gasto_ptu',             cat:'resultado_deudor',  label:'PTU del ejercicio (NIF D-3)'},
+  {id:'gasto_regalias',        cat:'resultado_deudor',  label:'Regalías, asistencia técnica y honorarios'},
+  {id:'gasto_arrendamiento',   cat:'resultado_deudor',  label:'Arrendamiento de activos pagado'},
+  {id:'gasto_deterioro',       cat:'resultado_deudor',  label:'Pérdidas por deterioro de activos (NIF C-15)'},
   // ===== NO INCLUIR =====
   {id:'no_aplica',             cat:'no_aplica',         label:'No incluir en extracción'},
+];
+
+
+// Cédulas para Declaración Anual (PM)
+const DOC_CEDULAS=[
+  {id:'J1', label:'J1 — Conciliación contable-fiscal de ingresos'},
+  {id:'J2', label:'J2 — Costo de ventas fiscal'},
+  {id:'J3', label:'J3 — Deducción de inversiones (dep. fiscal)'},
+  {id:'J4', label:'J4 — PTU deducible del ejercicio'},
+  {id:'J5', label:'J5 — Pagos provisionales acreditables'},
+  {id:'J6', label:'J6 — ISR del ejercicio'},
+  {id:'J7', label:'J7 — Dividendos percibidos y retenidos'},
+  {id:'J8', label:'J8 — Gastos no deducibles'},
+  {id:'J9', label:'J9 — Pérdidas fiscales de ejercicios anteriores'},
+  {id:'J10',label:'J10 — Capital Contable Fiscal (CUFIN)'},
+  {id:'J11',label:'J11 — Cuenta de Capital de Aportación (CUCA)'},
+  {id:'J12',label:'J12 — Operaciones con partes relacionadas'},
 ];
 
 // Mapa de categorías principales
@@ -6658,6 +6680,11 @@ function docMostrarClasifDialog(cuentas,clasifExist){
       const opts=subs.map(r=>`<option value="${r.id}"${r.id===rubroSug?' selected':''}>${r.label}</option>`).join('');
       return `<optgroup label="${info.label}">${opts}</optgroup>`;
     }).join('');
+    const cedsExist=(clasifExist[c.cuenta_mayor+'_cedulas']||'').split(',').filter(Boolean);
+    const cedCheckboxes=DOC_CEDULAS.map(cd=>{
+      const chk=cedsExist.includes(cd.id)?'checked':'';
+      return '<label style="font-size:9px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:2px;background:#f5f5f5;padding:1px 5px;border-radius:3px;border:1px solid #e0e0e0;margin:1px"><input type="checkbox" name="ced-'+escD(c.cuenta_mayor)+'" value="'+cd.id+'" '+chk+' style="width:10px;height:10px">'+cd.id+'</label>';
+    }).join('');
     return `<tr style="background:${colorFila};border-bottom:1px solid #f0f0ec">
       <td style="padding:6px 10px;font-size:12px;font-weight:700;color:#3B4BC8;white-space:nowrap">${escD(c.cuenta_mayor)}</td>
       <td style="padding:6px 10px;font-size:12px">${escD(c.nombre_mayor||'')}</td>
@@ -6666,10 +6693,14 @@ function docMostrarClasifDialog(cuentas,clasifExist){
           ${selOpts}
         </select>
       </td>
+      <td style="padding:4px 8px;min-width:180px">
+        <div style="display:flex;flex-wrap:wrap;gap:2px">${cedCheckboxes}</div>
+      </td>
     </tr>`;
   }).join('');
 
   const sinClasif=cuentas.filter(c=>!clasifExist[c.cuenta_mayor]).length;
+  window._clasifCuentas=cuentas; // guardar referencia global para docGuardarClasif
   const m=document.createElement('div');m.className='modal-overlay';m.id='doc-clasif-modal';
   m.innerHTML=`<div class="modal-box" style="max-width:780px;max-height:92vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
@@ -6679,7 +6710,7 @@ function docMostrarClasifDialog(cuentas,clasifExist){
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-sm" onclick="docClasifTodas()">⚡ Aplicar sugerencias a todas</button>
-        <button class="btn btn-sm btn-primary" onclick="docGuardarClasif(${JSON.stringify(cuentas)})">💾 Guardar clasificación</button>
+        <button class="btn btn-sm btn-primary" onclick="docGuardarClasif()">💾 Guardar clasificación</button>
         <button class="btn btn-sm" onclick="document.getElementById('doc-clasif-modal').remove()">✕</button>
       </div>
     </div>
@@ -6695,7 +6726,8 @@ function docMostrarClasifDialog(cuentas,clasifExist){
         <thead><tr style="background:#3B4BC8;color:#fff">
           <th style="padding:8px 10px;font-size:11px;text-align:left">No. Cuenta</th>
           <th style="padding:8px 10px;font-size:11px;text-align:left">Nombre de la cuenta</th>
-          <th style="padding:8px 10px;font-size:11px;text-align:left">Rubro</th>
+          <th style="padding:8px 10px;font-size:11px;text-align:left">Rubro contable (NIF)</th>
+          <th style="padding:8px 10px;font-size:11px;text-align:left">Cédulas Declaración Anual</th>
         </tr></thead>
         <tbody id="clasif-tbody">${rows}</tbody>
       </table>
@@ -6718,16 +6750,21 @@ function docClasifTodas(){
   docToast('Sugerencias confirmadas','ok');
 }
 
-async function docGuardarClasif(cuentas){
+async function docGuardarClasif(){
+  const cuentas=window._clasifCuentas||[];
   docToast('Guardando clasificación...','warn');
   const clienteId=String(docClienteActual.id);
   const nombre=docClienteActual.nombre;
   const rows=cuentas.map(c=>{
     const el=document.getElementById('clasif-'+c.cuenta_mayor);
     const rubro=el?el.value:'no_aplica';
+    // Leer cédulas seleccionadas (checkboxes)
+    const ceds=[];
+    document.querySelectorAll('input[name="ced-'+c.cuenta_mayor+'"]:checked').forEach(cb=>ceds.push(cb.value));
+    const cedulas=ceds.join(',');
     return {cliente_id:clienteId,cliente_nombre:nombre,
       cuenta_mayor:c.cuenta_mayor,nombre_mayor:c.nombre_mayor||'',
-      rubro,updated_at:nowISO()};
+      rubro,cedulas,updated_at:nowISO()};
   });
   try{
     // Upsert — insertar o actualizar por cliente_id + cuenta_mayor
@@ -6757,7 +6794,10 @@ async function docCargarClasif(){
     const rows=await sbGet('catalogo_clasificacion',
       '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=cuenta_mayor,rubro');
     docClasifCache={};
-    (rows||[]).forEach(r=>{docClasifCache[r.cuenta_mayor]=r.rubro;});
+    (rows||[]).forEach(r=>{
+      docClasifCache[r.cuenta_mayor]=r.rubro;
+      if(r.cedulas)docClasifCache[r.cuenta_mayor+'_cedulas']=r.cedulas;
+    });
   }catch(e){docClasifCache={};}
 }
 
