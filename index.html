@@ -6265,6 +6265,7 @@ const DOC_TIPOS_FIN=[
   {id:'er_anual',label:'Estado de Resultados Anual',icon:'📊',extractable:true},
   {id:'balance_general',label:'Balance General al 31-Dic',icon:'⚖️',extractable:true},
   {id:'catalogo_cuentas',label:'Catálogo de Cuentas',icon:'📑',extractable:false},
+  {id:'activos_fijos_integ',label:'Integración de Activos Fijos',icon:'🏭',extractable:false,special:'activos_fijos'},
   {id:'declaracion_anual',label:'Declaración Anual Presentada',icon:'🏛️',extractable:false},
   {id:'declaracion_pp',label:'Comprobantes PP (todos los meses)',icon:'💳',extractable:false},
   {id:'aux_ingresos',label:'Auxiliar de Ingresos',icon:'💹',extractable:true},
@@ -6385,13 +6386,21 @@ function docSetTab(tab){
   docTab=tab;
   const ejercicios=[...new Set(docCacheFin.map(d=>d.ejercicio).filter(Boolean))].sort((a,b)=>b-a);
   if(!ejercicios.includes(docEjercicio))ejercicios.unshift(docEjercicio);
-  // Cargar clasificaciones si entramos a la pestaña financiero
-  if(tab==='financiero'&&!docClasifCache){
-    docCargarClasif().then(()=>{
-      const el=document.getElementById('doc-tab-content');
-      if(el)el.innerHTML=docTabContent(ejercicios);
-    });
-    return;
+  // Cargar clasificaciones y activos si entramos a la pestaña financiero
+  if(tab==='financiero'){
+    const clienteId=String(docClienteActual?.id||'');
+    const promises=[];
+    if(!docClasifCache) promises.push(docCargarClasif());
+    if(clienteId&&(!window._afCount||window._afCount[clienteId]===undefined)){
+      promises.push(afCargar(clienteId).then(()=>afDetectarAdiciones(clienteId,docEjercicio)));
+    }
+    if(promises.length){
+      Promise.all(promises).then(()=>{
+        const el=document.getElementById('doc-tab-content');
+        if(el)el.innerHTML=docTabContent(ejercicios);
+      });
+      return;
+    }
   }
   const el=document.getElementById('doc-tab-content');
   if(el)el.innerHTML=docTabContent(ejercicios);
@@ -6470,6 +6479,22 @@ function docRenderFinanciero(ejercicios){
   }).join('');
 
   const otros=DOC_TIPOS_FIN.map(function(t){
+    // Tipo especial: Integración de Activos Fijos
+    if(t.special==='activos_fijos'){
+      const alerta=(window._afAlerta||{})[String(docClienteActual?.id)];
+      const numAf=(window._afCount||{})[String(docClienteActual?.id)]||0;
+      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f0ec;background:'+(alerta?'#FFFBF0':'#fff')+'">'+
+        '<div style="font-size:18px;width:24px;text-align:center;flex-shrink:0">🏭</div>'+
+        '<div style="flex:1"><div style="font-size:13px;font-weight:600">Integración de Activos Fijos</div>'+
+          '<div style="font-size:11px;color:#888">'+numAf+' activo'+(numAf!==1?'s':'')+' registrado'+(numAf!==1?'s':'')+(numAf>0?' · Base J11':'')+
+          (alerta?'</div><div style="margin-top:3px"><span style="background:#e0b44a;color:#fff;border-radius:4px;padding:2px 8px;font-size:10px;font-weight:700">⚠ '+alerta+' adición'+(alerta>1?'es':'')+' detectada'+(alerta>1?'s':'')+' en balanza — actualiza la integración</span>':'')+'</div>'+
+        '</div>'+
+        '<div style="display:flex;gap:5px;flex-shrink:0">'+
+          '<button class="btn btn-sm" style="font-size:11px;background:#EAF3DE;color:#3B6D11;border-color:#b7d9a0" onclick="afGestion()">📋 Ver / Editar</button>'+
+          '<button class="btn btn-sm" style="font-size:11px;background:#E6F1FB;color:#3B4BC8;border-color:#c5d0ff" onclick="afAgregarActivo()">✚ Agregar activo</button>'+
+        '</div>'+
+      '</div>';
+    }
     const d=finEj.find(function(x){return x.tipo===t.id;})||null, ok=!!d;
     const hasCifras=!!(d&&d.cifras&&Object.keys(d.cifras).length);
     let html='<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f0ec">';
@@ -6508,6 +6533,258 @@ function docRenderFinanciero(ejercicios){
     +'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">'+grid+'</div></div>'
     +'<div class="card"><div class="sec-label">Otros documentos financieros — '+docEjercicio+'</div>'+otros+'</div>';
 }
+
+// ===================================================
+// MÓDULO 4 — INTEGRACIÓN DE ACTIVOS FIJOS (J11)
+// ===================================================
+
+// Clasificaciones fiscales disponibles (LISR Art. 33-35)
+const AF_CLASIF = [
+  {id:'af_5',   label:'5%  — Edificios y construcciones (Art.34-I)'},
+  {id:'af_8',   label:'8%  — Equipo de comunicación satelital (Art.34-II)'},
+  {id:'af_10',  label:'10% — Mobiliario y equipo de oficina (Art.34-III)'},
+  {id:'af_12',  label:'12% — Equipo de comunicaciones telefónicas (Art.34-IV)'},
+  {id:'af_25',  label:'25% — Automóviles y camiones (Art.34-VI) ⚠ Límite $175,000'},
+  {id:'af_30',  label:'30% — Equipo de cómputo y software (Art.34-VII)'},
+  {id:'af_35',  label:'35% — Troqueles, moldes y herramental (Art.34-VIII)'},
+  {id:'af_100', label:'100% — Activos biológicos/semovientes (Art.34-IX)'},
+  {id:'af_v',   label:'Variable — Maquinaria industrial (Art.35)'},
+  {id:'af_0',   label:'0%  — Terrenos (no depreciables)'},
+];
+
+const AF_PORCENTAJES = {
+  af_5:5, af_8:8, af_10:10, af_12:12, af_25:25,
+  af_30:30, af_35:35, af_100:100, af_v:0, af_0:0
+};
+
+let afCache = null; // cache de activos del cliente actual
+
+async function afCargar(clienteId){
+  try{
+    const rows = await sbGet('activos_fijos',
+      '?cliente_id=eq.'+encodeURIComponent(String(clienteId))+'&order=fecha_adquisicion.asc&select=*');
+    afCache = rows||[];
+    if(!window._afCount) window._afCount={};
+    window._afCount[String(clienteId)] = afCache.filter(a=>a.en_uso!==false).length;
+    return afCache;
+  }catch(e){ afCache=[]; return []; }
+}
+
+// Detectar adiciones de activos en balanzas del ejercicio actual
+async function afDetectarAdiciones(clienteId, ejercicio){
+  if(!window._afAlerta) window._afAlerta={};
+  try{
+    // Buscar balanzas del ejercicio con cifras
+    const docs = await sbGet('client_documents',
+      '?cliente_id=eq.'+encodeURIComponent(String(clienteId))+
+      '&ejercicio=eq.'+ejercicio+'&tipo=eq.balanza&select=cifras,mes');
+    let totalAdiciones=0;
+    (docs||[]).forEach(d=>{
+      const det=(d.cifras&&d.cifras.detalle)||{};
+      // Sumar cargos en cuentas activo_fijo (detalle guardado como movimiento del período)
+      Object.entries(det).forEach(([k,v])=>{
+        if(k.startsWith('activo_fijo')&&v>0) totalAdiciones++;
+      });
+    });
+    window._afAlerta[String(clienteId)] = totalAdiciones>0?totalAdiciones:null;
+  }catch(e){ window._afAlerta[String(clienteId)]=null; }
+}
+
+// Abrir gestión completa de activos fijos
+async function afGestion(){
+  if(!docClienteActual) return;
+  docToast('Cargando activos fijos...','warn');
+  await afCargar(String(docClienteActual.id));
+  const af = afCache||[];
+  const fmtM = v=>new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:2}).format(v||0);
+  const fmtF = v=>v?new Date(v+'T00:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}):'—';
+
+  const filas = af.map((a,i)=>{
+    const pct = parseFloat(a.porcentaje_depreciacion)||0;
+    const meses = a.fecha_adquisicion
+      ? Math.max(0,Math.floor((new Date()-new Date(a.fecha_adquisicion+'T00:00:00'))/(1000*60*60*24*30.44)))
+      : 0;
+    const deprAnual = a.monto_adquisicion * pct/100;
+    const deprAcum  = Math.min(a.monto_adquisicion, deprAnual * meses/12);
+    const valorNeto = Math.max(0, a.monto_adquisicion - deprAcum);
+    return '<tr style="border-bottom:1px solid #f0f0ec;background:'+(a.en_uso===false?'#fafafa':'#fff')+'">'+
+      '<td style="padding:6px 10px;font-size:12px;color:'+(a.en_uso===false?'#aaa':'#1a1a1a')+'">'+escD(a.nombre)+'</td>'+
+      '<td style="padding:6px 10px;font-size:11px;color:#555">'+pct+'%</td>'+
+      '<td style="padding:6px 10px;font-size:12px;text-align:right">'+fmtM(a.monto_adquisicion)+'</td>'+
+      '<td style="padding:6px 10px;font-size:11px;color:#888">'+fmtF(a.fecha_adquisicion)+'</td>'+
+      '<td style="padding:6px 10px;font-size:12px;text-align:right;color:#A32D2D">'+fmtM(deprAcum)+'</td>'+
+      '<td style="padding:6px 10px;font-size:12px;text-align:right;color:#185FA5;font-weight:600">'+fmtM(valorNeto)+'</td>'+
+      '<td style="padding:6px 10px;text-align:center">'+
+        '<button class="btn btn-sm" style="font-size:10px" onclick="afEditarActivo(\''+a.id+'\')">✏</button>'+
+        '<button class="btn btn-sm" style="font-size:10px;background:#fef2f2;color:#dc2626;margin-left:3px" onclick="afEliminarActivo(\''+a.id+'\',\''+escD(a.nombre)+'\')">✕</button>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
+
+  const totalCosto  = af.reduce((s,a)=>s+(a.monto_adquisicion||0),0);
+  const totalDeprAcum = af.reduce((a,x)=>{
+    const p=parseFloat(x.porcentaje_depreciacion)||0;
+    const ms=x.fecha_adquisicion?Math.max(0,Math.floor((new Date()-new Date(x.fecha_adquisicion+'T00:00:00'))/(1000*60*60*24*30.44))):0;
+    return a+Math.min(x.monto_adquisicion,x.monto_adquisicion*p/100*ms/12);
+  },0);
+
+  const m=document.createElement('div');m.className='modal-overlay';m.id='af-modal-gest';
+  m.innerHTML='<div class="modal-box" style="max-width:900px;max-height:90vh">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
+      '<div><div style="font-size:16px;font-weight:700">🏭 Integración de Activos Fijos — '+escD(docClienteActual.nombre)+'</div>'+
+      '<div style="font-size:11px;color:#888">Base para cédula J11 — Depreciaciones contables/fiscales</div></div>'+
+      '<button onclick="document.getElementById(\'af-modal-gest\').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button>'+
+    '</div>'+
+    // Resumen
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">'+
+      '<div style="background:#E6F1FB;border-radius:8px;padding:10px 14px;text-align:center">'+
+        '<div style="font-size:11px;color:#888">Total activos</div><div style="font-size:20px;font-weight:700;color:#185FA5">'+af.length+'</div></div>'+
+      '<div style="background:#FCEBEB;border-radius:8px;padding:10px 14px;text-align:center">'+
+        '<div style="font-size:11px;color:#888">Costo de adquisición</div><div style="font-size:16px;font-weight:700;color:#A32D2D">'+fmtM(totalCosto)+'</div></div>'+
+      '<div style="background:#EAF3DE;border-radius:8px;padding:10px 14px;text-align:center">'+
+        '<div style="font-size:11px;color:#888">Valor neto estimado</div><div style="font-size:16px;font-weight:700;color:#3B6D11">'+fmtM(totalCosto-totalDeprAcum)+'</div></div>'+
+    '</div>'+
+    '<button class="btn btn-primary" style="margin-bottom:12px;font-size:13px" onclick="afAgregarActivo()">✚ Agregar activo</button>'+
+    (af.length?
+      '<div style="overflow-y:auto;max-height:400px"><table style="width:100%;border-collapse:collapse">'+
+      '<thead><tr style="background:#3B4BC8;color:#fff">'+
+        '<th style="padding:7px 10px;font-size:11px;text-align:left">Nombre del activo</th>'+
+        '<th style="padding:7px 10px;font-size:11px;text-align:left">% Depr.</th>'+
+        '<th style="padding:7px 10px;font-size:11px;text-align:right">Monto adquisición</th>'+
+        '<th style="padding:7px 10px;font-size:11px;text-align:left">Fecha adquisición</th>'+
+        '<th style="padding:7px 10px;font-size:11px;text-align:right">Depr. acumulada</th>'+
+        '<th style="padding:7px 10px;font-size:11px;text-align:right">Valor neto</th>'+
+        '<th style="padding:7px 10px;font-size:11px;text-align:center">Acc.</th>'+
+      '</tr></thead><tbody>'+filas+'</tbody></table></div>'
+      :'<div style="text-align:center;padding:40px;color:#888">Sin activos registrados.<br>Agrega los activos históricos de la empresa.</div>')+
+  '</div>';
+  document.body.appendChild(m);
+}
+
+// Abrir modal para agregar o editar un activo
+function afAgregarActivo(activo){
+  const edicion = !!activo;
+  const opts = AF_CLASIF.map(c=>'<option value="'+c.id+'"'+(activo&&activo.clasificacion_fiscal===c.id?' selected':'')+'>'+c.label+'</option>').join('');
+  const m=document.createElement('div');m.className='modal-overlay';m.id='af-modal-form';
+  m.innerHTML='<div class="modal-box" style="max-width:520px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
+      '<div style="font-size:15px;font-weight:700">'+(edicion?'✏ Editar':'✚ Agregar')+' activo fijo</div>'+
+      '<button onclick="document.getElementById(\'af-modal-form\').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button>'+
+    '</div>'+
+    '<div style="display:grid;gap:12px">'+
+      '<div>'+
+        '<div style="font-size:11px;font-weight:600;color:#555;margin-bottom:4px">Nombre del activo *</div>'+
+        '<input id="af-nombre" type="text" placeholder="Ej: Camioneta Ford F-150 2023" style="width:100%;padding:10px;border:1.5px solid #e0e0db;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+escD(activo?.nombre||'')+'">'+
+      '</div>'+
+      '<div>'+
+        '<div style="font-size:11px;font-weight:600;color:#555;margin-bottom:4px">Clasificación fiscal de depreciación *</div>'+
+        '<select id="af-clasif" style="width:100%;padding:10px;border:1.5px solid #e0e0db;border-radius:8px;font-size:13px;box-sizing:border-box" onchange="afActualizarPct()">'+
+          '<option value="">— Selecciona —</option>'+opts+
+        '</select>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+        '<div>'+
+          '<div style="font-size:11px;font-weight:600;color:#555;margin-bottom:4px">% Depreciación anual</div>'+
+          '<input id="af-pct" type="number" min="0" max="100" step="0.01" style="width:100%;padding:10px;border:1.5px solid #e0e0db;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(activo?.porcentaje_depreciacion||'')+'">'+
+        '</div>'+
+        '<div>'+
+          '<div style="font-size:11px;font-weight:600;color:#555;margin-bottom:4px">Monto de adquisición *</div>'+
+          '<input id="af-monto" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%;padding:10px;border:1.5px solid #e0e0db;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(activo?.monto_adquisicion||'')+'">'+
+        '</div>'+
+      '</div>'+
+      '<div>'+
+        '<div style="font-size:11px;font-weight:600;color:#555;margin-bottom:4px">Fecha de adquisición *</div>'+
+        '<input id="af-fecha" type="date" style="width:100%;padding:10px;border:1.5px solid #e0e0db;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+(activo?.fecha_adquisicion||'')+'">'+
+      '</div>'+
+      '<div>'+
+        '<div style="font-size:11px;font-weight:600;color:#555;margin-bottom:4px">Descripción / Serie / No. de identificación</div>'+
+        '<input id="af-desc" type="text" placeholder="Opcional" style="width:100%;padding:10px;border:1.5px solid #e0e0db;border-radius:8px;font-size:14px;box-sizing:border-box" value="'+escD(activo?.descripcion||'')+'">'+
+      '</div>'+
+      '<div id="af-err" style="display:none;background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:10px;font-size:12px"></div>'+
+      '<div style="display:flex;gap:8px">'+
+        '<button class="btn btn-full" style="flex:1;margin-top:0" onclick="document.getElementById(\'af-modal-form\').remove()">Cancelar</button>'+
+        '<button class="btn btn-primary btn-full" style="flex:1;margin-top:0" onclick="afGuardarActivo(\''+escD(activo?.id||'')+'\')" id="af-btn-save">'+( edicion?'Guardar cambios':'Agregar activo')+'</button>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(m);
+  if(activo?.id) document.getElementById('af-btn-save').setAttribute('data-id', activo.id);
+}
+
+function afActualizarPct(){
+  const sel = document.getElementById('af-clasif')?.value;
+  if(sel && AF_PORCENTAJES.hasOwnProperty(sel)){
+    document.getElementById('af-pct').value = AF_PORCENTAJES[sel];
+  }
+}
+
+async function afGuardarActivo(existingId){
+  const nombre = (document.getElementById('af-nombre')?.value||'').trim();
+  const clasif = document.getElementById('af-clasif')?.value||'';
+  const pct    = parseFloat(document.getElementById('af-pct')?.value)||0;
+  const monto  = parseFloat(document.getElementById('af-monto')?.value)||0;
+  const fecha  = document.getElementById('af-fecha')?.value||'';
+  const desc   = (document.getElementById('af-desc')?.value||'').trim();
+  const err    = document.getElementById('af-err');
+  if(!nombre||!clasif||!monto||!fecha){
+    err.textContent='Completa los campos obligatorios (*)'; err.style.display='block'; return;
+  }
+  err.style.display='none';
+  const btn=document.getElementById('af-btn-save');
+  btn.innerHTML='<span class="spinner"></span> Guardando...'; btn.disabled=true;
+  try{
+    const payload={
+      cliente_id:String(docClienteActual.id),
+      nombre, clasificacion_fiscal:clasif,
+      porcentaje_depreciacion:pct, monto_adquisicion:monto,
+      fecha_adquisicion:fecha, descripcion:desc, en_uso:true,
+      updated_at:nowISO()
+    };
+    if(existingId){
+      await sbPatch('activos_fijos','?id=eq.'+encodeURIComponent(existingId),payload);
+    } else {
+      await fetch(SB_URL+'/rest/v1/activos_fijos',{
+        method:'POST',
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify(payload)
+      });
+    }
+    document.getElementById('af-modal-form')?.remove();
+    document.getElementById('af-modal-gest')?.remove();
+    // Limpiar alerta si aplica
+    if(window._afAlerta) window._afAlerta[String(docClienteActual.id)]=null;
+    await afCargar(String(docClienteActual.id));
+    docSetTab('financiero');
+    docToast((existingId?'Activo actualizado':'Activo agregado'),'ok');
+    await afGestion();
+  }catch(e){
+    err.textContent='Error: '+e.message; err.style.display='block';
+    btn.innerHTML=existingId?'Guardar cambios':'Agregar activo'; btn.disabled=false;
+  }
+}
+
+async function afEditarActivo(id){
+  const a=(afCache||[]).find(x=>x.id===id);
+  if(!a){docToast('Activo no encontrado','err');return;}
+  document.getElementById('af-modal-gest')?.remove();
+  afAgregarActivo(a);
+}
+
+async function afEliminarActivo(id, nombre){
+  if(!confirm('¿Eliminar el activo "'+nombre+'"?')) return;
+  try{
+    await fetch(SB_URL+'/rest/v1/activos_fijos?id=eq.'+encodeURIComponent(id),{
+      method:'DELETE', headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    afCache=(afCache||[]).filter(a=>a.id!==id);
+    if(window._afCount) window._afCount[String(docClienteActual.id)]=(afCache||[]).length;
+    document.getElementById('af-modal-gest')?.remove();
+    docSetTab('financiero');
+    docToast('Activo eliminado','ok');
+    await afGestion();
+  }catch(e){ docToast('Error: '+e.message,'err'); }
+}
+
 
 // ===== CATÁLOGO DE CUENTAS — CLASIFICACIÓN =====
 
