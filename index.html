@@ -6918,9 +6918,11 @@ async function docSubirBalanza(mes,ejercicio,input){
       const text=await file.text();
       // Usar clasificación guardada si existe, si no usar parser genérico
       if(!docClasifCache) await docCargarClasif();
-      if(docClasifCache&&Object.keys(docClasifCache).length>0){
+      const tieneClasif=docClasifCache&&Object.keys(docClasifCache).filter(k=>!k.endsWith('_cedulas')).length>0;
+      if(tieneClasif){
         cifras=docExtraerCSVConClasif(text,docClasifCache);
       } else {
+        docToast('⚠ Clasificando sin catálogo — clasifica el catálogo de cuentas primero para mejor exactitud','warn');
         cifras=docExtraerCSV(text);
       }
     }
@@ -6994,14 +6996,40 @@ async function docExtraerCifras(docId,tipo,ejercicio,mes){
   if(!d){docToast('Documento no encontrado','err');return;}
   docToast('Extrayendo cifras con IA...','warn');
   try{
+    // Cargar clasificación del catálogo si no está en cache
+    if(!docClasifCache) await docCargarClasif();
+    const tieneClasif=docClasifCache&&Object.keys(docClasifCache).filter(k=>!k.endsWith('_cedulas')).length>0;
     const AK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
     const r=await fetch(d.archivo_url,{headers:{'Authorization':'Bearer '+AK,'apikey':AK}});
     if(!r.ok)throw new Error('No se pudo leer el archivo');
     const blob=await r.blob();
     const b64=await new Promise((res,rej)=>{const fr=new FileReader();fr.onloadend=()=>res(fr.result.split(',')[1]);fr.onerror=rej;fr.readAsDataURL(blob);});
     const mesLbl=mes?DOC_MESES_L[mes-1]+' '+ejercicio:'ejercicio '+ejercicio;
+
+    // Construir mapa de clasificación para incluir en el prompt
+    let clasifTexto='';
+    if(tieneClasif&&tipo==='balanza'){
+      const catMap={};DOC_RUBROS.forEach(r=>{catMap[r.id]=r.cat;});
+      const grupos={activo:[],pasivo:[],capital:[],resultado_acreedor:[],resultado_deudor:[]};
+      Object.entries(docClasifCache).forEach(([cta,subId])=>{
+        if(cta.endsWith('_cedulas'))return;
+        const cat=catMap[subId];
+        if(cat&&grupos[cat])grupos[cat].push(cta);
+      });
+      clasifTexto='CLASIFICACION DEL CATALOGO: '+
+        'ACTIVO cuentas '+grupos.activo.join(',')+
+        ' | PASIVO cuentas '+grupos.pasivo.join(',')+
+        ' | CAPITAL cuentas '+grupos.capital.join(',')+
+        ' | INGRESOS(acreedoras) cuentas '+grupos.resultado_acreedor.join(',')+
+        ' | GASTOS/COSTOS(deudoras) cuentas '+grupos.resultado_deudor.join(',');
+    }
+
+    const jsonCampos='{"activo":0,"pasivo":0,"capital":0,"resultado_acreedor":0,"resultado_deudor":0,'+
+       '"bancos":0,"clientes":0,"inventarios":0,"activo_fijo":0,"depreciacion_acumulada":0,'+
+       '"proveedores":0,"isr_pagar":0,"iva_pagar":0,'+
+       '"ingresos":0,"costo_ventas":0,"gastos_operacion":0,"gastos_financieros":0}';
     const prompt=tipo==='balanza'
-      ?'Eres contador experto. De esta balanza de comprobación al '+mesLbl+' extrae cifras clave en MXN. Solo JSON sin markdown: {"ingresos":0,"costo_ventas":0,"gastos_operacion":0,"otros_ingresos":0,"otros_gastos":0,"activo_fijo_bruto":0,"depreciacion_acumulada":0,"cuentas_por_cobrar":0,"bancos":0,"inventarios":0,"cuentas_por_pagar":0}'
+      ?'Eres socio de firma Big 4 especialista en contabilidad mexicana. De esta balanza de comprobacion al '+mesLbl+' extrae los saldos sumando por categoria NIF. '+clasifTexto+' Respuesta SOLO JSON sin markdown: '+jsonCampos
       :tipo==='er_anual'
       ?'Eres contador experto. De este Estado de Resultados extrae cifras en MXN. Solo JSON sin markdown: {"ingresos":0,"costo_ventas":0,"utilidad_bruta":0,"gastos_operacion":0,"utilidad_operacion":0,"productos_financieros":0,"gastos_financieros":0,"utilidad_antes_isr":0,"isr_contable":0,"utilidad_neta":0}'
       :tipo==='nomina'
