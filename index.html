@@ -6414,35 +6414,134 @@ function docRenderFinanciero(ejercicios){
 // ===== CATÁLOGO DE CUENTAS — CLASIFICACIÓN =====
 
 const DOC_RUBROS=[
-  {id:'activo',                label:'Activo',                  grupo:'Balance General'},
-  {id:'pasivo',                label:'Pasivo',                  grupo:'Balance General'},
-  {id:'capital',               label:'Capital',                 grupo:'Balance General'},
-  {id:'resultado_acreedor',    label:'Resultados Acreedoras',   grupo:'Estado de Resultados'},
-  {id:'resultado_deudor',      label:'Resultados Deudoras',     grupo:'Estado de Resultados'},
-  {id:'no_aplica',             label:'No incluir',              grupo:'-'},
+  // ===== ACTIVO (NIF C-1 a C-15, NIF A-5) =====
+  {id:'activo_caja',           cat:'activo',            label:'Caja y bancos'},
+  {id:'activo_clientes',       cat:'activo',            label:'Clientes y documentos por cobrar'},
+  {id:'activo_inventarios',    cat:'activo',            label:'Inventarios y almacén'},
+  {id:'activo_anticipos_prov', cat:'activo',            label:'Anticipos a proveedores'},
+  {id:'activo_iva',            cat:'activo',            label:'IVA acreditable / Impuestos a favor'},
+  {id:'activo_pagos_prov',     cat:'activo',            label:'Pagos provisionales ISR'},
+  {id:'activo_otros_circ',     cat:'activo',            label:'Otros activos circulantes'},
+  {id:'activo_fijo',           cat:'activo',            label:'Inmuebles, maquinaria y equipo'},
+  {id:'activo_depreciacion',   cat:'activo',            label:'Depreciación acumulada'},
+  {id:'activo_intangible',     cat:'activo',            label:'Activos intangibles y diferidos'},
+  // ===== PASIVO (NIF C-18, C-19, D-1) =====
+  {id:'pasivo_proveedores',    cat:'pasivo',            label:'Proveedores'},
+  {id:'pasivo_anticipo_cli',   cat:'pasivo',            label:'Anticipos de clientes'},
+  {id:'pasivo_acreedores',     cat:'pasivo',            label:'Acreedores diversos'},
+  {id:'pasivo_iva',            cat:'pasivo',            label:'IVA trasladado por pagar'},
+  {id:'pasivo_isr',            cat:'pasivo',            label:'ISR por pagar'},
+  {id:'pasivo_imss',           cat:'pasivo',            label:'IMSS e INFONAVIT por pagar'},
+  {id:'pasivo_ptu',            cat:'pasivo',            label:'PTU por pagar'},
+  {id:'pasivo_cp',             cat:'pasivo',            label:'Préstamos bancarios corto plazo'},
+  {id:'pasivo_lp',             cat:'pasivo',            label:'Préstamos bancarios largo plazo'},
+  {id:'pasivo_otros',          cat:'pasivo',            label:'Otros pasivos'},
+  // ===== CAPITAL (NIF C-11) =====
+  {id:'capital_social',        cat:'capital',           label:'Capital social'},
+  {id:'capital_reserva',       cat:'capital',           label:'Reserva legal'},
+  {id:'capital_utilidades',    cat:'capital',           label:'Utilidades retenidas de ejercicios anteriores'},
+  {id:'capital_perdidas',      cat:'capital',           label:'Pérdidas acumuladas de ejercicios anteriores'},
+  {id:'capital_resultado',     cat:'capital',           label:'Resultado del ejercicio'},
+  {id:'capital_actualizacion', cat:'capital',           label:'Actualización del capital'},
+  {id:'capital_prima',         cat:'capital',           label:'Prima en venta de acciones'},
+  {id:'capital_aportaciones',  cat:'capital',           label:'Aportaciones para futuros aumentos'},
+  {id:'capital_superavit',     cat:'capital',           label:'Superávit por revaluación de activos'},
+  {id:'capital_otros',         cat:'capital',           label:'Otros componentes del capital contable'},
+  // ===== RESULTADOS ACREEDORAS — Ingresos (NIF B-3, D-1) =====
+  {id:'ing_ventas',            cat:'resultado_acreedor',label:'Ventas / Ingresos por servicios'},
+  {id:'ing_descuentos',        cat:'resultado_acreedor',label:'Devoluciones y descuentos sobre ventas'},
+  {id:'ing_arrendamiento',     cat:'resultado_acreedor',label:'Ingresos por arrendamiento'},
+  {id:'ing_comisiones',        cat:'resultado_acreedor',label:'Comisiones ganadas'},
+  {id:'ing_intereses',         cat:'resultado_acreedor',label:'Intereses y rendimientos ganados'},
+  {id:'ing_venta_activos',     cat:'resultado_acreedor',label:'Utilidad en venta de activos'},
+  {id:'ing_dividendos',        cat:'resultado_acreedor',label:'Dividendos recibidos'},
+  {id:'ing_cambiario',         cat:'resultado_acreedor',label:'Diferencia en cambio favorable'},
+  {id:'ing_otros',             cat:'resultado_acreedor',label:'Otros ingresos'},
+  {id:'ing_extraordinarios',   cat:'resultado_acreedor',label:'Ingresos extraordinarios / no recurrentes'},
+  // ===== RESULTADOS DEUDORAS — Gastos/Costos (NIF B-3, C-6) =====
+  {id:'gasto_costo',           cat:'resultado_deudor',  label:'Costo de ventas / Costo de lo vendido'},
+  {id:'gasto_venta',           cat:'resultado_deudor',  label:'Gastos de venta y comercialización'},
+  {id:'gasto_admin',           cat:'resultado_deudor',  label:'Gastos de administración'},
+  {id:'gasto_financiero',      cat:'resultado_deudor',  label:'Gastos financieros e intereses pagados'},
+  {id:'gasto_depreciacion',    cat:'resultado_deudor',  label:'Depreciación y amortización del período'},
+  {id:'gasto_nomina',          cat:'resultado_deudor',  label:'Sueldos, salarios y prestaciones laborales'},
+  {id:'gasto_imss',            cat:'resultado_deudor',  label:'Cuotas IMSS e INFONAVIT patronal'},
+  {id:'gasto_cambiario',       cat:'resultado_deudor',  label:'Diferencia en cambio desfavorable'},
+  {id:'gasto_perdida_activos', cat:'resultado_deudor',  label:'Pérdida en venta o baja de activos'},
+  {id:'gasto_otros',           cat:'resultado_deudor',  label:'Otros gastos / gastos no deducibles'},
+  // ===== NO INCLUIR =====
+  {id:'no_aplica',             cat:'no_aplica',         label:'No incluir en extracción'},
 ];
+
+// Mapa de categorías principales
+const DOC_CATS={
+  activo:           {label:'Activo',                color:'#185FA5', bg:'#E6F1FB'},
+  pasivo:           {label:'Pasivo',                color:'#A32D2D', bg:'#FCEBEB'},
+  capital:          {label:'Capital',               color:'#3B6D11', bg:'#EAF3DE'},
+  resultado_acreedor:{label:'Resultados Acreedoras',color:'#3C3489', bg:'#EEEDFE'},
+  resultado_deudor: {label:'Resultados Deudoras',   color:'#854F0B', bg:'#FAEEDA'},
+  no_aplica:        {label:'No incluir',            color:'#888',    bg:'#f5f5f3'},
+};
 
 let docClasifCache=null; // clasificaciones cargadas del cliente actual
 
 // Auto-sugerir rubro por número y nombre de cuenta
 function docAutoRubro(num,nombre){
-  // Sugerir rubro contable fundamental basado en número y nombre de cuenta
   const n=nombre.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const p=num.charAt(0);
-  // Clase 1 = Activo
-  if(p==='1') return 'activo';
-  // Clase 2 = Pasivo
-  if(p==='2') return 'pasivo';
-  // Clase 3 = Capital
-  if(p==='3') return 'capital';
-  // Clase 4 = Ingresos (Resultados Acreedoras)
-  if(p==='4'){
-    // Excepciones: algunos sistemas ponen gastos en 4xxx
-    if(/GASTO|COSTO|COMPRA/.test(n)) return 'resultado_deudor';
-    return 'resultado_acreedor';
+  const pre2=num.substring(0,2),pre3=num.substring(0,3),pre4=num.substring(0,4);
+  // === ACTIVO ===
+  if(/BANCO|CAJA|EFECTIVO/.test(n)||/^11[12]/.test(num)) return 'activo_caja';
+  if(/CLIENTE|DEUDOR|DOCUM.POR COB/.test(n)||/^113/.test(num)) return 'activo_clientes';
+  if(/INVENTARIO|MERCANCIA|ALMACEN/.test(n)||/^114/.test(num)) return 'activo_inventarios';
+  if(/ANTICIPO.PROV|PAGO.ANTICIP/.test(n)) return 'activo_anticipos_prov';
+  if(/IVA.ACRED|IMPUESTO.A.FAVOR|SALDO.A.FAVOR/.test(n)) return 'activo_iva';
+  if(/PAGO.PROV|ISR.PROV|ANTICIPO.ISR/.test(n)) return 'activo_pagos_prov';
+  if(/DEPRECIA|AMORTIZA/.test(n)) return 'activo_depreciacion';
+  if(/INMUEBLE|EDIFICIO|TERRENO|MAQUINA|EQUIPO|MOBILIARIO|VEHICULO|ACTIVO.FIJ/.test(n)||/^12/.test(num)) return 'activo_fijo';
+  if(/INTANGIB|DIFERIDO|PATENTE|MARCA|LICENCIA/.test(n)) return 'activo_intangible';
+  if(num.charAt(0)==='1') return 'activo_otros_circ';
+  // === PASIVO ===
+  if(/PROVEEDOR/.test(n)||/^201|^220/.test(num)) return 'pasivo_proveedores';
+  if(/ANTICIPO.CLI|COBRO.ANTICIP/.test(n)) return 'pasivo_anticipo_cli';
+  if(/ACREEDOR/.test(n)) return 'pasivo_acreedores';
+  if(/IVA.TRASLAD|IVA.POR.PAG/.test(n)) return 'pasivo_iva';
+  if(/ISR.POR.PAG/.test(n)) return 'pasivo_isr';
+  if(/IMSS|INFONAVIT/.test(n)) return 'pasivo_imss';
+  if(/PTU|UTILIDAD.TRABAJ/.test(n)) return 'pasivo_ptu';
+  if(/PRESTAMO|CREDITO.BANC|HIPOTECA/.test(n)) return 'pasivo_cp';
+  if(num.charAt(0)==='2') return 'pasivo_otros';
+  // === CAPITAL ===
+  if(/CAPITAL.SOCIAL|ACCIONES/.test(n)) return 'capital_social';
+  if(/RESERVA.LEGAL/.test(n)) return 'capital_reserva';
+  if(/UTILIDAD.RETENIDA|RESULTADO.ACUM/.test(n)) return 'capital_utilidades';
+  if(/PERDIDA.ACUM/.test(n)) return 'capital_perdidas';
+  if(/RESULTADO.DEL.EJERCICIO/.test(n)) return 'capital_resultado';
+  if(num.charAt(0)==='3') return 'capital_social';
+  // === RESULTADOS ACREEDORAS ===
+  if(num.charAt(0)==='4'){
+    if(/GASTO|COSTO|COMPRA|INTERESES.PAGADOS|FINANCIERO/.test(n)) return 'gasto_financiero';
+    if(/DESCUENTO|DEVOLUCION/.test(n)) return 'ing_descuentos';
+    if(/ARRENDAMIENT/.test(n)) return 'ing_arrendamiento';
+    if(/COMISION/.test(n)) return 'ing_comisiones';
+    if(/INTERES.GANADO|RENDIMIENTO/.test(n)) return 'ing_intereses';
+    if(/DIVIDENDO/.test(n)) return 'ing_dividendos';
+    if(/CAMBIARIO|DIFERENCIA.CAMBIO/.test(n)) return 'ing_cambiario';
+    return 'ing_ventas';
   }
-  // Clase 5, 6, 7 = Gastos/Costos (Resultados Deudoras)
-  if(p==='5'||p==='6'||p==='7') return 'resultado_deudor';
+  // === RESULTADOS DEUDORAS ===
+  if(num.charAt(0)==='5'){
+    if(/COSTO|COSTO.DE.LO.VENDIDO/.test(n)) return 'gasto_costo';
+    return 'gasto_costo';
+  }
+  if(num.charAt(0)==='6'||num.charAt(0)==='7'){
+    if(/SUELDO|SALARIO|NOMINA|HONORARIO/.test(n)) return 'gasto_nomina';
+    if(/IMSS|INFONAVIT/.test(n)) return 'gasto_imss';
+    if(/VENTA|COMERCIAL|DISTRIBUCI/.test(n)) return 'gasto_venta';
+    if(/ADMIN|GERENCIA|DIRECCION/.test(n)) return 'gasto_admin';
+    if(/FINANCIERO|INTERES.PAG|CAMBIARIO/.test(n)) return 'gasto_financiero';
+    if(/DEPRECIA|AMORTIZA/.test(n)) return 'gasto_depreciacion';
+    return 'gasto_admin';
+  }
   return 'no_aplica';
 }
 
@@ -6502,14 +6601,25 @@ async function docProcesarCatalogo(file){
 // Diálogo de clasificación
 function docMostrarClasifDialog(cuentas,clasifExist){
   const grupos=[...new Set(DOC_RUBROS.map(r=>r.grupo))];
-  const opts=DOC_RUBROS.map(r=>`<option value="${r.id}">${r.label}</option>`).join('');
+  // Generar opciones agrupadas por categoría
+  const optsGrupos=Object.entries(DOC_CATS).map(([cat,info])=>{
+    const subs=DOC_RUBROS.filter(r=>r.cat===cat);
+    if(!subs.length)return'';
+    const opts=subs.map(r=>`<option value="${r.id}">${r.label}</option>`).join('');
+    return `<optgroup label="${info.label}">${opts}</optgroup>`;
+  }).join('');
 
   const rows=cuentas.map(c=>{
     const rubroExist=clasifExist[c.cuenta_mayor];
     const rubroSug=rubroExist||docAutoRubro(c.cuenta_mayor,c.nombre_mayor||'');
     const esNuevo=!rubroExist;
     const colorFila=esNuevo?'#fffbf0':'#fff';
-    const selOpts=DOC_RUBROS.map(r=>`<option value="${r.id}"${r.id===rubroSug?' selected':''}>${r.grupo}: ${r.label}</option>`).join('');
+    const selOpts=Object.entries(DOC_CATS).map(([cat,info])=>{
+      const subs=DOC_RUBROS.filter(r=>r.cat===cat);
+      if(!subs.length)return'';
+      const opts=subs.map(r=>`<option value="${r.id}"${r.id===rubroSug?' selected':''}>${r.label}</option>`).join('');
+      return `<optgroup label="${info.label}">${opts}</optgroup>`;
+    }).join('');
     return `<tr style="background:${colorFila};border-bottom:1px solid #f0f0ec">
       <td style="padding:6px 10px;font-size:12px;font-weight:700;color:#3B4BC8;white-space:nowrap">${escD(c.cuenta_mayor)}</td>
       <td style="padding:6px 10px;font-size:12px">${escD(c.nombre_mayor||'')}</td>
@@ -6637,10 +6747,15 @@ function docExtraerCSVConClasif(text, clasifMap){
     if(iS<0)iS=iFirst>=0?iFirst:header.length-1;
   }
 
-  // Acumuladores por categoría contable
+  // Mapa de sub-categoría → categoría principal
+  const catMap={};
+  DOC_RUBROS.forEach(r=>{catMap[r.id]=r.cat;});
+
+  // Acumuladores por categoría y sub-categoría
   const acum={
     activo:0, pasivo:0, capital:0,
-    resultado_acreedor:0, resultado_deudor:0
+    resultado_acreedor:0, resultado_deudor:0,
+    detalle:{}
   };
 
   for(let i=1;i<lines.length;i++){
@@ -6649,13 +6764,16 @@ function docExtraerCSVConClasif(text, clasifMap){
     if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
     const saldo=parseFloat((cols[iS]||'').replace(/[$, ]/g,''))||0;
     if(saldo===0) continue;
-    // Excluir cuentas título
     const partes=num.split('-');
     if(partes.length>2&&partes.slice(-2).filter(p=>/^0+$/.test(p)).length>=2) continue;
     const mayor=num.split(/[-. ]/)[0];
-    const rubro=clasifMap[mayor];
-    if(!rubro||rubro==='no_aplica') continue;
-    if(acum.hasOwnProperty(rubro)) acum[rubro]+=saldo;
+    const subId=clasifMap[mayor];
+    if(!subId||subId==='no_aplica') continue;
+    const cat=catMap[subId]||subId;
+    if(acum.hasOwnProperty(cat)) acum[cat]+=saldo;
+    // Detalle por sub-categoría
+    if(!acum.detalle[subId]) acum.detalle[subId]=0;
+    acum.detalle[subId]+=saldo;
   }
   return acum;
 }
