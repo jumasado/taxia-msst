@@ -2052,7 +2052,7 @@ async function saveCliente(){
   const btn=document.getElementById('cf-btn');btn.innerHTML='<span class="spinner"></span> Guardando...';btn.disabled=true;
   if(editing)await sbPatch('clientes',`?id=eq.${editing}`,{nombre,rfc,tipo,grupo_id,responsable,notas});
   else await sbPost('clientes',{nombre,rfc,tipo,grupo_id,responsable,notas});
-  await loadCaches();
+  await loadCaches(true); // force=true para refrescar aunque el caché sea reciente
   btn.innerHTML=editing?'Actualizar cliente':'Guardar cliente';btn.disabled=false;
   document.getElementById('cf-editing').value='';
   ['cf-nombre','cf-rfc','cf-notas'].forEach(i=>{document.getElementById(i).value='';});
