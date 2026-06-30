@@ -638,14 +638,67 @@ async function cambiarPassword(){
 }
 
 
+// ===== BLOQUEO POR INTENTOS FALLIDOS =====
+const LOGIN_MAX_INTENTOS=5;
+const LOGIN_BLOQUEO_MS=10*60*1000; // 10 minutos
+function getLoginIntentos(em){
+  try{
+    const raw=localStorage.getItem('taxia_login_guard_'+em);
+    if(!raw) return {count:0,blockedUntil:0};
+    return JSON.parse(raw);
+  }catch(e){return {count:0,blockedUntil:0};}
+}
+function setLoginIntentos(em,data){
+  try{localStorage.setItem('taxia_login_guard_'+em,JSON.stringify(data));}catch(e){}
+}
+function clearLoginIntentos(em){
+  try{localStorage.removeItem('taxia_login_guard_'+em);}catch(e){}
+}
+function checkLoginBloqueado(em){
+  const g=getLoginIntentos(em);
+  if(g.blockedUntil && Date.now()<g.blockedUntil){
+    const minRestantes=Math.ceil((g.blockedUntil-Date.now())/60000);
+    return minRestantes;
+  }
+  return 0;
+}
+function registrarIntentoFallido(em){
+  const g=getLoginIntentos(em);
+  g.count=(g.count||0)+1;
+  if(g.count>=LOGIN_MAX_INTENTOS){
+    g.blockedUntil=Date.now()+LOGIN_BLOQUEO_MS;
+    g.count=0;
+  }
+  setLoginIntentos(em,g);
+}
+
 async function doLogin(){
   const em=document.getElementById('lemail').value.trim().toLowerCase();
   const pw=document.getElementById('lpass').value;
   const btn=document.getElementById('lbtn');
+  const errEl=document.getElementById('lerr');
+  errEl.textContent='Correo o contraseña incorrectos';
+  // Verificar si está bloqueado por intentos fallidos
+  const minBloqueo=checkLoginBloqueado(em);
+  if(minBloqueo>0){
+    errEl.textContent='Demasiados intentos fallidos. Intenta de nuevo en '+minBloqueo+' minuto(s).';
+    errEl.style.display='block';
+    return;
+  }
   btn.innerHTML='<span class="spinner"></span> Verificando...';btn.disabled=true;
   try{
     const data=await sbGet('users',`?email=eq.${encodeURIComponent(em)}&pass=eq.${encodeURIComponent(pw)}&select=*`);
-    if(!data||!data.length){document.getElementById('lerr').style.display='block';btn.innerHTML='Entrar';btn.disabled=false;return;}
+    if(!data||!data.length){
+      registrarIntentoFallido(em);
+      const minAhora=checkLoginBloqueado(em);
+      if(minAhora>0){
+        errEl.textContent='Demasiados intentos fallidos. Cuenta bloqueada '+minAhora+' minuto(s).';
+      } else {
+        errEl.textContent='Correo o contraseña incorrectos';
+      }
+      errEl.style.display='block';btn.innerHTML='Entrar';btn.disabled=false;return;
+    }
+    clearLoginIntentos(em);
     session={...data[0]};
     const [allU]=await Promise.all([sbGet('users','?select=*'),loadCaches()]);
     allU.forEach(u=>{usersCache[u.email]=u;});
