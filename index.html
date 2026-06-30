@@ -638,6 +638,15 @@ async function cambiarPassword(){
 }
 
 
+// ===== HASH DE CONTRASEÑAS (SHA-256 + salt) =====
+const APP_SALT='TaxIA-MSST-2026-Salt-Fijo-Seguridad';
+async function hashPassword(plainPass){
+  const data=new TextEncoder().encode(plainPass+APP_SALT);
+  const hashBuffer=await crypto.subtle.digest('SHA-256',data);
+  const hashArray=Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
 // ===== BLOQUEO POR INTENTOS FALLIDOS =====
 const LOGIN_MAX_INTENTOS=5;
 const LOGIN_BLOQUEO_MS=10*60*1000; // 10 minutos
@@ -687,7 +696,8 @@ async function doLogin(){
   }
   btn.innerHTML='<span class="spinner"></span> Verificando...';btn.disabled=true;
   try{
-    const data=await sbGet('users',`?email=eq.${encodeURIComponent(em)}&pass=eq.${encodeURIComponent(pw)}&select=*`);
+    const pwHash=await hashPassword(pw);
+    const data=await sbGet('users',`?email=eq.${encodeURIComponent(em)}&pass=eq.${encodeURIComponent(pwHash)}&select=*`);
     if(!data||!data.length){
       registrarIntentoFallido(em);
       const minAhora=checkLoginBloqueado(em);
@@ -2206,7 +2216,9 @@ async function renderAdmin(){
 }
 function fillEditUser(email,name,role,pass){
   document.getElementById('un').value=name;document.getElementById('ue').value=email;
-  document.getElementById('up').value=pass;document.getElementById('ur').value=role;
+  document.getElementById('up').value='';
+  document.getElementById('up').placeholder='Dejar en blanco para mantener la contraseña actual';
+  document.getElementById('ur').value=role;
   document.getElementById('uediting').value=email;
 }
 async function deleteUser(email){
@@ -2218,16 +2230,22 @@ async function deleteUser(email){
 async function saveUser(){
   const name=document.getElementById('un').value.trim();
   const email=document.getElementById('ue').value.trim().toLowerCase();
-  const pass=document.getElementById('up').value.trim();
+  const passInput=document.getElementById('up').value.trim();
   const role=document.getElementById('ur').value;
   const editing=document.getElementById('uediting').value;
   const err=document.getElementById('aerr');err.style.display='none';
-  if(!name||!email||!pass){err.textContent='Completa todos los campos.';err.style.display='block';return;}
+  if(!name||!email||(!editing&&!passInput)){err.textContent='Completa todos los campos.';err.style.display='block';return;}
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){err.textContent='Correo inválido.';err.style.display='block';return;}
   const AVM={admin:'av-m',manager:'av-a',assistant:'av-y'};
   const initials=name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
   const av2=AVM[role]||'av-y';
   const btn=document.getElementById('subtn');btn.innerHTML='<span class="spinner"></span> Guardando...';btn.disabled=true;
+  let pass;
+  if(editing&&!passInput){
+    pass=(usersCache[editing]||{}).pass||'';
+  }else{
+    pass=await hashPassword(passInput);
+  }
   if(editing&&editing!==email)await sbDelete('users',`?email=eq.${encodeURIComponent(editing)}`);
   await sbUpsert('users',{email,name,role,initials,av:av2,pass},'email');
   usersCache[email]={email,name,role,initials,av:av2,pass};
