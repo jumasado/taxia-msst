@@ -366,7 +366,7 @@ function nav(s){
   else if(s==='plan') renderMisPlan(null);
   else if(s==='clientes') renderClientes();
   else if(s==='historial') renderHistory();
-  else if(s==='devoluciones') renderDevoluciones();
+  else if(s==='devoluciones'){devFiltroActual='todos';renderDevoluciones();}
   else if(s==='proyeccion') renderProyeccion();
   else if(s==='cierres') renderCierres();
   else if(s==='admin') renderAdmin();
@@ -2264,6 +2264,7 @@ const DEV_STATUS={
   en_revision_sat:{label:'En revisión SAT',color:'#633806',bg:'#FAEEDA'},
   requerimiento_sat:{label:'Requerimiento SAT',color:'#dc2626',bg:'#fef2f2'},
   informacion_entregada:{label:'Información entregada a SAT',color:'#5a8a1a',bg:'#f0f7d4'},
+  autorizada_no_depositada:{label:'Autorizada — No depositada',color:'#0C5E1E',bg:'#D1FAE5'},
   devuelta:{label:'Devuelta / Concluida',color:'#5a8a1a',bg:'#f0f7d4'},
   negada:{label:'Negada / Rechazada',color:'#dc2626',bg:'#fef2f2'}
 };
@@ -2281,6 +2282,7 @@ const DEV_REQUISITOS_SAT=[
 ];
 
 let devCache=[];
+let devFiltroActual='todos'; // filtro activo en portada
 
 function diasHabilesDesde(fechaStr,dias){
   const festivos=['01-01','02-05','03-21','05-01','09-16','11-20','12-25'];
@@ -2333,15 +2335,17 @@ function alertaDias(d,label){
 }
 
 async function renderDevoluciones(){
+  devFiltroActual=devFiltroActual||'todos';
   app.innerHTML=renderTopNav('devoluciones')+`
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
     <div style="font-size:15px;font-weight:600">Devoluciones IVA</div>
     <div style="display:flex;gap:8px">
-    <button class="btn btn-sm btn-purple" onclick="reporteDevolucionesPDF()">⎙ Reporte PDF</button>
-    <button class="btn btn-primary btn-sm" onclick="renderNuevaDevolucion()">+ Nueva solicitud</button>
-  </div>
+      <button class="btn btn-sm btn-purple" onclick="reporteDevolucionesPDF()">⎙ Reporte PDF</button>
+      <button class="btn btn-primary btn-sm" onclick="renderNuevaDevolucion()">+ Nueva solicitud</button>
+    </div>
   </div>
   <div class="loading" id="devl"><span class="spinner"></span>Cargando...</div>
+  <div id="dev-filtros" style="display:none;margin-bottom:14px"></div>
   <div id="dev-body"></div>`;
   await loadDevoluciones();
 }
@@ -2350,6 +2354,39 @@ async function loadDevoluciones(){
   const data=await sbGet('devoluciones_iva','?select=*&order=created_at.desc');
   devCache=data||[];
   document.getElementById('devl').style.display='none';
+  renderDevFiltros();
+  renderDevList();
+}
+
+function renderDevFiltros(){
+  const el=document.getElementById('dev-filtros');
+  if(!el||!devCache.length){if(el)el.style.display='none';return;}
+  // Contar por estatus
+  const conteo={todos:devCache.length};
+  devCache.forEach(d=>{conteo[d.status]=(conteo[d.status]||0)+1;});
+  // Estatus que tienen al menos 1 devolución
+  const estatusPresentes=['todos',...Object.keys(DEV_STATUS).filter(k=>conteo[k]>0)];
+  const btns=estatusPresentes.map(k=>{
+    const isActivo=devFiltroActual===k;
+    const info=k==='todos'?{label:'Todas',color:'#3B4BC8',bg:'#E6F1FB'}:DEV_STATUS[k];
+    return '<button onclick="devAplicarFiltro(\''+k+'\')" style="'+
+      'padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;'+
+      'border:2px solid '+(isActivo?info.color:'#e0e0db')+';'+
+      'background:'+(isActivo?info.bg:'#fff')+';'+
+      'color:'+(isActivo?info.color:'#888')+'">'+
+      escH(info.label)+' <span style="background:'+(isActivo?info.color:'#ddd')+';color:'+(isActivo?'#fff':'#666')+
+      ';border-radius:999px;padding:0 6px;font-size:10px;margin-left:2px">'+( conteo[k]||0)+'</span>'+
+    '</button>';
+  }).join('');
+  el.style.display='flex';
+  el.style.flexWrap='wrap';
+  el.style.gap='6px';
+  el.innerHTML=btns;
+}
+
+function devAplicarFiltro(status){
+  devFiltroActual=status;
+  renderDevFiltros();
   renderDevList();
 }
 
@@ -2378,9 +2415,11 @@ function renderDevList(){
     return;
   }
 
-  // Agrupar por status activos vs concluidos — ordenados por cliente y período
-  const activos=sortDevoluciones(devCache.filter(d=>d.status!=='devuelta'&&d.status!=='negada'));
-  const cerrados=sortDevoluciones(devCache.filter(d=>d.status==='devuelta'||d.status==='negada'));
+  // Aplicar filtro por estatus seleccionado
+  const ESTADOS_CERRADO=['devuelta','negada'];
+  const listaFiltrada=devFiltroActual==='todos'?devCache:devCache.filter(d=>d.status===devFiltroActual);
+  const activos=sortDevoluciones(listaFiltrada.filter(d=>!ESTADOS_CERRADO.includes(d.status)));
+  const cerrados=sortDevoluciones(listaFiltrada.filter(d=>ESTADOS_CERRADO.includes(d.status)));
 
   let html='';
 
