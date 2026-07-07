@@ -7133,12 +7133,47 @@ function docParseCatalogCSV(text){
   }
 
   // Vincular padres e hijos
-  Object.values(nodoMap).forEach(n=>{
-    if(n.padre&&nodoMap[n.padre]){
-      nodoMap[n.padre].hijos.push(n.cod);
-      padreMap[n.cod]=n.padre;
-    }
-  });
+  if(iPadre>=0){
+    // Modo A: usar Codigo_padre explícito (catálogos CONTPAQi con jerarquía)
+    Object.values(nodoMap).forEach(n=>{
+      if(n.padre&&nodoMap[n.padre]){
+        nodoMap[n.padre].hijos.push(n.cod);
+        padreMap[n.cod]=n.padre;
+      }
+    });
+  } else {
+    // Modo B: deducir padre-hijo por estructura numérica del código
+    // La cuenta padre de "102-0001" es "102-0000" (mismo prefijo, último seg = ceros)
+    // La cuenta padre de "500-2000-0001" es "500-2000-0000"
+    const codsOrdenados=Object.keys(nodoMap).sort((a,b)=>{
+      const la=a.split(/[-. ]/).length, lb=b.split(/[-. ]/).length;
+      return la!==lb?la-lb:a.localeCompare(b,undefined,{numeric:true});
+    });
+    codsOrdenados.forEach(cod=>{
+      const partes=cod.split(/[-. ]/);
+      if(partes.length<=1) return;
+      // Construir el código padre: mismos segmentos pero el último en ceros
+      const esMayor=partes.slice(1).every(p=>/^0+$/.test(p));
+      if(!esMayor){
+        // Buscar padre: mismo prefijo hasta el penúltimo segmento + último en ceros
+        const padreCod=partes.slice(0,-1).join('-')+'-'+('0'.repeat(partes[partes.length-1].length));
+        if(nodoMap[padreCod]&&padreCod!==cod){
+          nodoMap[padreCod].hijos.push(cod);
+          padreMap[cod]=padreCod;
+        } else {
+          // Fallback: buscar cualquier nodo con mismos primeros segmentos y todos-ceros al final
+          for(let len=partes.length-1;len>=1;len--){
+            const candidato=partes.slice(0,len).join('-')+'-'+'0'.repeat(partes[len]?.length||4);
+            if(nodoMap[candidato]&&nodoMap[candidato].cod!==cod){
+              nodoMap[candidato].hijos.push(cod);
+              padreMap[cod]=nodoMap[candidato].cod;
+              break;
+            }
+          }
+        }
+      }
+    });
+  }
 
   // Lista de mayores (compatibilidad con código existente)
   const mayorMap={};
