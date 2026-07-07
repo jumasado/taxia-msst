@@ -6581,6 +6581,7 @@ function docRenderFinanciero(ejercicios){
     html+='<div style="margin-top:5px;display:flex;flex-direction:column;gap:3px">';
     if(ok) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px" data-did="'+escD(String(d.id))+'" data-nombre="'+escD(d.nombre_archivo||'')+'" onclick="docVerCifras(this.dataset.did,this.dataset.nombre)">Ver</button>';
     if(ok&&hasCifras) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#EAF3DE;color:#3B6D11;border-color:#b7d9a0" data-mes="'+n+'" onclick="docVerER('+docEjercicio+',parseInt(this.dataset.mes))">ER</button>';
+    if(ok) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#EEEDFE;color:#3C3489;border-color:#c5d0ff" data-did="'+escD(String(d.id))+'" data-url="'+escD(d.archivo_url||'')+'" onclick="docRecalcularBalanza(this.dataset.did,this.dataset.url)" title="Recalcular cifras con clasificación actual">↺</button>';
     if(ok&&!hasCifras) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#EEEDFE;color:#3B4BC8;border-color:#c5d0ff" data-did="'+escD(String(d.id))+'" onclick="docExtraerCifras(this.dataset.did,\'balanza\','+docEjercicio+','+n+')">✨ IA</button>';
     if(ok) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#FCEBEB;color:#A32D2D;border-color:#f5c0c0" data-did="'+escD(String(d.id))+'" data-mes="'+n+'" onclick="docBorrarBalanza(this.dataset.did,parseInt(this.dataset.mes))">✕</button>';
     html+='<label class="btn btn-sm" style="font-size:9px;padding:2px 4px;cursor:pointer;justify-content:center;margin:0">'+(ok?'↑':'↑ Subir');
@@ -7197,6 +7198,7 @@ function docMostrarClasifDialog(cuentas, clasifExist, subcuentaMap, nodoMap, pad
   window._nodoMap = nodoMap;
   window._padreMap = padreMap;
   window._clasifExist = clasifExist||{};
+  window._clasifChanges = {}; // resetear cambios pendientes al abrir
 
   // Generar opciones agrupadas por categoría NIF
   const optsGrupos = Object.entries(DOC_CATS).map(([cat,info])=>{
@@ -7331,6 +7333,10 @@ function docActualizarBadge(cod){
   const badge = document.getElementById('badge-'+safeCod);
   if(!sel||!badge) return;
   const rubro = sel.value;
+  // Registrar cambio en objeto de cambios (para guardar independientemente del DOM)
+  if(!window._clasifChanges) window._clasifChanges={};
+  if(rubro) window._clasifChanges[cod]=rubro;
+  else delete window._clasifChanges[cod]; // heredar de padre = borrar override
   if(!rubro){
     badge.style.cssText='font-size:9px;padding:1px 6px;border-radius:10px;background:#f5f5f3;color:#999';
     badge.textContent='— heredar de padre —';
@@ -7377,42 +7383,43 @@ async function docGuardarClasif(){
   docToast('Guardando clasificación...','warn');
   const clienteId=String(docClienteActual.id);
   const nombre=docClienteActual.nombre;
-  // Leer todas las cuentas clasificadas del árbol jerárquico
-  const rows=[];
-  // Recopilar todos los selects en el modal del árbol
+  // Combinar: clasificaciones existentes en DB + cambios realizados en esta sesión
+  // _clasifExist: rubros guardados en DB (cargados al abrir)
+  // _clasifChanges: rubros modificados en esta sesión (rastreados por docActualizarBadge)
+  const clasifExistLocal = window._clasifExist||{};
+  const clasifChanges = window._clasifChanges||{};
+  // Merge: changes anulan a exist
+  const clasifFinal = Object.assign({}, clasifExistLocal, clasifChanges);
+
+  // También leer selects visibles en el DOM (nodos expandidos no rastreados por change)
   document.querySelectorAll('#clasif-tree select[id^="select-"]').forEach(sel=>{
-    if(!sel.value||sel.value==='') return; // vacío = heredar de padre, no guardar
-    // Extraer código de cuenta del id: select-101_0000_0000 → 101-0000-0000
+    if(!sel.value) return;
     const rawId=sel.id.replace(/^select-/,'');
-    // Buscar el código real en nodoMap comparando el id normalizado
     let codReal=null;
-    Object.keys(nodoMap).forEach(cod=>{
-      if(cod.replace(/[-. ]/g,'_')===rawId) codReal=cod;
-    });
-    if(!codReal){
-      // Fallback: reconstruir código desde el id
-      codReal=rawId.replace(/_/g,'-');
-    }
-    const nodo=nodoMap[codReal];
-    rows.push({
-      cliente_id:clienteId,
-      cliente_nombre:nombre,
-      cuenta_mayor:codReal,
-      nombre_mayor:nodo?nodo.nom:codReal,
-      rubro:sel.value,
-      cedulas:'',
-      updated_at:nowISO()
-    });
+    Object.keys(nodoMap).forEach(cod=>{if(cod.replace(/[-. ]/g,'_')===rawId)codReal=cod;});
+    if(!codReal) codReal=rawId.replace(/_/g,'-');
+    if(sel.value) clasifFinal[codReal]=sel.value;
+    else delete clasifFinal[codReal];
   });
-  // Si no hay árbol, usar lista plana de compatibilidad
-  if(!rows.length){
-    cuentas.forEach(c=>{
-      const el=document.getElementById('clasif-'+c.cuenta_mayor);
-      if(!el||!el.value) return;
-      rows.push({cliente_id:clienteId,cliente_nombre:nombre,
-        cuenta_mayor:c.cuenta_mayor,nombre_mayor:c.nombre_mayor||'',
-        rubro:el.value,cedulas:'',updated_at:nowISO()});
+
+  const rows=Object.entries(clasifFinal)
+    .filter(([cod,rubro])=>rubro&&rubro!=='')
+    .map(([cod,rubro])=>{
+      const nodo=nodoMap[cod];
+      return {
+        cliente_id:clienteId,
+        cliente_nombre:nombre,
+        cuenta_mayor:cod,
+        nombre_mayor:nodo?nodo.nom:cod,
+        rubro,
+        cedulas:'',
+        updated_at:nowISO()
+      };
     });
+
+  if(!rows.length){
+    docToast('Sin clasificaciones para guardar. Asigna rubros a las cuentas.','warn');
+    btn.innerHTML='💾 Guardar clasificación';btn.disabled=false;return;
   }
   try{
     // Primero eliminar clasificaciones existentes del cliente
@@ -7678,6 +7685,41 @@ async function docSubirGeneral(tipoId,tipoLabel,input){
     docSetTab('generales');docToast('Archivo subido','ok');
   }catch(e){docToast('Error: '+e.message,'err');}
 }
+
+async function docRecalcularBalanza(docId, archivoUrl){
+  if(!archivoUrl){docToast('No hay archivo disponible para recalcular','warn');return;}
+  docToast('↺ Recalculando cifras con clasificación actual...','warn');
+  try{
+    // Cargar clasificación actualizada
+    if(!docClasifCache||Object.keys(docClasifCache).length===0) await docCargarClasif();
+    const tieneClasif=docClasifCache&&Object.keys(docClasifCache).filter(k=>!k.endsWith('_cedulas')).length>0;
+    if(!tieneClasif){
+      docToast('Clasifica el catálogo de cuentas primero para poder recalcular','warn');
+      return;
+    }
+    // Descargar el archivo CSV desde Storage
+    const AK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+    const r=await fetch(archivoUrl,{headers:{'Authorization':'Bearer '+AK,'apikey':AK}});
+    if(!r.ok) throw new Error('No se pudo descargar el archivo ('+r.status+')');
+    const text=await r.text();
+    // Re-extraer cifras con la clasificación actual
+    const cifras=docExtraerCSVConClasif(text,docClasifCache);
+    if(!cifras||!Object.keys(cifras).length){
+      docToast('No se pudieron extraer cifras. Verifica la clasificación del catálogo.','warn');
+      return;
+    }
+    // Actualizar cifras en la base de datos
+    await sbPatch('client_documents','?id=eq.'+encodeURIComponent(docId),{cifras});
+    // Actualizar el cache local
+    const idx=[...docCacheGen,...docCacheFin].findIndex(d=>String(d.id)===String(docId));
+    const doc=[...docCacheGen,...docCacheFin].find(d=>String(d.id)===String(docId));
+    if(doc) doc.cifras=cifras;
+    docToast('✓ Cifras recalculadas con la clasificación actual','ok');
+    // Refrescar la vista
+    docSetTab('financiero');
+  }catch(e){docToast('Error al recalcular: '+e.message,'err');}
+}
+
 
 async function docBorrarBalanza(docId,mes){
   if(!confirm('¿Borrar la balanza de '+DOC_MESES_L[mes-1]+'? Esta acción no se puede deshacer.'))return;
