@@ -7332,15 +7332,18 @@ function docExtraerCSVConClasif(text, clasifMap){
   // ===== PARSER PARA FORMATO EXTRAIDA =====
   if(isExtraida){
     // Extraer solo las líneas de texto de la balanza
+    // CLAVE: usar regex para extraer la 2ª columna completa respetando comillas
+    // (split por coma destruye los números con separador de miles: 49,091,216.00)
     const textoLines = [];
     for(let i=1; i<rawLines.length; i++){
-      const cols = rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
-      // Formato: "linea","texto_extraido" o "tipo_registro","campo","valor"
-      // Buscar la columna que contiene el texto de la balanza
-      const txt = cols[cols.length-1]; // última columna
+      const line = rawLines[i];
+      // Extraer segunda columna completa: "numero","CONTENIDO CON,COMAS,INTERNAS"
+      const m2 = line.match(/^"[^"]*","(.*)"$/);
+      if(!m2) continue;
+      const txt = m2[1].trim();
       if(!txt || txt.length < 10) continue;
-      // Verificar que contiene un código de cuenta al inicio
-      if(!/^\d{3}[-\s]\d{3,4}[-\s]\d{3,4}/.test(txt) && !/^\d{3}-\d{4}-\d{4}/.test(txt)) continue;
+      // Verificar que empieza con código de cuenta XXX-XXXX-XXXX
+      if(!/^\d{3}-\d{3,4}-\d{3,4}/.test(txt)) continue;
       textoLines.push(txt);
     }
 
