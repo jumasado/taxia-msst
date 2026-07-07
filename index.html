@@ -6974,7 +6974,8 @@ const DOC_RUBROS=[
   {id:'gasto_imss',            cat:'resultado_deudor',  label:'Cuotas IMSS e INFONAVIT patronal'},
   {id:'gasto_cambiario',       cat:'resultado_deudor',  label:'Diferencia en cambio desfavorable'},
   {id:'gasto_perdida_activos', cat:'resultado_deudor',  label:'Pérdida en venta o baja de activos'},
-  {id:'gasto_otros',           cat:'resultado_deudor',  label:'Otros gastos / gastos no deducibles'},
+  {id:'gasto_otros',           cat:'resultado_deudor',  label:'Otros gastos deducibles (Art. 27 LISR)'},
+  {id:'gasto_no_deducible',    cat:'resultado_deudor',  label:'Gastos no deducibles (Art. 28 LISR)'},
   {id:'gasto_isr',             cat:'resultado_deudor',  label:'ISR del ejercicio (NIF D-4)'},
   {id:'gasto_ptu',             cat:'resultado_deudor',  label:'PTU del ejercicio (NIF D-3)'},
   {id:'gasto_regalias',        cat:'resultado_deudor',  label:'Regalías, asistencia técnica y honorarios'},
@@ -7069,6 +7070,10 @@ function docAutoRubro(num,nombre){
     if(/FINANCIERO|INTERES.PAG|CAMBIARIO/.test(n)) return 'gasto_financiero';
     if(/DEPRECIA|AMORTIZA/.test(n)) return 'gasto_depreciacion';
     return 'gasto_admin';
+  }
+  // Detectar gastos no deducibles por nombre
+  if(/NO.DEDUCIBLE|MULTA|SANCION|RECARGO|ACTUALIZACION|REPRESENTACION|DONATIVO/.test(n)){
+    return 'gasto_no_deducible';
   }
   return 'no_aplica';
 }
@@ -8092,7 +8097,8 @@ const ER_ESTRUCTURA = [
   {tipo:'linea',     label:'Ingresos extraordinarios',               rubros:['ing_extraordinarios'],signo:1},
   {tipo:'linea',     label:'Otros ingresos',                         rubros:['ing_otros'],          signo:1},
   {tipo:'linea',     label:'(-) Pérdidas por deterioro de activos',  rubros:['gasto_deterioro'],    signo:-1},
-  {tipo:'linea',     label:'(-) Otros gastos / no deducibles',       rubros:['gasto_otros'],        signo:-1},
+  {tipo:'linea',     label:'(-) Otros gastos deducibles',            rubros:['gasto_otros'],        signo:-1},
+  {tipo:'linea',     label:'(-) Gastos no deducibles (Art. 28 LISR)',   rubros:['gasto_no_deducible'], signo:-1},
   {tipo:'subtotal',  label:'= TOTAL OTROS INGRESOS Y GASTOS',        key:'otros_neto'},
 
   {tipo:'total',     label:'= UTILIDAD (PÉRDIDA) ANTES DE ISR Y PTU',key:'util_antes_isr'},
