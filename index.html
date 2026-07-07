@@ -7508,11 +7508,20 @@ function docExtraerCSVConClasif(text, clasifMap){
     return null;
   }
 
-  // Verificar si algún hijo del código está directamente clasificado en clasifMap
-  // (para evitar doble conteo cuando se clasifican sub-cuentas individualmente)
+  // Verificar si algún hijo DIRECTO del código tiene clasificación propia
+  // USA nodoMap (jerarquía real CONTPAQi) — evita el bug de auto-exclusión
+  // donde "400-0000-0000" se excluía porque "400-0000-0000" empieza con "400-0000-"
   const clasifKeys = Object.keys(clasifMap).filter(k=>!k.endsWith('_cedulas'));
   function tieneHijosClasificados(cod){
-    return clasifKeys.some(k => k !== cod && k.startsWith(cod+'-'));
+    // Modo A: usar árbol real del catálogo (preciso)
+    const nodoMapa = window._nodoMap||{};
+    const nodo = nodoMapa[cod];
+    if(nodo && nodo.hijos && nodo.hijos.length>0){
+      return nodo.hijos.some(hijo => clasifMap[hijo]&&clasifMap[hijo]!=='no_aplica');
+    }
+    // Modo B: fallback sin nodoMap — NO excluir para evitar el bug de auto-exclusión
+    // El doble conteo es menos dañino que excluir ingresos completos
+    return false;
   }
 
   // ===== PARSER FORMATO EXTRAIDA =====
@@ -7555,12 +7564,14 @@ function docExtraerCSVConClasif(text, clasifMap){
       // C) Ni A ni B → excluir
       const tieneClasifDirecta = clasifMap[codCompleto] || clasifMap[codSub] || clasifMap[mayor];
       if(esCero){
-        if(!tieneClasifDirecta&&!getRubro(codCompleto)) return; // sin clasificación
-        if(tieneHijosClasificados(codCompleto)||tieneHijosClasificados(codSub)||tieneHijosClasificados(mayor)) return; // hijos clasificados = doble conteo
+        // Cuenta de mayor: incluir si tiene clasificación Y ningún hijo directo está clasificado
+        const rubro = clasifMap[codCompleto]||clasifMap[mayor]||getRubro(codCompleto);
+        if(!rubro||rubro==='no_aplica') return;
+        if(tieneHijosClasificados(codCompleto)) return; // hijos clasificados individualmente = saltar mayor
       } else {
-        // Sub-cuenta: incluir solo si tiene clasificación directa o por ancestro inmediato
+        // Sub-cuenta: incluir SOLO si tiene clasificación directa explícita en clasifMap
         const subId = clasifMap[codCompleto]||clasifMap[codSub];
-        if(!subId) return; // sin clasificación directa → usar mayor si existe
+        if(!subId||subId==='no_aplica') return;
       }
 
       const subId = clasifMap[codCompleto]||clasifMap[codSub]||clasifMap[mayor]||getRubro(codCompleto);
@@ -7638,8 +7649,9 @@ function docExtraerCSVConClasif(text, clasifMap){
     const tieneClasifDirecta = clasifMap[num]||clasifMap[codeCompleto]||clasifMap[mayor];
 
     if(esCero){
-      if(!tieneClasifDirecta&&!getRubro(num)) continue;
-      if(tieneHijosClasificados(num)||tieneHijosClasificados(mayor)) continue;
+      const rub = clasifMap[num]||clasifMap[mayor]||getRubro(num);
+      if(!rub||rub==='no_aplica') continue;
+      if(tieneHijosClasificados(num)) continue;
     } else {
       if(!clasifMap[num]&&!clasifMap[codeCompleto]) continue;
     }
