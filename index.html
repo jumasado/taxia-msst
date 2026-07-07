@@ -7075,19 +7075,15 @@ function docAutoRubro(num,nombre){
 // Extraer cuentas de mayor de un CSV de catálogo
 function docParseCatalogCSV(text){
   const lines=text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
-  if(!lines.length) return [];
+  if(!lines.length) return {mayores:[], subcuentas:{}};
   const sep=lines[0].includes(';')?';':',';
-
-  // Normalizar encabezados: quitar acentos y espacios (CONTPAQi usa "C ó d i g o")
   const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'').toUpperCase();
-
-  // Limpiar nombres espaciados: "A C T I V O   A   C O R T O" → "ACTIVO A CORTO"
   const limpiarNom=s=>s.split(/\s{2,}/).map(g=>{
     const ws=g.trim().split(/\s+/);
     return ws.every(w=>w.length<=1)?ws.join(''):g.trim();
   }).join(' ').trim();
 
-  // Buscar fila de encabezado (tiene CODIGO y/o NOMBRE normalizados)
+  // Detectar encabezados
   let headerIdx=-1,iC=-1,iN=-1;
   for(let i=0;i<Math.min(lines.length,10);i++){
     const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
@@ -7098,38 +7094,63 @@ function docParseCatalogCSV(text){
     });
     if(iC>=0){headerIdx=i;break;}
   }
-  // Fallback CONTPAQi: col0=Nivel(1-9), col1=código XXXX-...
+  // Fallback CONTPAQi
   if(iC<0){
     for(let i=0;i<Math.min(lines.length,15);i++){
       const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
       if(/^[1-9]$/.test(cols[0])&&/^\d{3,6}[-.]/.test(cols[1])){
-        iC=1;iN=2;headerIdx=i-1;
-        break;
+        iC=1;iN=2;headerIdx=i-1;break;
       }
     }
   }
   if(iC<0) iC=0;
   if(iN<0) iN=iC+1;
 
-  const mayorMap={};
-  const start=headerIdx>=0?headerIdx+1:1;
-  for(let i=start;i<lines.length;i++){
+  const mayorMap={};     // mayor → {cuenta_mayor, nombre_mayor}
+  const subcuentaMap={}; // mayor → [{code, nombre}]
+  const start2=headerIdx>=0?headerIdx+1:1;
+
+  for(let i=start2;i<lines.length;i++){
     const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
     const num=(cols[iC]||'').trim();
     const nom=(cols[iN]||'').trim();
-    // FILTRO CLAVE: solo cuentas reales (3-6 dígitos seguidos de - o fin)
     if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
-    const mayor=num.split(/[-. ]/)[0];
-    if(!mayor||mayor.length<3||mayor.length>6) continue;
-    const partes=num.split('-');
-    const esMayor=partes.length===1||partes.slice(1).every(p=>/^0+$/.test(p));
+    const partes=num.split(/[-. ]/);
+    const mayor=partes[0];
     const nomL=limpiarNom(nom);
     if(!nomL) continue;
-    if(esMayor&&!mayorMap[mayor]) mayorMap[mayor]={cuenta_mayor:mayor,nombre_mayor:nomL};
-    else if(!mayorMap[mayor]) mayorMap[mayor]={cuenta_mayor:mayor,nombre_mayor:nomL};
+
+    // Determinar si es cuenta de mayor (todos los segmentos después del primero son 0)
+    const esMayor=partes.length===1||partes.slice(1).every(p=>/^0+$/.test(p));
+
+    if(esMayor){
+      if(!mayorMap[mayor]) mayorMap[mayor]={cuenta_mayor:mayor,nombre_mayor:nomL};
+    } else {
+      // Es subcuenta — guardar el código completo sin el último segmento si es 0
+      // Ej: 501-0601-0000 → código sub-mayor: "501-0601"
+      //     501-0601      → código sub-mayor: "501-0601"
+      let codeSub=partes[0];
+      for(let p=1;p<partes.length;p++){
+        const remaining=partes.slice(p);
+        if(remaining.every(r=>/^0+$/.test(r))) break;
+        codeSub+='-'+partes[p];
+      }
+      // Solo guardar el primer nivel de subcuenta (sub-mayor)
+      const subParts=codeSub.split('-');
+      if(subParts.length===2){ // Ej: "501-0601"
+        if(!subcuentaMap[mayor]) subcuentaMap[mayor]=[];
+        // Evitar duplicados
+        if(!subcuentaMap[mayor].find(s=>s.code===codeSub)){
+          subcuentaMap[mayor].push({code:codeSub,nombre:nomL});
+        }
+      }
+    }
   }
-  return Object.values(mayorMap).sort((a,b)=>
+
+  const mayores=Object.values(mayorMap).sort((a,b)=>
     a.cuenta_mayor.localeCompare(b.cuenta_mayor,undefined,{numeric:true}));
+
+  return {mayores, subcuentas:subcuentaMap};
 }
 
 // Procesar catálogo al subirse
@@ -7141,96 +7162,137 @@ async function docProcesarCatalogo(file){
   }
   docToast('Procesando catálogo...','warn');
   const text=await file.text();
-  const cuentas=docParseCatalogCSV(text);
+  const parsed=docParseCatalogCSV(text);
+  const cuentas=parsed.mayores||parsed; // compatibilidad con llamadas antiguas
   if(!cuentas.length){docToast('No se encontraron cuentas en el archivo','err');return;}
-  // Cargar clasificaciones existentes
+  // Cargar clasificaciones existentes (mayor + subcuentas)
   let clasifExist={};
   try{
     const rows=await sbGet('catalogo_clasificacion',
       '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=*');
     (rows||[]).forEach(r=>{clasifExist[r.cuenta_mayor]=r.rubro;});
   }catch(e){}
-  docMostrarClasifDialog(cuentas,clasifExist);
+  docMostrarClasifDialog(cuentas, clasifExist, parsed.subcuentas||{});
 }
 
 // Diálogo de clasificación
-function docMostrarClasifDialog(cuentas,clasifExist){
-  const grupos=[...new Set(DOC_RUBROS.map(r=>r.grupo))];
-  // Generar opciones agrupadas por categoría
+function docMostrarClasifDialog(cuentas, clasifExist, subcuentaMap){
+  subcuentaMap=subcuentaMap||{};
+  window._clasifCuentas=cuentas;
+  window._subcuentaMap=subcuentaMap;
+  // Generar opciones agrupadas por categoría principal (NIF)
   const optsGrupos=Object.entries(DOC_CATS).map(([cat,info])=>{
     const subs=DOC_RUBROS.filter(r=>r.cat===cat);
     if(!subs.length)return'';
     const opts=subs.map(r=>`<option value="${r.id}">${r.label}</option>`).join('');
     return `<optgroup label="${info.label}">${opts}</optgroup>`;
   }).join('');
+  const optsNoAplica=`<option value="no_aplica">No incluir</option>`;
+  const allOpts=`<option value="">— Selecciona —</option>${optsGrupos}${optsNoAplica}`;
 
+  function buildSelect(id, rubSug, small){
+    const style=small?'font-size:10px;width:100%;padding:2px 4px;border:1px solid #ddd;border-radius:4px;background:#fafafa':
+      `font-size:11px;width:100%;padding:4px 6px;border:1px solid ${(clasifExist[id]&&clasifExist[id]!='no_aplica')?'#c5d5c5':'#e0b44a'};border-radius:6px;background:${(clasifExist[id]&&clasifExist[id]!='no_aplica')?'#f0f7f0':'#fffbf0'}`;
+    const curRub=clasifExist[id]||rubSug||'';
+    return `<select id="clasif-${escD(id)}" style="${style}">
+      ${allOpts.replace(`value="${curRub}"`,`value="${curRub}" selected`)}
+    </select>`;
+  }
+
+  // Generar filas: mayor + (si expandido) sus subcuentas
   const rows=cuentas.map(c=>{
-    const rubroExist=clasifExist[c.cuenta_mayor];
-    const rubroSug=rubroExist||docAutoRubro(c.cuenta_mayor,c.nombre_mayor||'');
-    const esNuevo=!rubroExist;
-    const colorFila=esNuevo?'#fffbf0':'#fff';
-    const selOpts=Object.entries(DOC_CATS).map(([cat,info])=>{
-      const subs=DOC_RUBROS.filter(r=>r.cat===cat);
-      if(!subs.length)return'';
-      const opts=subs.map(r=>`<option value="${r.id}"${r.id===rubroSug?' selected':''}>${r.label}</option>`).join('');
-      return `<optgroup label="${info.label}">${opts}</optgroup>`;
-    }).join('');
-    const cedsExist=(clasifExist[c.cuenta_mayor+'_cedulas']||'').split(',').filter(Boolean);
+    const mayor=c.cuenta_mayor;
+    const rubSug=clasifExist[mayor]||docAutoRubro(mayor,c.nombre_mayor);
+    const subs=(subcuentaMap[mayor]||[]);
+    const hasSubs=subs.length>0;
+    const cat=(window.DOC_RUBROS||[]).find(r=>r.id===rubSug);
+    const catInfo=cat?DOC_CATS[cat.cat]:null;
+    const colorFila=catInfo?catInfo.bg:'#fff';
+    const esNuevo=!clasifExist[mayor];
+    const cedExist=(clasifExist[mayor+'_cedulas']||'').split(',').filter(Boolean);
     const cedCheckboxes=DOC_CEDULAS.map(cd=>{
-      const chk=cedsExist.includes(cd.id)?'checked':'';
-      return '<label style="font-size:9px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:2px;background:#f5f5f5;padding:1px 5px;border-radius:3px;border:1px solid #e0e0e0;margin:1px"><input type="checkbox" name="ced-'+escD(c.cuenta_mayor)+'" value="'+cd.id+'" '+chk+' style="width:10px;height:10px">'+cd.id+'</label>';
+      const chk=cedExist.includes(cd.id)?'checked':'';
+      return `<label style="font-size:9px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:2px;background:#f5f5f5;padding:1px 5px;border-radius:3px;border:1px solid #e0e0e0;margin:1px"><input type="checkbox" name="ced-${escD(mayor)}" value="${cd.id}" ${chk} style="width:10px;height:10px">${cd.id}</label>`;
     }).join('');
-    return `<tr style="background:${colorFila};border-bottom:1px solid #f0f0ec">
-      <td style="padding:6px 10px;font-size:12px;font-weight:700;color:#3B4BC8;white-space:nowrap">${escD(c.cuenta_mayor)}</td>
+
+    // Botón para expandir/colapsar subcuentas
+    const expandBtn=hasSubs?`<button onclick="docToggleSubcuentas('${escD(mayor)}')" 
+      id="btn-expand-${escD(mayor)}" 
+      style="background:none;border:1px solid #c5d0ff;border-radius:4px;padding:1px 6px;font-size:10px;cursor:pointer;color:#3B4BC8;margin-right:6px" 
+      title="${subs.length} subcuentas">▶ ${subs.length}</button>`:'';
+
+    let html=`<tr style="background:${colorFila};border-bottom:1px solid #f0f0ec" id="row-mayor-${escD(mayor)}">
+      <td style="padding:6px 10px;font-size:12px;font-weight:700;color:#3B4BC8;white-space:nowrap">${expandBtn}${escD(mayor)}</td>
       <td style="padding:6px 10px;font-size:12px">${escD(c.nombre_mayor||'')}</td>
-      <td style="padding:4px 8px;min-width:240px">
-        <select id="clasif-${escD(c.cuenta_mayor)}" style="font-size:11px;width:100%;padding:4px 6px;border:1px solid ${esNuevo?'#e0b44a':'#c5d5c5'};border-radius:6px;background:${esNuevo?'#fffbf0':'#f0f7f0'}">
-          ${selOpts}
-        </select>
-      </td>
-      <td style="padding:4px 8px;min-width:180px">
-        <div style="display:flex;flex-wrap:wrap;gap:2px">${cedCheckboxes}</div>
-      </td>
+      <td style="padding:4px 8px;min-width:240px">${buildSelect(mayor,rubSug,false)}</td>
+      <td style="padding:4px 8px;min-width:180px"><div style="display:flex;flex-wrap:wrap;gap:2px">${cedCheckboxes}</div></td>
     </tr>`;
+
+    // Filas de subcuentas (ocultas por defecto)
+    if(hasSubs){
+      html+=subs.map(s=>{
+        const subRub=clasifExist[s.code]||'';
+        return `<tr id="row-sub-${escD(mayor)}" style="display:none;background:#f8f9ff;border-bottom:1px solid #ececff">
+          <td style="padding:3px 10px 3px 30px;font-size:11px;color:#888">↳ ${escD(s.code)}</td>
+          <td style="padding:3px 10px;font-size:11px;color:#555">${escD(s.nombre)}</td>
+          <td style="padding:2px 8px">${buildSelect(s.code,clasifExist[mayor]||'',true)}</td>
+          <td></td>
+        </tr>`;
+      }).join('');
+    }
+    return html;
   }).join('');
 
-  const sinClasif=cuentas.filter(c=>!clasifExist[c.cuenta_mayor]).length;
-  window._clasifCuentas=cuentas; // guardar referencia global para docGuardarClasif
+  // Función global para toggle (necesita variable mayor)
+  const majorRef = 'major'; // referencia al iterador — corregido abajo
+
+  window._clasifCuentas=cuentas;
   const m=document.createElement('div');m.className='modal-overlay';m.id='doc-clasif-modal';
-  m.innerHTML=`<div class="modal-box" style="max-width:780px;max-height:92vh;overflow-y:auto">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+  m.innerHTML=`<div class="modal-box" style="max-width:860px;max-height:92vh">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div>
         <div style="font-size:16px;font-weight:700">📊 Clasificación del catálogo de cuentas</div>
-        <div style="font-size:12px;color:#888;margin-top:2px">${escD(docClienteActual.nombre)} · ${cuentas.length} cuentas de mayor${sinClasif?` · <span style="color:#854F0B">${sinClasif} nuevas (sugerencias automáticas)</span>`:' · Todas clasificadas'}</div>
+        <div style="font-size:11px;color:#888">Clasifica por cuenta de mayor. Usa ▶ para clasificar subcuentas individualmente.</div>
       </div>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" onclick="docClasifTodas()">⚡ Aplicar sugerencias a todas</button>
-        <button class="btn btn-sm btn-primary" onclick="docGuardarClasif()">💾 Guardar clasificación</button>
-        <button class="btn btn-sm" onclick="document.getElementById('doc-clasif-modal').remove()">✕</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="docGuardarClasif()" class="btn btn-primary btn-sm">💾 Guardar clasificación</button>
+        <button onclick="docCerrarClasif()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button>
       </div>
     </div>
-
-    <div style="background:#EEEDFE;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#3B4BC8">
-      <strong>Instrucciones:</strong> Asigna a cada cuenta de mayor el rubro correcto. 
-      Las <span style="background:#fffbf0;border:1px solid #e0b44a;padding:1px 5px;border-radius:3px">celdas amarillas</span> son nuevas con sugerencia automática — revísalas.
-      Una vez guardado, todas las balanzas de este cliente usarán esta clasificación automáticamente.
+    <div style="font-size:11px;color:#555;background:#f5f5f3;padding:6px 10px;border-radius:6px;margin-bottom:10px">
+      ℹ️ <strong>▶ N</strong> = tiene N subcuentas. Al expandir puedes clasificar cada subcuenta individualmente — anula la clasificación del mayor para esa cuenta.
     </div>
-
-    <div style="overflow-x:auto">
+    <div style="overflow-y:auto;max-height:60vh">
       <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:#3B4BC8;color:#fff">
+        <thead><tr style="background:#3B4BC8;color:#fff;position:sticky;top:0">
           <th style="padding:8px 10px;font-size:11px;text-align:left">No. Cuenta</th>
           <th style="padding:8px 10px;font-size:11px;text-align:left">Nombre de la cuenta</th>
           <th style="padding:8px 10px;font-size:11px;text-align:left">Rubro contable (NIF)</th>
-          <th style="padding:8px 10px;font-size:11px;text-align:left">Cédulas Declaración Anual</th>
+          <th style="padding:8px 10px;font-size:11px;text-align:left">Cédulas DA</th>
         </tr></thead>
         <tbody id="clasif-tbody">${rows}</tbody>
       </table>
     </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+      <span style="font-size:11px;color:#888">${cuentas.length} cuentas de mayor</span>
+      <button onclick="docGuardarClasif()" class="btn btn-primary">💾 Guardar clasificación</button>
+    </div>
   </div>`;
   document.body.appendChild(m);
-  window._docClasifCuentas=cuentas;
 }
+
+function docToggleSubcuentas(mayor){
+  const subRows=document.querySelectorAll(`#clasif-tbody tr[id="row-sub-${mayor}"]`);
+  const btn=document.getElementById(`btn-expand-${mayor}`);
+  const expanded=subRows.length&&subRows[0].style.display!=='none';
+  subRows.forEach(r=>r.style.display=expanded?'none':'table-row');
+  if(btn) btn.innerHTML=(expanded?'▶':'▼')+' '+subRows.length;
+}
+
+function docCerrarClasif(){
+  document.getElementById('doc-clasif-modal')?.remove();
+}
+
 
 function docClasifTodas(){
   (window._docClasifCuentas||[]).forEach(c=>{
@@ -7250,16 +7312,30 @@ async function docGuardarClasif(){
   docToast('Guardando clasificación...','warn');
   const clienteId=String(docClienteActual.id);
   const nombre=docClienteActual.nombre;
+  // Construir rows de cuentas de mayor
   const rows=cuentas.map(c=>{
     const el=document.getElementById('clasif-'+c.cuenta_mayor);
     const rubro=el?el.value:'no_aplica';
-    // Leer cédulas seleccionadas (checkboxes)
     const ceds=[];
     document.querySelectorAll('input[name="ced-'+c.cuenta_mayor+'"]:checked').forEach(cb=>ceds.push(cb.value));
-    const cedulas=ceds.join(',');
     return {cliente_id:clienteId,cliente_nombre:nombre,
       cuenta_mayor:c.cuenta_mayor,nombre_mayor:c.nombre_mayor||'',
-      rubro,cedulas,updated_at:nowISO()};
+      rubro,cedulas:ceds.join(','),updated_at:nowISO()};
+  });
+
+  // Agregar subcuentas clasificadas individualmente
+  const subcuentaMap=window._subcuentaMap||{};
+  cuentas.forEach(c=>{
+    const subs=subcuentaMap[c.cuenta_mayor]||[];
+    subs.forEach(s=>{
+      const el=document.getElementById('clasif-'+s.code);
+      if(!el) return;
+      const rubro=el.value;
+      if(!rubro||rubro==='') return; // no sobrescribir si no se seleccionó
+      rows.push({cliente_id:clienteId,cliente_nombre:nombre,
+        cuenta_mayor:s.code,nombre_mayor:s.nombre||'',
+        rubro,cedulas:'',updated_at:nowISO()});
+    });
   });
   try{
     // Primero eliminar clasificaciones existentes del cliente
@@ -7295,7 +7371,7 @@ async function docCargarClasif(){
       '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=cuenta_mayor,rubro');
     docClasifCache={};
     (rows||[]).forEach(r=>{
-      docClasifCache[r.cuenta_mayor]=r.rubro;
+      docClasifCache[r.cuenta_mayor]=r.rubro; // funciona para mayor ('501') y sub-mayor ('501-0601')
       if(r.cedulas)docClasifCache[r.cuenta_mayor+'_cedulas']=r.cedulas;
     });
   }catch(e){docClasifCache={};}
@@ -7374,7 +7450,9 @@ function docExtraerCSVConClasif(text, clasifMap){
       // Aplicar regla: si tiene XXX-0000-0000 solo usar ese
       if(mayorConCero.has(mayor) && !esCero) return;
 
-      const subId = clasifMap[mayor];
+      // Buscar clasificación: sub-mayor primero, luego mayor (criterio más específico)
+      const subMayor = m[1]+'-'+m[2]; // ej: "501-0601"
+      const subId = clasifMap[subMayor] || clasifMap[mayor];
       if(!subId || subId==='no_aplica') return;
       const cat = catMap[subId] || subId;
 
@@ -7462,7 +7540,9 @@ function docExtraerCSVConClasif(text, clasifMap){
     if(mayor==='000') continue;
     const esCero=partes.length>=2&&partes.slice(1).every(p=>/^0+$/.test(p));
     if(mayorConCero.has(mayor)&&!esCero) continue;
-    const subId=clasifMap[mayor];
+    // Buscar clasificación: código completo primero, luego mayor
+    const codeCompleto=partes.slice(0,2).join('-'); // "XXX-XXXX"
+    const subId=clasifMap[codeCompleto]||clasifMap[mayor];
     if(!subId||subId==='no_aplica') continue;
     const cat=catMap[subId]||subId;
     let valor=0;
@@ -7860,7 +7940,9 @@ async function docReClasificar(){
     const r=await fetch(catDoc.archivo_url,{headers:{'Authorization':'Bearer '+AK,'apikey':AK}});
     if(!r.ok) throw new Error('No se pudo cargar el archivo del catálogo');
     const text=await r.text();
-    const cuentas=docParseCatalogCSV(text);
+    const _parsed=docParseCatalogCSV(text);
+    const cuentas=_parsed.mayores||_parsed;
+    const subcuentas=_parsed.subcuentas||{};
     if(!cuentas.length){docToast('No se encontraron cuentas en el catálogo','err');return;}
     let clasifExist={};
     try{
