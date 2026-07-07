@@ -7134,7 +7134,7 @@ function docParseCatalogCSV(text){
 
   // Vincular padres e hijos
   if(iPadre>=0){
-    // Modo A: usar Codigo_padre explícito (catálogos CONTPAQi con jerarquía)
+    // MODO A: Codigo_padre explícito (más preciso — DESARROLLADORA)
     Object.values(nodoMap).forEach(n=>{
       if(n.padre&&nodoMap[n.padre]){
         nodoMap[n.padre].hijos.push(n.cod);
@@ -7142,36 +7142,47 @@ function docParseCatalogCSV(text){
       }
     });
   } else {
-    // Modo B: deducir padre-hijo por estructura numérica del código
-    // La cuenta padre de "102-0001" es "102-0000" (mismo prefijo, último seg = ceros)
-    // La cuenta padre de "500-2000-0001" es "500-2000-0000"
-    const codsOrdenados=Object.keys(nodoMap).sort((a,b)=>{
-      const la=a.split(/[-. ]/).length, lb=b.split(/[-. ]/).length;
-      return la!==lb?la-lb:a.localeCompare(b,undefined,{numeric:true});
-    });
-    codsOrdenados.forEach(cod=>{
-      const partes=cod.split(/[-. ]/);
-      if(partes.length<=1) return;
-      // Construir el código padre: mismos segmentos pero el último en ceros
-      const esMayor=partes.slice(1).every(p=>/^0+$/.test(p));
-      if(!esMayor){
-        // Buscar padre: mismo prefijo hasta el penúltimo segmento + último en ceros
-        const padreCod=partes.slice(0,-1).join('-')+'-'+('0'.repeat(partes[partes.length-1].length));
-        if(nodoMap[padreCod]&&padreCod!==cod){
-          nodoMap[padreCod].hijos.push(cod);
-          padreMap[cod]=padreCod;
-        } else {
-          // Fallback: buscar cualquier nodo con mismos primeros segmentos y todos-ceros al final
-          for(let len=partes.length-1;len>=1;len--){
-            const candidato=partes.slice(0,len).join('-')+'-'+'0'.repeat(partes[len]?.length||4);
-            if(nodoMap[candidato]&&nodoMap[candidato].cod!==cod){
-              nodoMap[candidato].hijos.push(cod);
-              padreMap[cod]=nodoMap[candidato].cod;
-              break;
-            }
-          }
+    // MODO B: sin Codigo_padre — reconstruir jerarquía por orden de aparición + nivel
+    // CONTPAQi exporta las cuentas en orden jerárquico (padre siempre antes que hijos)
+    // Usamos un "stack de niveles" para saber quién es el padre de cada cuenta
+
+    // Recolectar cuentas en orden de aparición del archivo (ya en rawLines)
+    const codsEnOrden=[];
+    for(let i=startRow;i<rawLines.length;i++){
+      const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+      const cod=(cols[iCod]||'').trim();
+      if(cod&&nodoMap[cod]) codsEnOrden.push(cod);
+    }
+
+    // Determinar nivel de cada cuenta:
+    // Prioridad: columna Nivel > Clase_cuenta > segmentos del código
+    function getNivel(cod){
+      const n=nodoMap[cod];
+      if(n.nivel>0) return n.nivel; // columna Nivel explícita
+      const c=(n.clase||'').toLowerCase();
+      if(c.includes('acumul')||c.includes('titul')) return 1;
+      if(c==='mayor') return 3;
+      if(c==='afectable'||c==='movimiento') return 4;
+      // Fallback: número de segmentos como proxy de profundidad
+      return Math.min(cod.split(/[-. ]/).length, 4);
+    }
+
+    // Stack: [cod_nivel1, cod_nivel2, cod_nivel3, ...]
+    // stack[i] = código del ancestro en el nivel i
+    const stack=[];
+    codsEnOrden.forEach(cod=>{
+      const nivel=getNivel(cod);
+      // El padre es el último cod en el stack con nivel < nivel_actual
+      // Recortar el stack al nivel actual
+      while(stack.length>=nivel) stack.pop();
+      if(stack.length>0){
+        const padreC=stack[stack.length-1];
+        if(nodoMap[padreC]&&!nodoMap[padreC].hijos.includes(cod)){
+          nodoMap[padreC].hijos.push(cod);
+          padreMap[cod]=padreC;
         }
       }
+      stack.push(cod);
     });
   }
 
