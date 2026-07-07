@@ -7463,13 +7463,11 @@ async function docCargarClasif(){
 
 // Extractor CSV USANDO clasificaciones guardadas
 function docExtraerCSVConClasif(text, clasifMap){
-  // ===========================================================
-  // DETECTAR FORMATO
-  // A) EXTRAIDA: generado por TaxIA desde PDF
-  //    Header: "linea","texto_extraido"
-  //    Cada row tiene el texto crudo de la balanza
-  // B) ESTÁNDAR CONTPAQi: CSV directo del sistema contable
-  // ===========================================================
+  // ============================================================
+  // DETECCIÓN DE FORMATO
+  // A) EXTRAIDA: generado por TaxIA desde PDF (header: linea,texto_extraido)
+  // B) ESTÁNDAR: CSV directo de CONTPAQi
+  // ============================================================
   const rawLines = text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
   if(!rawLines.length) return {};
 
@@ -7477,7 +7475,7 @@ function docExtraerCSVConClasif(text, clasifMap){
   const h0 = rawLines[0].replace(/^"|"$/g,'').toLowerCase();
   const isExtraida = h0.includes('texto_extraido') || h0.includes('tipo_registro');
 
-  // Mapa de clasificación → categoría principal
+  // Mapa sub-categoría → categoría principal
   const catMap = {};
   DOC_RUBROS.forEach(r=>{ catMap[r.id] = r.cat; });
   const RESULTADO_CATS = new Set(['resultado_acreedor','resultado_deudor']);
@@ -7489,101 +7487,109 @@ function docExtraerCSVConClasif(text, clasifMap){
     detalle:{}, detalle_acum:{}
   };
 
-  // ===== PARSER PARA FORMATO EXTRAIDA =====
+  // Función para obtener el rubro usando cascada jerárquica
+  // Primero busca clasificación directa, luego sube por padreMap (si disponible)
+  const padreMap = window._padreMap || {};
+  function getRubro(cod){
+    if(clasifMap[cod]&&clasifMap[cod]!=='no_aplica') return clasifMap[cod];
+    const partes = cod.split(/[-. ]/);
+    // Intentar variantes del código (cod completo → 2 segmentos → 1 segmento)
+    for(let len=partes.length-1;len>=1;len--){
+      const sub = partes.slice(0,len).join('-');
+      if(clasifMap[sub]&&clasifMap[sub]!=='no_aplica') return clasifMap[sub];
+    }
+    // Walk-up por padreMap
+    let cur = padreMap[cod];
+    for(let i=0;i<10;i++){
+      if(!cur) break;
+      if(clasifMap[cur]&&clasifMap[cur]!=='no_aplica') return clasifMap[cur];
+      cur = padreMap[cur];
+    }
+    return null;
+  }
+
+  // Verificar si algún hijo del código está directamente clasificado en clasifMap
+  // (para evitar doble conteo cuando se clasifican sub-cuentas individualmente)
+  const clasifKeys = Object.keys(clasifMap).filter(k=>!k.endsWith('_cedulas'));
+  function tieneHijosClasificados(cod){
+    return clasifKeys.some(k => k !== cod && k.startsWith(cod+'-'));
+  }
+
+  // ===== PARSER FORMATO EXTRAIDA =====
   if(isExtraida){
-    // Extraer solo las líneas de texto de la balanza
-    // CLAVE: usar regex para extraer la 2ª columna completa respetando comillas
-    // (split por coma destruye los números con separador de miles: 49,091,216.00)
     const textoLines = [];
     for(let i=1; i<rawLines.length; i++){
       const line = rawLines[i];
-      // Extraer segunda columna completa: "numero","CONTENIDO CON,COMAS,INTERNAS"
+      // Extraer 2ª columna completa respetando comillas (evita corte en miles: 49,091,216.00)
       const m2 = line.match(/^"[^"]*","(.*)"$/);
       if(!m2) continue;
       const txt = m2[1].trim();
       if(!txt || txt.length < 10) continue;
-      // Verificar que empieza con código de cuenta XXX-XXXX-XXXX
       if(!/^\d{3}-\d{3,4}-\d{3,4}/.test(txt)) continue;
       textoLines.push(txt);
     }
 
-    // Parsear cada línea de texto crudo de la balanza
-    // Formato CONTPAQi: "XXX-XXXX-XXXXNOMBRE saldoIni cargos abonos saldoAct"
     const parseNum = s => parseFloat((s||'').replace(/,/g,'')) || 0;
 
     // Paso 1: detectar mayors con cuenta "XXX-0000-0000"
     const mayorConCero = new Set();
     textoLines.forEach(txt => {
       const m = txt.match(/^(\d{3})-(\d{3,4})-(\d{3,4})/);
-      if(!m) return;
-      const seg1=m[2], seg2=m[3];
-      if(/^0+$/.test(seg1) && /^0+$/.test(seg2)){
-        if(m[1]!=='000') mayorConCero.add(m[1]);
-      }
+      if(!m||m[1]==='000') return;
+      if(/^0+$/.test(m[2])&&/^0+$/.test(m[3])) mayorConCero.add(m[1]);
     });
 
-    // Paso 2: parsear y acumular
+    // Paso 2: parsear y acumular con reglas de cascada
     textoLines.forEach(txt => {
       const m = txt.match(/^(\d{3})-(\d{3,4})-(\d{3,4})/);
-      if(!m) return;
+      if(!m||m[1]==='000') return;
       const mayor = m[1];
-      if(mayor === '000') return; // encabezados
       const seg1=m[2], seg2=m[3];
-      const esCero = /^0+$/.test(seg1) && /^0+$/.test(seg2);
+      const esCero = /^0+$/.test(seg1)&&/^0+$/.test(seg2);
+      const codCompleto = m[1]+'-'+m[2]+'-'+m[3];
+      const codSub = m[1]+'-'+m[2]; // ej: "501-0601"
 
-      // Aplicar regla: si tiene XXX-0000-0000 solo usar ese
-      if(mayorConCero.has(mayor) && !esCero) return;
+      // Regla de inclusión:
+      // A) Es cuenta mayor (esCero) → incluir SI no tiene hijos clasificados directamente
+      // B) Tiene clasificación directa → incluir siempre (aunque no sea mayor)
+      // C) Ni A ni B → excluir
+      const tieneClasifDirecta = clasifMap[codCompleto] || clasifMap[codSub] || clasifMap[mayor];
+      if(esCero){
+        if(!tieneClasifDirecta&&!getRubro(codCompleto)) return; // sin clasificación
+        if(tieneHijosClasificados(codCompleto)||tieneHijosClasificados(codSub)||tieneHijosClasificados(mayor)) return; // hijos clasificados = doble conteo
+      } else {
+        // Sub-cuenta: incluir solo si tiene clasificación directa o por ancestro inmediato
+        const subId = clasifMap[codCompleto]||clasifMap[codSub];
+        if(!subId) return; // sin clasificación directa → usar mayor si existe
+      }
 
-      // Búsqueda jerárquica: código completo → sub-mayor → mayor → ancestro
-      const padreMapLocal = window._padreMap||{};
-      const codCompleto = m[1]+'-'+m[2]+'-'+m[3]; // ej: "501-0601-0000"
-      const subMayor = m[1]+'-'+m[2]; // ej: "501-0601"
-      const subId = clasifMap[codCompleto]
-        || clasifMap[subMayor]
-        || clasifMap[mayor]
-        || docBuscarClasifJerarquica(codCompleto, clasifMap, padreMapLocal);
-      if(!subId || subId==='no_aplica') return;
-      const cat = catMap[subId] || subId;
+      const subId = clasifMap[codCompleto]||clasifMap[codSub]||clasifMap[mayor]||getRubro(codCompleto);
+      if(!subId||subId==='no_aplica') return;
+      const cat = catMap[subId]||subId;
 
-      // Extraer números del texto (últimos 4 grupos numéricos)
       const nums = [];
       const numRegex = /([\d,]+\.\d{2})/g;
       let nm;
-      while((nm = numRegex.exec(txt)) !== null) nums.push(parseNum(nm[1]));
+      while((nm=numRegex.exec(txt))!==null) nums.push(parseNum(nm[1]));
+      if(nums.length<2) return;
 
-      if(nums.length < 2) return;
-      // Columnas: [saldoIni, cargos, abonos, saldoAct] o [saldoIni, saldoAct]
-      const saldoIni = nums[0];
-      const cargos   = nums.length >= 4 ? nums[nums.length-3] : 0;
-      const abonos   = nums.length >= 4 ? nums[nums.length-2] : 0;
-      const saldoAct = nums[nums.length-1];
+      const cargos = nums.length>=4?nums[nums.length-3]:0;
+      const abonos = nums.length>=4?nums[nums.length-2]:0;
+      const saldoAct = nums[nums.length-1]||0;
 
       if(RESULTADO_CATS.has(cat)){
-        const mov = cat==='resultado_acreedor' ? (abonos-cargos) : (cargos-abonos);
-        if(mov){
-          acum[cat] += mov;
-          if(!acum.detalle[subId]) acum.detalle[subId]=0;
-          acum.detalle[subId] += mov;
-        }
-        if(saldoAct){
-          const acumKey = cat+'_acum';
-          acum[acumKey] = (acum[acumKey]||0) + saldoAct;
-          if(!acum.detalle_acum[subId]) acum.detalle_acum[subId]=0;
-          acum.detalle_acum[subId] += saldoAct;
-        }
+        const mov = cat==='resultado_acreedor'?(abonos-cargos):(cargos-abonos);
+        if(mov){ acum[cat]+=mov; if(!acum.detalle[subId])acum.detalle[subId]=0; acum.detalle[subId]+=mov; }
+        if(saldoAct){ const ak=cat+'_acum'; acum[ak]=(acum[ak]||0)+saldoAct;
+          if(!acum.detalle_acum[subId])acum.detalle_acum[subId]=0; acum.detalle_acum[subId]+=saldoAct; }
       } else {
-        if(saldoAct){
-          acum[cat] += saldoAct;
-          if(!acum.detalle[subId]) acum.detalle[subId]=0;
-          acum.detalle[subId] += saldoAct;
-        }
+        if(saldoAct){ acum[cat]+=saldoAct; if(!acum.detalle[subId])acum.detalle[subId]=0; acum.detalle[subId]+=saldoAct; }
       }
     });
-
     return acum;
   }
 
-  // ===== PARSER PARA FORMATO ESTÁNDAR CONTPAQi CSV =====
+  // ===== PARSER FORMATO ESTÁNDAR CONTPAQi CSV =====
   const header = rawLines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
   const norm = s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
 
@@ -7596,7 +7602,6 @@ function docExtraerCSVConClasif(text, clasifMap){
     if(/^ABONOS$|CREDITOS|MOVIMIENTOHABER/.test(hn)) iAbonos=i;
     if(/SALDOACTUAL|SALDOFINAL|SALDO_ACT/.test(hn)&&!/DEUDOR|ACREEDOR/.test(hn)) iSA=i;
   });
-
   if(iCargos<0||iAbonos<0||iSA<0){
     const numericCols=new Set();
     for(let row=1;row<Math.min(rawLines.length,5);row++){
@@ -7619,7 +7624,7 @@ function docExtraerCSVConClasif(text, clasifMap){
     if(partes.length>=2&&partes.slice(1).every(p=>/^0+$/.test(p))) mayorConCero.add(partes[0]);
   }
 
-  // Paso 2: procesar
+  // Paso 2: procesar con reglas de cascada
   for(let i=1;i<rawLines.length;i++){
     const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
     const num=(cols[iC]||'').trim();
@@ -7627,17 +7632,22 @@ function docExtraerCSVConClasif(text, clasifMap){
     const partes=num.split(/[-. ]/);
     const mayor=partes[0];
     if(mayor==='000') continue;
+
     const esCero=partes.length>=2&&partes.slice(1).every(p=>/^0+$/.test(p));
-    if(mayorConCero.has(mayor)&&!esCero) continue;
-    // Búsqueda jerárquica: código completo → mayor → ancestro
-    const padreMapStd = window._padreMap||{};
     const codeCompleto=partes.slice(0,2).join('-');
-    const subId=clasifMap[codeCompleto]
-      ||clasifMap[mayor]
-      ||docBuscarClasifJerarquica(mayor, clasifMap, padreMapStd);
+    const tieneClasifDirecta = clasifMap[num]||clasifMap[codeCompleto]||clasifMap[mayor];
+
+    if(esCero){
+      if(!tieneClasifDirecta&&!getRubro(num)) continue;
+      if(tieneHijosClasificados(num)||tieneHijosClasificados(mayor)) continue;
+    } else {
+      if(!clasifMap[num]&&!clasifMap[codeCompleto]) continue;
+    }
+
+    const subId=clasifMap[num]||clasifMap[codeCompleto]||clasifMap[mayor]||getRubro(num);
     if(!subId||subId==='no_aplica') continue;
     const cat=catMap[subId]||subId;
-    let valor=0;
+
     if(RESULTADO_CATS.has(cat)){
       const cargos=parseFloat((cols[iCargos]||'').replace(/[$, ]/g,''))||0;
       const abonos=parseFloat((cols[iAbonos]||'').replace(/[$, ]/g,''))||0;
@@ -7646,7 +7656,7 @@ function docExtraerCSVConClasif(text, clasifMap){
       const sa=Math.abs(parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0);
       if(sa){ const ak=cat+'_acum'; acum[ak]=(acum[ak]||0)+sa; if(!acum.detalle_acum[subId])acum.detalle_acum[subId]=0; acum.detalle_acum[subId]+=sa; }
     } else {
-      valor=parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0;
+      const valor=parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0;
       if(valor){ acum[cat]+=valor; if(!acum.detalle[subId])acum.detalle[subId]=0; acum.detalle[subId]+=valor; }
     }
   }
