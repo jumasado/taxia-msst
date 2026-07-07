@@ -7303,13 +7303,121 @@ async function docCargarClasif(){
 
 // Extractor CSV USANDO clasificaciones guardadas
 function docExtraerCSVConClasif(text, clasifMap){
-  const rawLines=text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
-  if(!rawLines.length)return{};
-  const sep=rawLines[0].includes(';')?';':',';
-  const header=rawLines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
-  const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
+  // ===========================================================
+  // DETECTAR FORMATO
+  // A) EXTRAIDA: generado por TaxIA desde PDF
+  //    Header: "linea","texto_extraido"
+  //    Cada row tiene el texto crudo de la balanza
+  // B) ESTÁNDAR CONTPAQi: CSV directo del sistema contable
+  // ===========================================================
+  const rawLines = text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
+  if(!rawLines.length) return {};
 
-  let iC=0,iN=1,iSI=-1,iCargos=-1,iAbonos=-1,iSA=-1;
+  const sep = rawLines[0].includes(';') ? ';' : ',';
+  const h0 = rawLines[0].replace(/^"|"$/g,'').toLowerCase();
+  const isExtraida = h0.includes('texto_extraido') || h0.includes('tipo_registro');
+
+  // Mapa de clasificación → categoría principal
+  const catMap = {};
+  DOC_RUBROS.forEach(r=>{ catMap[r.id] = r.cat; });
+  const RESULTADO_CATS = new Set(['resultado_acreedor','resultado_deudor']);
+
+  const acum = {
+    activo:0, pasivo:0, capital:0,
+    resultado_acreedor:0, resultado_deudor:0,
+    resultado_acreedor_acum:0, resultado_deudor_acum:0,
+    detalle:{}, detalle_acum:{}
+  };
+
+  // ===== PARSER PARA FORMATO EXTRAIDA =====
+  if(isExtraida){
+    // Extraer solo las líneas de texto de la balanza
+    const textoLines = [];
+    for(let i=1; i<rawLines.length; i++){
+      const cols = rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+      // Formato: "linea","texto_extraido" o "tipo_registro","campo","valor"
+      // Buscar la columna que contiene el texto de la balanza
+      const txt = cols[cols.length-1]; // última columna
+      if(!txt || txt.length < 10) continue;
+      // Verificar que contiene un código de cuenta al inicio
+      if(!/^\d{3}[-\s]\d{3,4}[-\s]\d{3,4}/.test(txt) && !/^\d{3}-\d{4}-\d{4}/.test(txt)) continue;
+      textoLines.push(txt);
+    }
+
+    // Parsear cada línea de texto crudo de la balanza
+    // Formato CONTPAQi: "XXX-XXXX-XXXXNOMBRE saldoIni cargos abonos saldoAct"
+    const parseNum = s => parseFloat((s||'').replace(/,/g,'')) || 0;
+
+    // Paso 1: detectar mayors con cuenta "XXX-0000-0000"
+    const mayorConCero = new Set();
+    textoLines.forEach(txt => {
+      const m = txt.match(/^(\d{3})-(\d{3,4})-(\d{3,4})/);
+      if(!m) return;
+      const seg1=m[2], seg2=m[3];
+      if(/^0+$/.test(seg1) && /^0+$/.test(seg2)){
+        if(m[1]!=='000') mayorConCero.add(m[1]);
+      }
+    });
+
+    // Paso 2: parsear y acumular
+    textoLines.forEach(txt => {
+      const m = txt.match(/^(\d{3})-(\d{3,4})-(\d{3,4})/);
+      if(!m) return;
+      const mayor = m[1];
+      if(mayor === '000') return; // encabezados
+      const seg1=m[2], seg2=m[3];
+      const esCero = /^0+$/.test(seg1) && /^0+$/.test(seg2);
+
+      // Aplicar regla: si tiene XXX-0000-0000 solo usar ese
+      if(mayorConCero.has(mayor) && !esCero) return;
+
+      const subId = clasifMap[mayor];
+      if(!subId || subId==='no_aplica') return;
+      const cat = catMap[subId] || subId;
+
+      // Extraer números del texto (últimos 4 grupos numéricos)
+      const nums = [];
+      const numRegex = /([\d,]+\.\d{2})/g;
+      let nm;
+      while((nm = numRegex.exec(txt)) !== null) nums.push(parseNum(nm[1]));
+
+      if(nums.length < 2) return;
+      // Columnas: [saldoIni, cargos, abonos, saldoAct] o [saldoIni, saldoAct]
+      const saldoIni = nums[0];
+      const cargos   = nums.length >= 4 ? nums[nums.length-3] : 0;
+      const abonos   = nums.length >= 4 ? nums[nums.length-2] : 0;
+      const saldoAct = nums[nums.length-1];
+
+      if(RESULTADO_CATS.has(cat)){
+        const mov = cat==='resultado_acreedor' ? (abonos-cargos) : (cargos-abonos);
+        if(mov){
+          acum[cat] += mov;
+          if(!acum.detalle[subId]) acum.detalle[subId]=0;
+          acum.detalle[subId] += mov;
+        }
+        if(saldoAct){
+          const acumKey = cat+'_acum';
+          acum[acumKey] = (acum[acumKey]||0) + saldoAct;
+          if(!acum.detalle_acum[subId]) acum.detalle_acum[subId]=0;
+          acum.detalle_acum[subId] += saldoAct;
+        }
+      } else {
+        if(saldoAct){
+          acum[cat] += saldoAct;
+          if(!acum.detalle[subId]) acum.detalle[subId]=0;
+          acum.detalle[subId] += saldoAct;
+        }
+      }
+    });
+
+    return acum;
+  }
+
+  // ===== PARSER PARA FORMATO ESTÁNDAR CONTPAQi CSV =====
+  const header = rawLines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
+  const norm = s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
+
+  let iC=0, iN=1, iSI=-1, iCargos=-1, iAbonos=-1, iSA=-1;
   header.forEach((h,i)=>{
     const hn=norm(h);
     if(['CODIGO','CUENTA','COD','NUMERODECUENTA'].includes(hn)) iC=i;
@@ -7319,7 +7427,6 @@ function docExtraerCSVConClasif(text, clasifMap){
     if(/SALDOACTUAL|SALDOFINAL|SALDO_ACT/.test(hn)&&!/DEUDOR|ACREEDOR/.test(hn)) iSA=i;
   });
 
-  // Detección por posición (CONTPAQi: Cuenta,Nombre,SaldoIni,Cargos,Abonos,SaldoAct)
   if(iCargos<0||iAbonos<0||iSA<0){
     const numericCols=new Set();
     for(let row=1;row<Math.min(rawLines.length,5);row++){
@@ -7327,18 +7434,9 @@ function docExtraerCSVConClasif(text, clasifMap){
       cols.forEach((v,i)=>{ if(i>1&&(parseFloat(v.replace(/[$, ]/g,''))!==0||v==='0.00'||v==='0')) numericCols.add(i); });
     }
     const un=[...numericCols].sort((a,b)=>a-b);
-    if(un.length>=4){
-      if(iSI<0) iSI=un[0];
-      if(iCargos<0) iCargos=un[1];
-      if(iAbonos<0) iAbonos=un[2];
-      if(iSA<0) iSA=un[un.length-1];
-    }
+    if(un.length>=4){ if(iSI<0)iSI=un[0]; if(iCargos<0)iCargos=un[1]; if(iAbonos<0)iAbonos=un[2]; if(iSA<0)iSA=un[un.length-1]; }
   }
   if(iSA<0) iSA=header.length-1;
-
-  const catMap={};
-  DOC_RUBROS.forEach(r=>{catMap[r.id]=r.cat;});
-  const RESULTADO_CATS=new Set(['resultado_acreedor','resultado_deudor']);
 
   // Paso 1: detectar mayors con cuenta "XXX-0000"
   const mayorConCero=new Set();
@@ -7351,16 +7449,6 @@ function docExtraerCSVConClasif(text, clasifMap){
     if(partes.length>=2&&partes.slice(1).every(p=>/^0+$/.test(p))) mayorConCero.add(partes[0]);
   }
 
-  // Acumuladores: movimientos del período Y saldos acumulados
-  const acum={
-    activo:0, pasivo:0, capital:0,
-    resultado_acreedor:0,        // movimientos del MES
-    resultado_deudor:0,          // movimientos del MES
-    resultado_acreedor_acum:0,   // saldo ACUMULADO (año)
-    resultado_deudor_acum:0,     // saldo ACUMULADO (año)
-    detalle:{}, detalle_acum:{}
-  };
-
   // Paso 2: procesar
   for(let i=1;i<rawLines.length;i++){
     const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
@@ -7369,41 +7457,22 @@ function docExtraerCSVConClasif(text, clasifMap){
     const partes=num.split(/[-. ]/);
     const mayor=partes[0];
     if(mayor==='000') continue;
-
     const esCero=partes.length>=2&&partes.slice(1).every(p=>/^0+$/.test(p));
     if(mayorConCero.has(mayor)&&!esCero) continue;
-
     const subId=clasifMap[mayor];
     if(!subId||subId==='no_aplica') continue;
     const cat=catMap[subId]||subId;
-    if(!acum.hasOwnProperty(cat)) return;
-
+    let valor=0;
     if(RESULTADO_CATS.has(cat)){
-      // Movimiento del período
       const cargos=parseFloat((cols[iCargos]||'').replace(/[$, ]/g,''))||0;
       const abonos=parseFloat((cols[iAbonos]||'').replace(/[$, ]/g,''))||0;
       const mov=cat==='resultado_acreedor'?(abonos-cargos):(cargos-abonos);
-      if(mov){
-        acum[cat]+=mov;
-        if(!acum.detalle[subId]) acum.detalle[subId]=0;
-        acum.detalle[subId]+=mov;
-      }
-      // Saldo acumulado
+      if(mov){ acum[cat]+=mov; if(!acum.detalle[subId])acum.detalle[subId]=0; acum.detalle[subId]+=mov; }
       const sa=Math.abs(parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0);
-      if(sa){
-        const acumKey=cat+'_acum';
-        acum[acumKey]=(acum[acumKey]||0)+sa;
-        if(!acum.detalle_acum[subId]) acum.detalle_acum[subId]=0;
-        acum.detalle_acum[subId]+=sa;
-      }
+      if(sa){ const ak=cat+'_acum'; acum[ak]=(acum[ak]||0)+sa; if(!acum.detalle_acum[subId])acum.detalle_acum[subId]=0; acum.detalle_acum[subId]+=sa; }
     } else {
-      // Balance general: saldo actual
-      const sa=parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0;
-      if(sa){
-        acum[cat]+=sa;
-        if(!acum.detalle[subId]) acum.detalle[subId]=0;
-        acum.detalle[subId]+=sa;
-      }
+      valor=parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0;
+      if(valor){ acum[cat]+=valor; if(!acum.detalle[subId])acum.detalle[subId]=0; acum.detalle[subId]+=valor; }
     }
   }
   return acum;
