@@ -7074,30 +7074,32 @@ function docAutoRubro(num,nombre){
 
 // Extraer cuentas de mayor de un CSV de catálogo
 function docParseCatalogCSV(text){
-  const lines=text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
-  if(!lines.length) return {mayores:[], subcuentas:{}};
-  const sep=lines[0].includes(';')?';':',';
+  const rawLines=text.split('\n').map(l=>l.replace(/\r/,'')).filter(l=>l.trim());
+  if(!rawLines.length) return {mayores:[], subcuentas:{}};
+  const sep=rawLines[0].includes(';')?';':',';
   const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'').toUpperCase();
   const limpiarNom=s=>s.split(/\s{2,}/).map(g=>{
     const ws=g.trim().split(/\s+/);
     return ws.every(w=>w.length<=1)?ws.join(''):g.trim();
   }).join(' ').trim();
 
-  // Detectar encabezados
-  let headerIdx=-1,iC=-1,iN=-1;
-  for(let i=0;i<Math.min(lines.length,10);i++){
-    const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+  // Detectar columnas — incluyendo Clase_cuenta y Codigo_padre (CONTPAQi avanzado)
+  let headerIdx=-1,iC=-1,iN=-1,iClase=-1,iPadre=-1;
+  for(let i=0;i<Math.min(rawLines.length,10);i++){
+    const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
     cols.forEach((h,j)=>{
       const hn=norm(h);
       if(['CODIGO','CUENTA','COD','NUMERODECUENTA','CUENTACONTABLE'].includes(hn)) iC=j;
       if(['NOMBRE','DESCRIPCION','CONCEPTO','DENOMINACION'].includes(hn)) iN=j;
+      if(hn==='CLASE_CUENTA'||hn==='CLASECUENTA'||hn==='TIPO_CUENTA'||hn==='TIPOCUENTA') iClase=j;
+      if(hn==='CODIGO_PADRE'||hn==='CODIGOPADRE'||hn==='PADRE') iPadre=j;
     });
     if(iC>=0){headerIdx=i;break;}
   }
-  // Fallback CONTPAQi
+  // Fallback CONTPAQi nivel/código
   if(iC<0){
-    for(let i=0;i<Math.min(lines.length,15);i++){
-      const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+    for(let i=0;i<Math.min(rawLines.length,15);i++){
+      const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
       if(/^[1-9]$/.test(cols[0])&&/^\d{3,6}[-.]/.test(cols[1])){
         iC=1;iN=2;headerIdx=i-1;break;
       }
@@ -7106,42 +7108,99 @@ function docParseCatalogCSV(text){
   if(iC<0) iC=0;
   if(iN<0) iN=iC+1;
 
-  const mayorMap={};     // mayor → {cuenta_mayor, nombre_mayor}
-  const subcuentaMap={}; // mayor → [{code, nombre}]
-  const start2=headerIdx>=0?headerIdx+1:1;
+  const mayorMap={};     // prefijo3 → {cuenta_mayor, nombre_mayor}
+  const subcuentaMap={}; // prefijo3_del_padre → [{code, nombre}]
+  const startRow=headerIdx>=0?headerIdx+1:1;
 
-  for(let i=start2;i<lines.length;i++){
-    const cols=lines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
-    const num=(cols[iC]||'').trim();
-    const nom=(cols[iN]||'').trim();
-    if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
-    const partes=num.split(/[-. ]/);
-    const mayor=partes[0];
-    const nomL=limpiarNom(nom);
-    if(!nomL) continue;
+  // MODO A: con Clase_cuenta y Codigo_padre (CONTPAQi exportación estructurada)
+  if(iClase>=0){
+    // Primero: construir mapa codigo→mayor para saber el antepasado Mayor de cada cuenta
+    const codigoToMayor={};
+    const allRows=[];
+    for(let i=startRow;i<rawLines.length;i++){
+      const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+      const cod=(cols[iC]||'').trim();
+      if(!cod||!/^\d{3}/.test(cod)) continue;
+      const clase=(cols[iClase]||'').trim();
+      const padre=iPadre>=0?(cols[iPadre]||'').trim():'';
+      const nom=limpiarNom((cols[iN]||'').trim());
+      allRows.push({cod,clase,padre,nom});
+    }
 
-    // Determinar si es cuenta de mayor (todos los segmentos después del primero son 0)
-    const esMayor=partes.length===1||partes.slice(1).every(p=>/^0+$/.test(p));
+    // Primera pasada: registrar mayors
+    allRows.forEach(r=>{
+      if(r.clase==='Mayor'||r.clase==='MAYOR'||r.clase==='mayor'){
+        const mayor=r.cod.split(/[-. ]/)[0];
+        if(!mayorMap[mayor]) mayorMap[mayor]={cuenta_mayor:mayor,nombre_mayor:r.nom};
+        codigoToMayor[r.cod]=mayor;
+      }
+    });
 
-    if(esMayor){
-      if(!mayorMap[mayor]) mayorMap[mayor]={cuenta_mayor:mayor,nombre_mayor:nomL};
-    } else {
-      // Es subcuenta — guardar el código completo sin el último segmento si es 0
-      // Ej: 501-0601-0000 → código sub-mayor: "501-0601"
-      //     501-0601      → código sub-mayor: "501-0601"
+    // Segunda pasada: registrar Afectables como subcuentas del Mayor ascendente
+    allRows.forEach(r=>{
+      if(r.clase!=='Afectable'&&r.clase!=='AFECTABLE'&&r.clase!=='afectable') return;
+      if(!r.nom) return;
+      // Buscar el Mayor padre: ir subiendo por Codigo_padre hasta encontrar un Mayor
+      let curPadre=r.padre;
+      let mayorPadre=null;
+      for(let safety=0;safety<10;safety++){
+        if(!curPadre) break;
+        if(codigoToMayor[curPadre]){mayorPadre=codigoToMayor[curPadre];break;}
+        // Buscar el padre del padre
+        const parentRow=allRows.find(x=>x.cod===curPadre);
+        if(!parentRow) break;
+        // Si el padre es Mayor, usarlo
+        if(parentRow.clase==='Mayor'||parentRow.clase==='MAYOR'){
+          mayorPadre=parentRow.cod.split(/[-. ]/)[0];
+          break;
+        }
+        curPadre=parentRow.padre;
+      }
+      if(!mayorPadre) return;
+
+      // Calcular código del sub-mayor (XXX-NNNN sin último segmento de ceros)
+      const partes=r.cod.split(/[-. ]/);
       let codeSub=partes[0];
       for(let p=1;p<partes.length;p++){
         const remaining=partes.slice(p);
-        if(remaining.every(r=>/^0+$/.test(r))) break;
+        if(remaining.every(x=>/^0+$/.test(x))) break;
         codeSub+='-'+partes[p];
       }
-      // Solo guardar el primer nivel de subcuenta (sub-mayor)
       const subParts=codeSub.split('-');
-      if(subParts.length===2){ // Ej: "501-0601"
-        if(!subcuentaMap[mayor]) subcuentaMap[mayor]=[];
-        // Evitar duplicados
-        if(!subcuentaMap[mayor].find(s=>s.code===codeSub)){
-          subcuentaMap[mayor].push({code:codeSub,nombre:nomL});
+      if(subParts.length<2) return; // solo el mayor mismo, no sub-mayor
+      if(!subcuentaMap[mayorPadre]) subcuentaMap[mayorPadre]=[];
+      if(!subcuentaMap[mayorPadre].find(s=>s.code===codeSub)){
+        subcuentaMap[mayorPadre].push({code:codeSub, nombre:r.nom});
+      }
+    });
+
+  } else {
+    // MODO B: sin Clase_cuenta — deducir por estructura del código
+    for(let i=startRow;i<rawLines.length;i++){
+      const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+      const num=(cols[iC]||'').trim();
+      const nom=(cols[iN]||'').trim();
+      if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
+      const partes=num.split(/[-. ]/);
+      const mayor=partes[0];
+      const nomL=limpiarNom(nom);
+      if(!nomL) continue;
+      const esMayor=partes.length===1||partes.slice(1).every(p=>/^0+$/.test(p));
+      if(esMayor){
+        if(!mayorMap[mayor]) mayorMap[mayor]={cuenta_mayor:mayor,nombre_mayor:nomL};
+      } else {
+        let codeSub=partes[0];
+        for(let p=1;p<partes.length;p++){
+          const remaining=partes.slice(p);
+          if(remaining.every(r=>/^0+$/.test(r))) break;
+          codeSub+='-'+partes[p];
+        }
+        const subParts=codeSub.split('-');
+        if(subParts.length===2){
+          if(!subcuentaMap[mayor]) subcuentaMap[mayor]=[];
+          if(!subcuentaMap[mayor].find(s=>s.code===codeSub)){
+            subcuentaMap[mayor].push({code:codeSub,nombre:nomL});
+          }
         }
       }
     }
@@ -7950,7 +8009,7 @@ async function docReClasificar(){
         '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=*');
       (rows||[]).forEach(row=>{clasifExist[row.cuenta_mayor]=row.rubro;});
     }catch(e){}
-    docMostrarClasifDialog(cuentas,clasifExist);
+    docMostrarClasifDialog(cuentas,clasifExist,subcuentas);
   }catch(e){docToast('Error: '+e.message,'err');}
 }
 
