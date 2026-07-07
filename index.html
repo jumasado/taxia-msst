@@ -8134,19 +8134,10 @@ async function docVerER(ejercicio, mes){
         return;
       }
       if(row.tipo==='subtotal'||row.tipo==='total'){
-        // Calcular según key
-        if(row.key==='ingresos_netos'){tots.ingresos_netos={m:acum.m,a:acum.a};}
-        else if(row.key==='utilidad_bruta'){tots.utilidad_bruta={m:tots.ingresos_netos.m+acum.m,a:tots.ingresos_netos.a+acum.a};acum={m:tots.utilidad_bruta.m,a:tots.utilidad_bruta.a};}
-        else if(row.key==='gastos_op'){tots.gastos_op={m:acum.m-tots.utilidad_bruta.m,a:acum.a-tots.utilidad_bruta.a};}
-        else if(row.key==='util_op'){tots.util_op={m:acum.m,a:acum.a};}
-        else if(row.key==='rif'){tots.rif={m:acum.m-tots.util_op.m,a:acum.a-tots.util_op.a};}
-        else if(row.key==='util_antes_otros'){tots.util_antes_otros={m:acum.m,a:acum.a};}
-        else if(row.key==='otros_neto'){tots.otros_neto={m:acum.m-tots.util_antes_otros.m,a:acum.a-tots.util_antes_otros.a};}
-        else if(row.key==='util_antes_isr'){tots.util_antes_isr={m:acum.m,a:acum.a};}
-        else if(row.key==='util_neta'){tots.util_neta={m:acum.m,a:acum.a};}
-        const t=tots[row.key]||{m:acum.m,a:acum.a};
-        lineas.push({tipo:row.tipo,label:row.label,vm:t.m,va:t.a,enfasis:row.enfasis});
-        if(row.key==='ingresos_netos') acum={m:t.m,a:t.a};
+        // El acumulador rodante 'acum' ya lleva la suma correcta.
+        // Solo guardamos y mostramos su valor — sin ningún re-cálculo adicional.
+        tots[row.key]={m:acum.m,a:acum.a};
+        lineas.push({tipo:row.tipo,label:row.label,vm:acum.m,va:acum.a,enfasis:row.enfasis});
       }
     });
 
