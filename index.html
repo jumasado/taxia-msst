@@ -6580,6 +6580,7 @@ function docRenderFinanciero(ejercicios){
     if(hasCifras) html+='<div style="font-size:9px;color:#3B4BC8">✨ Cifras</div>';
     html+='<div style="margin-top:5px;display:flex;flex-direction:column;gap:3px">';
     if(ok) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px" data-did="'+escD(String(d.id))+'" data-nombre="'+escD(d.nombre_archivo||'')+'" onclick="docVerCifras(this.dataset.did,this.dataset.nombre)">Ver</button>';
+    if(ok&&hasCifras) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#EAF3DE;color:#3B6D11;border-color:#b7d9a0" data-mes="'+n+'" onclick="docVerER('+docEjercicio+',parseInt(this.dataset.mes))">ER</button>';
     if(ok&&!hasCifras) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#EEEDFE;color:#3B4BC8;border-color:#c5d0ff" data-did="'+escD(String(d.id))+'" onclick="docExtraerCifras(this.dataset.did,\'balanza\','+docEjercicio+','+n+')">✨ IA</button>';
     if(ok) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#FCEBEB;color:#A32D2D;border-color:#f5c0c0" data-did="'+escD(String(d.id))+'" data-mes="'+n+'" onclick="docBorrarBalanza(this.dataset.did,parseInt(this.dataset.mes))">✕</button>';
     html+='<label class="btn btn-sm" style="font-size:9px;padding:2px 4px;cursor:pointer;justify-content:center;margin:0">'+(ok?'↑':'↑ Subir');
@@ -8012,6 +8013,218 @@ async function docReClasificar(){
     docMostrarClasifDialog(cuentas,clasifExist,subcuentas);
   }catch(e){docToast('Error: '+e.message,'err');}
 }
+
+// ===================================================
+// MÓDULO 4 — ESTADO DE RESULTADOS (NIF B-3)
+// ===================================================
+
+// Estructura del ER bajo NIF B-3 (última reforma aplicable DOF 2023)
+const ER_ESTRUCTURA = [
+  {tipo:'seccion',   label:'I. INGRESOS'},
+  {tipo:'linea',     label:'Ventas / Ingresos por servicios',       rubros:['ing_ventas'],         signo:1},
+  {tipo:'linea',     label:'(-) Devoluciones y descuentos s/ventas',rubros:['ing_descuentos'],     signo:-1},
+  {tipo:'linea',     label:'Ingresos por arrendamiento',            rubros:['ing_arrendamiento'],  signo:1},
+  {tipo:'linea',     label:'Comisiones ganadas',                    rubros:['ing_comisiones'],     signo:1},
+  {tipo:'subtotal',  label:'= INGRESOS NETOS',                      key:'ingresos_netos', indent:false},
+
+  {tipo:'seccion',   label:'II. COSTO DE VENTAS'},
+  {tipo:'linea',     label:'Costo de ventas / Costo de lo vendido', rubros:['gasto_costo'],        signo:-1},
+  {tipo:'subtotal',  label:'= UTILIDAD BRUTA',                      key:'utilidad_bruta', enfasis:true},
+
+  {tipo:'seccion',   label:'III. GASTOS DE OPERACIÓN'},
+  {tipo:'linea',     label:'Gastos de venta y comercialización',    rubros:['gasto_venta'],        signo:-1},
+  {tipo:'linea',     label:'Gastos de administración',              rubros:['gasto_admin'],        signo:-1},
+  {tipo:'linea',     label:'Sueldos, salarios y prestaciones',      rubros:['gasto_nomina'],       signo:-1},
+  {tipo:'linea',     label:'Cuotas IMSS e INFONAVIT patronal',      rubros:['gasto_imss'],         signo:-1},
+  {tipo:'linea',     label:'Depreciación y amortización contable',  rubros:['gasto_depreciacion'], signo:-1},
+  {tipo:'linea',     label:'Arrendamiento de activos pagado',       rubros:['gasto_arrendamiento'],signo:-1},
+  {tipo:'linea',     label:'Regalías y asistencia técnica',         rubros:['gasto_regalias'],     signo:-1},
+  {tipo:'subtotal',  label:'= TOTAL GASTOS DE OPERACIÓN',           key:'gastos_op'},
+  {tipo:'subtotal',  label:'= UTILIDAD (PÉRDIDA) DE OPERACIÓN',     key:'util_op', enfasis:true},
+
+  {tipo:'seccion',   label:'IV. RESULTADO INTEGRAL DE FINANCIAMIENTO (RIF)'},
+  {tipo:'linea',     label:'Intereses y rendimientos ganados',       rubros:['ing_intereses'],      signo:1},
+  {tipo:'linea',     label:'Utilidad en venta de activos',           rubros:['ing_venta_activos'],  signo:1},
+  {tipo:'linea',     label:'Diferencia en cambio favorable',         rubros:['ing_cambiario'],      signo:1},
+  {tipo:'linea',     label:'(-) Gastos financieros e intereses',     rubros:['gasto_financiero'],   signo:-1},
+  {tipo:'linea',     label:'(-) Diferencia en cambio desfavorable',  rubros:['gasto_cambiario'],    signo:-1},
+  {tipo:'linea',     label:'(-) Pérdida en venta / baja de activos', rubros:['gasto_perdida_activos'],signo:-1},
+  {tipo:'subtotal',  label:'= RIF NETO',                             key:'rif'},
+  {tipo:'subtotal',  label:'= UTILIDAD ANTES DE OTROS CONCEPTOS',    key:'util_antes_otros'},
+
+  {tipo:'seccion',   label:'V. OTROS INGRESOS Y GASTOS'},
+  {tipo:'linea',     label:'Dividendos recibidos',                   rubros:['ing_dividendos'],     signo:1},
+  {tipo:'linea',     label:'Ingresos extraordinarios',               rubros:['ing_extraordinarios'],signo:1},
+  {tipo:'linea',     label:'Otros ingresos',                         rubros:['ing_otros'],          signo:1},
+  {tipo:'linea',     label:'(-) Pérdidas por deterioro de activos',  rubros:['gasto_deterioro'],    signo:-1},
+  {tipo:'linea',     label:'(-) Otros gastos / no deducibles',       rubros:['gasto_otros'],        signo:-1},
+  {tipo:'subtotal',  label:'= TOTAL OTROS INGRESOS Y GASTOS',        key:'otros_neto'},
+
+  {tipo:'total',     label:'= UTILIDAD (PÉRDIDA) ANTES DE ISR Y PTU',key:'util_antes_isr'},
+
+  {tipo:'seccion',   label:'VI. IMPUESTOS A LA UTILIDAD Y PTU'},
+  {tipo:'linea',     label:'(-) ISR del ejercicio (NIF D-4)',         rubros:['gasto_isr'],          signo:-1},
+  {tipo:'linea',     label:'(-) PTU del ejercicio (NIF D-3)',         rubros:['gasto_ptu'],          signo:-1},
+
+  {tipo:'total',     label:'= UTILIDAD (PÉRDIDA) NETA DEL PERÍODO',  key:'util_neta'},
+];
+
+async function docVerER(ejercicio, mes){
+  // Cargar balanzas del ejercicio con cifras
+  docToast('Generando Estado de Resultados...','warn');
+  try{
+    const clienteId=String(docClienteActual.id);
+    const docs=await sbGet('client_documents',
+      '?cliente_id=eq.'+encodeURIComponent(clienteId)+
+      '&ejercicio=eq.'+ejercicio+'&tipo=eq.balanza&select=mes,cifras,nombre_archivo'+
+      '&order=mes.asc');
+
+    // Construir mapa mes→cifras
+    const cifrasPorMes={};
+    (docs||[]).forEach(d=>{
+      if(d.cifras&&Object.keys(d.cifras).length>0) cifrasPorMes[d.mes]=d.cifras;
+    });
+
+    const cifrasMes=cifrasPorMes[mes];
+    if(!cifrasMes){
+      docToast('La balanza de '+DOC_MESES_L[mes-1]+' no tiene cifras extraídas. Extráelas primero.','warn');
+      return;
+    }
+
+    // Preparar extractor de valores (mes + acumulado)
+    const getMes=(rubros)=>rubros.reduce((s,r)=>s+(cifrasMes.detalle?.[r]||0),0);
+    const getAcum=(rubros)=>rubros.reduce((s,r)=>s+(cifrasMes.detalle_acum?.[r]||0),0);
+
+    const fmtM=(v,negativo)=>{
+      if(!v&&v!==0) return '<span style="color:#bbb">—</span>';
+      const n=negativo?-v:v;
+      const style=n<0?'color:#A32D2D':n>0?'':'color:#bbb';
+      return `<span style="${style}">${new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0}).format(n)}</span>`;
+    };
+
+    // Calcular todos los subtotales
+    const calc=(rubros,det,acum)=>{
+      const vm=getMes(rubros);
+      const va=getAcum(rubros);
+      return {mes:vm,acum:va};
+    };
+
+    // Construir filas del ER
+    const tots={ingresos_netos:{m:0,a:0},utilidad_bruta:{m:0,a:0},
+      gastos_op:{m:0,a:0},util_op:{m:0,a:0},
+      rif:{m:0,a:0},util_antes_otros:{m:0,a:0},
+      otros_neto:{m:0,a:0},util_antes_isr:{m:0,a:0},util_neta:{m:0,a:0}};
+
+    // Acumuladores rodantes
+    let acum={m:0,a:0};
+    const lineas=[];
+
+    ER_ESTRUCTURA.forEach(row=>{
+      if(row.tipo==='seccion'){
+        lineas.push({tipo:'seccion',label:row.label});
+        return;
+      }
+      if(row.tipo==='linea'){
+        const vm=getMes(row.rubros)*row.signo;
+        const va=getAcum(row.rubros)*row.signo;
+        acum.m+=vm; acum.a+=va;
+        if(vm!==0||va!==0){
+          lineas.push({tipo:'linea',label:row.label,vm,va,signo:row.signo});
+        }
+        return;
+      }
+      if(row.tipo==='subtotal'||row.tipo==='total'){
+        // Calcular según key
+        if(row.key==='ingresos_netos'){tots.ingresos_netos={m:acum.m,a:acum.a};}
+        else if(row.key==='utilidad_bruta'){tots.utilidad_bruta={m:tots.ingresos_netos.m+acum.m,a:tots.ingresos_netos.a+acum.a};acum={m:tots.utilidad_bruta.m,a:tots.utilidad_bruta.a};}
+        else if(row.key==='gastos_op'){tots.gastos_op={m:acum.m-tots.utilidad_bruta.m,a:acum.a-tots.utilidad_bruta.a};}
+        else if(row.key==='util_op'){tots.util_op={m:acum.m,a:acum.a};}
+        else if(row.key==='rif'){tots.rif={m:acum.m-tots.util_op.m,a:acum.a-tots.util_op.a};}
+        else if(row.key==='util_antes_otros'){tots.util_antes_otros={m:acum.m,a:acum.a};}
+        else if(row.key==='otros_neto'){tots.otros_neto={m:acum.m-tots.util_antes_otros.m,a:acum.a-tots.util_antes_otros.a};}
+        else if(row.key==='util_antes_isr'){tots.util_antes_isr={m:acum.m,a:acum.a};}
+        else if(row.key==='util_neta'){tots.util_neta={m:acum.m,a:acum.a};}
+        const t=tots[row.key]||{m:acum.m,a:acum.a};
+        lineas.push({tipo:row.tipo,label:row.label,vm:t.m,va:t.a,enfasis:row.enfasis});
+        if(row.key==='ingresos_netos') acum={m:t.m,a:t.a};
+      }
+    });
+
+    // Renderizar HTML del ER
+    const mesesDisp=Object.keys(cifrasPorMes).map(Number).sort((a,b)=>a-b);
+    const mesSelector=mesesDisp.map(m=>
+      `<button onclick="docVerER(${ejercicio},${m})" style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid ${m===mes?'#3B4BC8':'#ddd'};background:${m===mes?'#3B4BC8':'#fff'};color:${m===mes?'#fff':'#555'}">${DOC_MESES_L[m-1]}</button>`
+    ).join('');
+
+    const fmtCel=(v,tipo)=>{
+      const fmt=new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0});
+      if(v===0&&tipo==='linea') return '<span style="color:#ddd">—</span>';
+      const c=v<0?'#A32D2D':v>0?'#1a1a1a':'#bbb';
+      const w=(tipo==='total'||tipo==='subtotal')&&tipo!=='seccion'?'font-weight:700':'';
+      return `<span style="color:${c};${w}">${fmt.format(v)}</span>`;
+    };
+
+    const rows=lineas.map(l=>{
+      if(l.tipo==='seccion') return `
+        <tr><td colspan="3" style="padding:10px 12px 4px;font-size:10px;font-weight:700;letter-spacing:1px;color:#3B4BC8;text-transform:uppercase;background:#E6F1FB;border-top:2px solid #3B4BC8">${escH(l.label)}</td></tr>`;
+      if(l.tipo==='linea') return `
+        <tr style="border-bottom:1px solid #f5f5f3">
+          <td style="padding:5px 12px 5px 24px;font-size:12px;color:#444">${escH(l.label)}</td>
+          <td style="padding:5px 12px;font-size:12px;text-align:right;white-space:nowrap">${fmtCel(l.vm,'linea')}</td>
+          <td style="padding:5px 12px;font-size:12px;text-align:right;white-space:nowrap;background:#fafafe">${fmtCel(l.va,'linea')}</td>
+        </tr>`;
+      const bg=l.tipo==='total'?'#EAF3DE':l.enfasis?'#E6F1FB':'#f5f5f3';
+      const bdr=l.tipo==='total'?'border-top:2px solid #3B6D11':'border-top:1px solid #c5d0ff';
+      return `
+        <tr style="background:${bg};${bdr}">
+          <td style="padding:7px 12px;font-size:12px;font-weight:700;color:${l.tipo==='total'?'#3B6D11':'#3B4BC8'}">${escH(l.label)}</td>
+          <td style="padding:7px 12px;font-size:13px;font-weight:700;text-align:right;white-space:nowrap">${fmtCel(l.vm,l.tipo)}</td>
+          <td style="padding:7px 12px;font-size:13px;font-weight:700;text-align:right;white-space:nowrap;background:${bg}">${fmtCel(l.va,l.tipo)}</td>
+        </tr>`;
+    }).join('');
+
+    const m2=document.createElement('div');m2.className='modal-overlay';m2.id='doc-er-modal';
+    m2.innerHTML=`<div class="modal-box" style="max-width:720px;max-height:94vh;padding:0;overflow:hidden">
+      <div style="padding:16px 20px 0;background:#3B4BC8;color:#fff">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+          <div>
+            <div style="font-size:13px;opacity:.8">Estado de Resultados — NIF B-3</div>
+            <div style="font-size:17px;font-weight:700">${escH(docClienteActual.nombre)}</div>
+          </div>
+          <button onclick="document.getElementById('doc-er-modal').remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:16px">✕</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;padding-bottom:12px">${mesSelector}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr auto auto;padding:8px 12px 6px;background:#f5f5f3;border-bottom:1px solid #e0e0db;font-size:11px;font-weight:700;color:#888">
+        <div>Concepto</div>
+        <div style="text-align:right;padding:0 12px;min-width:130px">${DOC_MESES_L[mes-1]} ${ejercicio}</div>
+        <div style="text-align:right;padding:0 12px;min-width:130px;background:#fafafe">Acumulado ${ejercicio}</div>
+      </div>
+      <div style="overflow-y:auto;max-height:calc(94vh - 180px)">
+        <table style="width:100%;border-collapse:collapse">${rows}</table>
+      </div>
+      <div style="padding:10px 16px;border-top:1px solid #e0e0db;display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-sm btn-purple" onclick="docImprimirER(${ejercicio},${mes})">⎙ Imprimir</button>
+        <button class="btn btn-sm" onclick="document.getElementById('doc-er-modal').remove()">Cerrar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m2);
+  }catch(e){docToast('Error: '+e.message,'err');}
+}
+
+function docImprimirER(ejercicio, mes){
+  const modal=document.getElementById('doc-er-modal');
+  if(!modal) return;
+  const contenido=modal.querySelector('.modal-box').innerHTML;
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="utf-8"><title>Estado de Resultados</title>
+    <style>body{font-family:Arial,sans-serif;margin:20px}table{width:100%;border-collapse:collapse}
+    @media print{button{display:none}}</style></head>
+    <body>${contenido}<script>window.print();<\/script></body></html>`);
+  win.document.close();
+}
+
 
 // ===================================================
 // ACTIVOS FIJOS — CARGA MASIVA + COMPARACIÓN BALANZA
