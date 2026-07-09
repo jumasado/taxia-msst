@@ -4459,6 +4459,16 @@ async function reporteProyeccionPDF(id){
     else{const ing=avg('ingresos'),cv=avg('costo_ventas'),go=avg('gastos_operacion'),oi=avg('otros_ingresos'),og=avg('otros_gastos'),pp=avg('pago_provisional');
       proyectados.push({mes:m,real:false,ingresos:ing,costo_ventas:cv,utilidad_bruta:ing-cv,gastos_operacion:go,utilidad_operacion:ing-cv-go,otros_ingresos:oi,otros_gastos:og,pago_provisional:pp,utilidad_neta_contable:ing-cv-go+oi-og});}
   }
+  // Cifras REALES al mes actual (solo meses con datos reales)
+  const ultimoMesReal=mesesConDatos.length>0?Math.max(...mesesConDatos.map(m=>m.mes)):0;
+  const mesRealLabel=ultimoMesReal>0?MESES_NOMBRES[ultimoMesReal-1]:'Sin datos';
+  const realIngresos=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
+  const realCosto=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
+  const realGastosOp=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
+  const realOtrosIng=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
+  const realOtrosGas=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.otros_gastos)||0),0);
+  const realUtilidad=realIngresos-realCosto-realGastosOp+realOtrosIng-realOtrosGas;
+  const realPP=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
   const totalIngresos=proyectados.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
   const totalCosto=proyectados.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
   const totalGastosOp=proyectados.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
