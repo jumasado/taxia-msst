@@ -3148,6 +3148,16 @@ async function renderDetalleProyeccion(id){
     }
   }
 
+  // Cifras REALES al mes actual (solo meses con datos reales)
+  const ultimoMesReal=mesesConDatos.length>0?Math.max(...mesesConDatos.map(m=>m.mes)):0;
+  const mesRealLabel=ultimoMesReal>0?MESES_NOMBRES[ultimoMesReal-1]:'Sin datos';
+  const realIngresos=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
+  const realCosto=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
+  const realGastosOp=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
+  const realOtrosIng=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
+  const realOtrosGas=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.otros_gastos)||0),0);
+  const realUtilidad=realIngresos-realCosto-realGastosOp+realOtrosIng-realOtrosGas;
+  const realPP=mesesConDatos.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
   const totalIngresos=proyectados.reduce((s,m)=>s+(parseFloat(m.ingresos)||0),0);
   const totalCosto=proyectados.reduce((s,m)=>s+(parseFloat(m.costo_ventas)||0),0);
   const totalGastosOp=proyectados.reduce((s,m)=>s+(parseFloat(m.gastos_operacion)||0),0);
@@ -4466,29 +4476,33 @@ async function reporteProyeccionPDF(id){
   const cuPDF=totalIngresos>0?(utilidadFiscal/totalIngresos*100):0;
   const hoy=new Date().toLocaleDateString('es-MX',{timeZone:'America/Tijuana',dateStyle:'long'});
 
-  // Gráficas SVG
+  // Gráficas SVG (3 separadas: Ingresos | Egresos | Resultado)
   const labelsM=MESES_NOMBRES.map(m=>m.slice(0,3));
-  const gW=920,gH=180,gX=60,gY=20,gBW=gW-80,gBH=gH-50;
-  const barPairP=Math.floor(gBW/12);
-  const barW=Math.floor(barPairP/2)-2;
-  const maxVal=Math.max(...proyectados.map(m=>parseFloat(m.ingresos)||0),...proyectados.map(m=>(parseFloat(m.costo_ventas)||0)+(parseFloat(m.gastos_operacion)||0)))*1.1||1;
-
-  let svg1='<svg width="100%" viewBox="0 0 '+gW+' '+gH+'" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif">';
-  for(let i=0;i<=4;i++){const y=gY+gBH-(i/4)*gBH;svg1+='<line x1="'+gX+'" y1="'+y+'" x2="'+(gX+gBW)+'" y2="'+y+'" stroke="#e5e5e0" stroke-width="0.5"/>';const val=((maxVal/1.1)*(i/4)/1000000);svg1+='<text x="'+(gX-5)+'" y="'+(y+4)+'" text-anchor="end" font-size="8" fill="#999">$'+val.toFixed(1)+'M</text>';}
-  proyectados.forEach((m,i)=>{
-    const x=gX+i*barPairP;
-    const egresos=(parseFloat(m.costo_ventas)||0)+(parseFloat(m.gastos_operacion)||0)+(parseFloat(m.otros_gastos)||0);
-    const hI=Math.max(1,Math.round(((parseFloat(m.ingresos)||0)/maxVal)*gBH));
-    const hE=Math.max(1,Math.round((egresos/maxVal)*gBH));
-    const op=m.real?1:0.55;
-    svg1+='<rect x="'+x+'" y="'+(gY+gBH-hI)+'" width="'+barW+'" height="'+hI+'" fill="#3B4BC8" opacity="'+op+'" rx="2"/>';
-    svg1+='<rect x="'+(x+barW+2)+'" y="'+(gY+gBH-hE)+'" width="'+barW+'" height="'+hE+'" fill="#dc2626" opacity="'+op+'" rx="2"/>';
-    svg1+='<text x="'+(x+barPairP/2)+'" y="'+(gY+gBH+12)+'" text-anchor="middle" font-size="7.5" fill="#888">'+labelsM[i]+'</text>';
-  });
-  svg1+='<rect x="'+gX+'" y="'+(gY+gBH+22)+'" width="10" height="8" fill="#3B4BC8" rx="2"/><text x="'+(gX+13)+'" y="'+(gY+gBH+30)+'" font-size="8" fill="#555">Ingresos</text>';
-  svg1+='<rect x="'+(gX+80)+'" y="'+(gY+gBH+22)+'" width="10" height="8" fill="#dc2626" rx="2"/><text x="'+(gX+93)+'" y="'+(gY+gBH+30)+'" font-size="8" fill="#555">Egresos</text>';
-  svg1+='</svg>';
-
+  const gW=920,gH=155,gX=55,gY=15,gBW=gW-70,gBH=gH-38;
+  const barP=Math.floor(gBW/12);
+  const barW=Math.floor(barP*0.6);
+  function buildBarSVG(values,color){
+    const maxV=Math.max(...values.map(v=>Math.abs(v)))*1.15||1;
+    let s='<svg width="100%" viewBox="0 0 '+gW+' '+gH+'" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif">';
+    for(let i=0;i<=4;i++){const y=gY+gBH-(i/4)*gBH;const val=((maxV/1.15)*(i/4)/1000000);
+      s+='<line x1="'+gX+'" y1="'+y+'" x2="'+(gX+gBW)+'" y2="'+y+'" stroke="#e5e5e0" stroke-width="0.4"/>';
+      s+='<text x="'+(gX-5)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="#bbb">$'+val.toFixed(1)+'M</text>';}
+    values.forEach((v,i)=>{
+      const x=gX+i*barP+(barP-barW)/2;
+      const abs=Math.abs(v);const h=Math.max(1,Math.round((abs/maxV)*gBH));
+      const positivo=v>=0;const baseY=positivo?gY+gBH-h:gY+gBH;
+      const fill=positivo?color:'#dc2626';const op=proyectados[i]?.real?1:0.5;
+      s+='<rect x="'+x+'" y="'+baseY+'" width="'+barW+'" height="'+h+'" fill="'+fill+'" opacity="'+op+'" rx="2"/>';
+      s+='<text x="'+(x+barW/2)+'" y="'+(gY+gBH+13)+'" text-anchor="middle" font-size="7" fill="'+(proyectados[i]?.real?'#555':'#bbb')+'">'+labelsM[i]+'</text>';
+    });
+    s+='</svg>';return s;
+  }
+  const ingVal=proyectados.map(m=>parseFloat(m.ingresos)||0);
+  const egVal=proyectados.map(m=>(parseFloat(m.costo_ventas)||0)+(parseFloat(m.gastos_operacion)||0)+(parseFloat(m.otros_gastos)||0));
+  const resVal=proyectados.map(m=>parseFloat(m.utilidad_neta_contable)||0);
+  const svg1=buildBarSVG(ingVal,'#3B4BC8');
+  const svg2=buildBarSVG(egVal,'#EF9F27');
+  const svg3=buildBarSVG(resVal,'#5a8a1a');
   // Tabla mensual HTML
   const mesRowsHTML=proyectados.map(m=>'<tr style="background:'+(m.real?'#fff':'#f8fff8')+'">'+
     '<td style="padding:5px 8px;font-size:11px;font-weight:500;border-bottom:1px solid #f0f0ec">'+MESES_NOMBRES[m.mes-1]+(m.real?'':' <span style="font-size:8px;color:#8DC63F;font-weight:700">PROY</span>')+'</td>'+
@@ -4631,17 +4645,74 @@ tr:last-child td{border-bottom:none}
   </div>
 </div>
 
-<div class="kpi-grid">
-  <div class="kpi"><div class="kpi-label">Ingresos proyectados</div><div class="kpi-val">${fmtMXN(totalIngresos)}</div><div class="kpi-sub">${nMeses} reales · ${12-nMeses} proyectados</div></div>
-  <div class="kpi naranja"><div class="kpi-label">Utilidad contable</div><div class="kpi-val" style="color:${utilidadContable>=0?'#92400E':'#dc2626'}">${fmtMXN(utilidadContable)}</div><div class="kpi-sub">Margen ${(totalIngresos>0?(utilidadContable/totalIngresos*100):0).toFixed(1)}%</div></div>
-  <div class="kpi ${utilidadFiscal>=0?'verde':'rojo'}"><div class="kpi-label">Utilidad fiscal estimada</div><div class="kpi-val">${fmtMXN(utilidadFiscal)}</div><div class="kpi-sub">Ajustes: ${fmtMXN(totalSumas-totalRestas)}</div></div>
-  <div class="kpi ${isrACargoP>0?'rojo':'verde'}"><div class="kpi-label">${isrACargoP>0?'ISR a cargo':'Saldo a favor'}</div><div class="kpi-val">${isrACargoP>0?fmtMXN(isrACargoP):fmtMXN(saldoFavorP)}</div><div class="kpi-sub">ISR estimado: ${fmtMXN(isrEstimado)}</div></div>
-  <div class="kpi"><div class="kpi-label">Coeficiente de utilidad</div><div class="kpi-val">${cuPDF.toFixed(2)}%</div><div class="kpi-sub">Art. 14 LISR · Para ${proy.ejercicio+1}</div></div>
+<!-- KPIs: fila proyectado + fila real -->
+<div class="kpi-grid" style="margin-bottom:8px">
+  <div class="kpi"><div class="kpi-label">Ingresos</div>
+    <div style="font-size:9px;font-weight:600;color:#888;margin-bottom:2px">PROYECTADO ANUAL</div>
+    <div class="kpi-val">${fmtMXN(totalIngresos)}</div><div class="kpi-sub">${nMeses} reales · ${12-nMeses} proyectados</div>
+    <div style="margin-top:6px;padding-top:6px;border-top:1px solid #e5e5e0">
+      <div style="font-size:9px;font-weight:600;color:#3B6D11;margin-bottom:2px">REAL AL ${mesRealLabel.toUpperCase()}</div>
+      <div style="font-size:13px;font-weight:700;color:#3B6D11">${fmtMXN(realIngresos)}</div>
+      <div style="font-size:9px;color:#aaa">${nMeses} mes${nMeses!==1?'es':''} acumulados</div>
+    </div>
+  </div>
+  <div class="kpi naranja"><div class="kpi-label">Utilidad contable</div>
+    <div style="font-size:9px;font-weight:600;color:#888;margin-bottom:2px">PROYECTADO ANUAL</div>
+    <div class="kpi-val" style="color:${utilidadContable>=0?'#92400E':'#dc2626'}">${fmtMXN(utilidadContable)}</div><div class="kpi-sub">Margen ${(totalIngresos>0?(utilidadContable/totalIngresos*100):0).toFixed(1)}%</div>
+    <div style="margin-top:6px;padding-top:6px;border-top:1px solid #e5e5e0">
+      <div style="font-size:9px;font-weight:600;color:#3B6D11;margin-bottom:2px">REAL AL ${mesRealLabel.toUpperCase()}</div>
+      <div style="font-size:13px;font-weight:700;color:${realUtilidad>=0?'#3B6D11':'#dc2626'}">${fmtMXN(realUtilidad)}</div>
+      <div style="font-size:9px;color:#aaa">Margen ${(realIngresos>0?(realUtilidad/realIngresos*100):0).toFixed(1)}%</div>
+    </div>
+  </div>
+  <div class="kpi ${utilidadFiscal>=0?'verde':'rojo'}"><div class="kpi-label">Utilidad fiscal estimada</div>
+    <div style="font-size:9px;font-weight:600;color:#888;margin-bottom:2px">PROYECTADO ANUAL</div>
+    <div class="kpi-val">${fmtMXN(utilidadFiscal)}</div><div class="kpi-sub">Ajustes: ${fmtMXN(totalSumas-totalRestas)}</div>
+    <div style="margin-top:6px;padding-top:6px;border-top:1px solid #e5e5e0">
+      <div style="font-size:9px;font-weight:600;color:#888;margin-bottom:2px">NOTA</div>
+      <div style="font-size:9px;color:#aaa;line-height:1.4">Requiere cierre anual para determinar cifra definitiva.</div>
+    </div>
+  </div>
+  <div class="kpi ${isrACargoP>0?'rojo':'verde'}"><div class="kpi-label">${isrACargoP>0?'ISR a cargo':'Saldo a favor'}</div>
+    <div style="font-size:9px;font-weight:600;color:#888;margin-bottom:2px">PROYECTADO ANUAL</div>
+    <div class="kpi-val">${isrACargoP>0?fmtMXN(isrACargoP):fmtMXN(saldoFavorP)}</div><div class="kpi-sub">ISR estimado: ${fmtMXN(isrEstimado)}</div>
+    <div style="margin-top:6px;padding-top:6px;border-top:1px solid #e5e5e0">
+      <div style="font-size:9px;font-weight:600;color:#3B6D11;margin-bottom:2px">PP REALES AL ${mesRealLabel.toUpperCase()}</div>
+      <div style="font-size:13px;font-weight:700;color:#3B4BC8">${fmtMXN(realPP)}</div>
+      <div style="font-size:9px;color:#aaa">${nMeses} pagos acumulados</div>
+    </div>
+  </div>
+  <div class="kpi"><div class="kpi-label">Coeficiente de utilidad</div>
+    <div style="font-size:9px;font-weight:600;color:#888;margin-bottom:2px">PROYECTADO ANUAL</div>
+    <div class="kpi-val">${cuPDF.toFixed(2)}%</div><div class="kpi-sub">Art. 14 LISR · Para ${proy.ejercicio+1}</div>
+    <div style="margin-top:6px;padding-top:6px;border-top:1px solid #e5e5e0">
+      <div style="font-size:9px;font-weight:600;color:#888;margin-bottom:2px">MESES CON DATOS</div>
+      <div style="font-size:13px;font-weight:700;color:#555">${nMeses}/12</div>
+      <div style="font-size:9px;color:#aaa">Avance del ejercicio</div>
+    </div>
+  </div>
 </div>
 
 <div class="section">
-  <div class="section-title">Evolución mensual — Ingresos vs Egresos</div>
-  <div class="graf-box"><div class="graf-title">Comparativo mensual (MXN)</div>${svg1}</div>
+  <div class="section-title">Comportamiento del ejercicio ${proy.ejercicio} — mes a mes</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+    <div class="graf-box">
+      <div class="graf-title">📈 Ingresos del ejercicio</div>
+      ${svg1}
+      <div style="font-size:8px;color:#3B4BC8;text-align:right;margin-top:4px;font-weight:600">Total: ${fmtMXN(totalIngresos)}</div>
+    </div>
+    <div class="graf-box">
+      <div class="graf-title">📉 Egresos del ejercicio</div>
+      ${svg2}
+      <div style="font-size:8px;color:#EF9F27;text-align:right;margin-top:4px;font-weight:600">Total: ${fmtMXN(totalCosto+totalGastosOp+totalOtrosGas)}</div>
+    </div>
+    <div class="graf-box">
+      <div class="graf-title">📊 Resultado del ejercicio</div>
+      ${svg3}
+      <div style="font-size:8px;text-align:right;margin-top:4px;font-weight:600;color:${utilidadContable>=0?'#5a8a1a':'#dc2626'}">Total: ${fmtMXN(utilidadContable)}</div>
+    </div>
+  </div>
+  <div style="font-size:8px;color:#bbb;margin-top:8px">■ Barras sólidas = datos reales &nbsp;·&nbsp; Barras semitransparentes = proyección por promedio</div>
 </div>
 
 <div class="section">
