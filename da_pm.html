@@ -2682,7 +2682,8 @@ function mostrarBalanzaCatalogo(cuentas){
   const overlay=document.createElement('div');
   overlay.className='modal-overlay';overlay.id='modal-catalogo';
 
-  const pendientes=cuentas.filter(c=>!c.rubro_fiscal).length;
+  const esPendiente=c=>!c.es_titulo&&(!c.rubro_fiscal||c.rubro_fiscal===''||c.rubro_fiscal==='sin_clasificar');
+  const pendientes=cuentas.filter(esPendiente).length;
   const rubroOpts='<option value="">— Seleccionar —</option>'+RUBROS_FISCALES.map(r=>'<option value="'+r.val+'">'+r.label+'</option>').join('');
 
   // Calcular niveles de sangría
@@ -2694,7 +2695,8 @@ function mostrarBalanzaCatalogo(cuentas){
     const sangria=nivel*20; // 20px por nivel
     const bloqueado=c.es_titulo;
     const bgRow=c.es_titulo?'#fffbf0':i%2===0?'#fff':'#fafafa';
-    return `<tr id="cat-row-${i}" data-titulo="${c.es_titulo?'true':'false'}" style="background:${bgRow}">
+    const isPend=!c.es_titulo&&(!c.rubro_fiscal||c.rubro_fiscal===''||c.rubro_fiscal==='sin_clasificar');
+    return `<tr id="cat-row-${i}" data-titulo="${c.es_titulo?'true':'false'}" data-pendiente="${isPend?'true':'false'}" style="background:${bgRow}">
       <td style="padding:5px 8px;font-size:11px;white-space:nowrap">
         <div style="display:flex;align-items:center;gap:4px;padding-left:${sangria}px">
           ${c.es_titulo?
@@ -2757,6 +2759,11 @@ function mostrarBalanzaCatalogo(cuentas){
           style="background:#FAEEDA;color:#854F0B;border-color:#f0c060">
           🔍 Ver todas (${cuentas.filter(c=>c.es_titulo).length} títulos)
         </button>
+        ${pendientes>0?`
+        <button class="btn btn-sm" id="btn-filtro-pendientes" onclick="catTogglePendientes()"
+          style="background:#FCEBEB;color:#A32D2D;border-color:#fca5a5;font-weight:700">
+          ⚠ Pendientes (${pendientes})
+        </button>`:''}
         <button class="btn btn-sm" onclick="catExcluirTitulos()"
           title="Eliminar del catálogo todas las cuentas título">
           🗑 Excluir títulos
@@ -2775,8 +2782,14 @@ function mostrarBalanzaCatalogo(cuentas){
       </div>
     </div>
 
-    ${pendientes>0?`<div style="background:#FAEEDA;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#854F0B">
-      ⚠ ${pendientes} cuenta${pendientes!==1?'s':''} sin rubro fiscal asignado</div>`:''}
+    ${pendientes>0?`
+    <div id="banner-pendientes"
+      style="background:#FCEBEB;border:1px solid #fca5a5;border-radius:8px;padding:9px 14px;margin-bottom:10px;
+             font-size:12px;color:#A32D2D;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer"
+      onclick="catTogglePendientes()" title="Clic para filtrar solo estas cuentas">
+      <span>⚠ <strong>${pendientes} cuenta${pendientes!==1?'s':''}</strong> sin rubro fiscal asignado — <u>clic para verlas</u></span>
+      <span id="banner-pend-estado" style="font-size:11px;opacity:.7">Mostrando todas</span>
+    </div>`:''}
 
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;min-width:800px">
@@ -2921,17 +2934,42 @@ window.catActualizarDesdeBalanza=async function(){
 
 window._catMostrarTitulos=true;
 
+window._catSoloPendientes=false;
+
 window.catToggleFiltro=function(){
   window._catMostrarTitulos=!window._catMostrarTitulos;
   const btn=document.getElementById('btn-filtro-titulo');
   const titulos=document.querySelectorAll('#cat-tbody tr[data-titulo="true"]');
-  const todos=document.querySelectorAll('#cat-tbody tr');
   if(window._catMostrarTitulos){
     titulos.forEach(r=>r.style.display='');
-    if(btn) btn.textContent='🔍 Ocultar títulos';
+    if(btn) btn.textContent='🔍 Ver todas ('+(window._catCuentas||[]).filter(c=>c.es_titulo).length+' títulos)';
   }else{
     titulos.forEach(r=>r.style.display='none');
-    if(btn) btn.textContent='🔍 Mostrar títulos ('+(window._catCuentas||[]).filter(c=>c.es_titulo).length+')';
+    if(btn) btn.textContent='🔍 Ocultar títulos';
+  }
+};
+
+window.catTogglePendientes=function(){
+  window._catSoloPendientes=!window._catSoloPendientes;
+  const btnP=document.getElementById('btn-filtro-pendientes');
+  const banner=document.getElementById('banner-pendientes');
+  const estadoLbl=document.getElementById('banner-pend-estado');
+  const todas=document.querySelectorAll('#cat-tbody tr');
+  const pendRows=document.querySelectorAll('#cat-tbody tr[data-pendiente="true"]');
+  const okRows=document.querySelectorAll('#cat-tbody tr[data-pendiente="false"]');
+  const totalPend=pendRows.length;
+  if(window._catSoloPendientes){
+    okRows.forEach(r=>r.style.display='none');
+    pendRows.forEach(r=>r.style.display='');
+    if(btnP){btnP.textContent='⚠ Pendientes ('+totalPend+') — ver todas';btnP.style.background='#A32D2D';btnP.style.color='#fff';btnP.style.borderColor='#A32D2D';}
+    if(estadoLbl) estadoLbl.textContent='Filtrando solo pendientes';
+    if(banner) banner.style.background='#fca5a5';
+    if(pendRows.length>0) pendRows[0].scrollIntoView({behavior:'smooth',block:'center'});
+  }else{
+    todas.forEach(r=>{const esTitulo=r.dataset.titulo==='true';r.style.display=(esTitulo&&!window._catMostrarTitulos)?'none':'';});
+    if(btnP){btnP.textContent='⚠ Pendientes ('+totalPend+')';btnP.style.background='#FCEBEB';btnP.style.color='#A32D2D';btnP.style.borderColor='#fca5a5';}
+    if(estadoLbl) estadoLbl.textContent='Mostrando todas';
+    if(banner) banner.style.background='#FCEBEB';
   }
 };
 
@@ -2971,7 +3009,21 @@ window.catActualizarRubro=function(idx,valor){
   const row=document.getElementById('cat-row-'+idx);
   if(row){
     const sels=row.querySelectorAll('select');
-    if(sels[1]) sels[1].style.borderColor=valor?'#e0e0db':'#EF9F27';
+    const ahora_pendiente=!valor||valor===''||valor==='sin_clasificar';
+    if(sels[1]){sels[1].style.borderColor=ahora_pendiente?'#EF9F27':'#e0e0db';sels[1].style.background=ahora_pendiente?'#fff8ed':'';}
+    row.dataset.pendiente=ahora_pendiente?'true':'false';
+    if(window._catSoloPendientes&&!ahora_pendiente) row.style.display='none';
+    const totalPend=(window._catCuentas||[]).filter(c=>!c.es_titulo&&(!c.rubro_fiscal||c.rubro_fiscal===''||c.rubro_fiscal==='sin_clasificar')).length;
+    const btnP=document.getElementById('btn-filtro-pendientes');
+    const bannerEl=document.getElementById('banner-pendientes');
+    if(btnP){
+      if(totalPend===0){btnP.textContent='✅ Todo clasificado';btnP.style.background='#EAF3DE';btnP.style.color='#3B6D11';btnP.style.borderColor='#a3d99b';if(window._catSoloPendientes){window._catSoloPendientes=false;document.querySelectorAll('#cat-tbody tr').forEach(r=>{const esTitulo=r.dataset.titulo==='true';r.style.display=(esTitulo&&!window._catMostrarTitulos)?'none':'';});}}
+      else{btnP.textContent=window._catSoloPendientes?'⚠ Pendientes ('+totalPend+') — ver todas':'⚠ Pendientes ('+totalPend+')';}
+    }
+    if(bannerEl){
+      if(totalPend===0){bannerEl.style.background='#EAF3DE';bannerEl.style.border='1px solid #a3d99b';bannerEl.style.color='#3B6D11';bannerEl.style.cursor='default';bannerEl.onclick=null;bannerEl.innerHTML='<span>✅ Todas las cuentas tienen rubro fiscal asignado</span>';}
+      else{const strong=bannerEl.querySelector('strong');if(strong)strong.textContent=totalPend+' cuenta'+(totalPend!==1?'s':'');const estado=document.getElementById('banner-pend-estado');if(estado)estado.textContent=window._catSoloPendientes?'Filtrando solo pendientes':'Mostrando todas';}
+    }
   }
 };
 
