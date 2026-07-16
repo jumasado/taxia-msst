@@ -894,6 +894,7 @@ function mostrarModalConclusion(tareaId, targetEmail){
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  setTimeout(()=>docActualizarContadorPend(), 50);
 }
 
 function selectMotivo(id){
@@ -7335,6 +7336,7 @@ function docMostrarClasifDialog(cuentas, clasifExist, subcuentaMap, nodoMap, pad
   window._padreMap = padreMap;
   window._clasifExist = clasifExist||{};
   window._clasifChanges = {}; // resetear cambios pendientes al abrir
+  window._docSoloPendientes = false;
 
   // Generar opciones agrupadas por categoría NIF
   const optsGrupos = Object.entries(DOC_CATS).map(([cat,info])=>{
@@ -7366,9 +7368,19 @@ function docMostrarClasifDialog(cuentas, clasifExist, subcuentaMap, nodoMap, pad
         <div style="font-size:16px;font-weight:700">📊 Clasificación del catálogo de cuentas</div>
         <div style="font-size:11px;color:#888">Doble clic en cualquier cuenta para expandir sus dependientes. Asigna el rubro al nivel más apropiado.</div>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="btn-doc-pendientes" onclick="docTogglePendientes()"
+          style="display:none;background:#FCEBEB;color:#A32D2D;border:1px solid #fca5a5;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer">
+          ⚠ Pendientes (–)
+        </button>
         <button onclick="docGuardarClasif()" class="btn btn-primary btn-sm">💾 Guardar</button>
         <button onclick="docCerrarClasif()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button>
+      </div>
+    </div>
+    <div id="banner-doc-pendientes" style="display:none;background:#FCEBEB;border:1px solid #fca5a5;border-radius:8px;padding:9px 14px;margin-bottom:8px;font-size:12px;color:#A32D2D;flex-shrink:0;cursor:pointer" onclick="docTogglePendientes()">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span>⚠ <strong id="banner-doc-count">–</strong> cuentas afectables sin rubro asignado — <u>clic para verlas</u></span>
+        <span id="banner-doc-estado" style="font-size:11px;opacity:.7">Mostrando todas</span>
       </div>
     </div>
     <div style="background:#E6F1FB;border-radius:6px;padding:6px 12px;font-size:11px;color:#185FA5;margin-bottom:10px;flex-shrink:0">
@@ -7409,8 +7421,10 @@ function docRenderNodo(cod, container, nivel, nodoMap, padreMap, clasifExist, op
   const badgeColor = catInfo ? `background:${catInfo.bg};color:${catInfo.color}` : 'background:#f5f5f3;color:#999';
   const badgeLabel = rubroActual ? (DOC_RUBROS.find(r=>r.id===rubroActual)||{label:'No incluir'}).label : '— sin clasificar —';
 
+  const esPend = esAfectable && !rubroActual;
   const row = document.createElement('div');
   row.id = 'nodo-'+cod.replace(/[-. ]/g,'_');
+  row.dataset.pendiente = esPend ? 'true' : 'false';
   row.style.cssText = `background:${bg};border-bottom:1px solid #f0f0ec;padding:5px 12px 5px ${8+indent}px;display:flex;align-items:center;gap:8px;cursor:${tieneHijos?'pointer':'default'}`;
   row.title = tieneHijos ? 'Doble clic para expandir/colapsar dependientes' : '';
 
@@ -7463,6 +7477,39 @@ function docToggleNodoHijos(cod, container, nivel, nodoMap, padreMap, clasifExis
   }
 }
 
+function docActualizarContadorPend(){
+  const nodos=Array.from(document.querySelectorAll('[id^="nodo-"][data-pendiente]'));
+  const totalPend=nodos.filter(n=>n.dataset.pendiente==='true').length;
+  const btnP=document.getElementById('btn-doc-pendientes');
+  const banner=document.getElementById('banner-doc-pendientes');
+  const countEl=document.getElementById('banner-doc-count');
+  const activo=window._docSoloPendientes;
+  if(btnP){
+    btnP.style.display='inline-block';
+    if(totalPend===0){btnP.textContent='✅ Todo clasificado';btnP.style.background='#EAF3DE';btnP.style.color='#3B6D11';btnP.style.borderColor='#a3d99b';}
+    else{btnP.textContent=activo?'⚠ Pendientes ('+totalPend+') — ver todas':'⚠ Pendientes ('+totalPend+')';btnP.style.background=activo?'#A32D2D':'#FCEBEB';btnP.style.color=activo?'#fff':'#A32D2D';btnP.style.borderColor=activo?'#A32D2D':'#fca5a5';}
+  }
+  if(banner){
+    banner.style.display=totalPend===0?'none':'block';
+    if(countEl) countEl.textContent=totalPend;
+    const estado=document.getElementById('banner-doc-estado');
+    if(estado) estado.textContent=activo?'Filtrando solo pendientes':'Mostrando todas';
+  }
+}
+
+function docTogglePendientes(){
+  window._docSoloPendientes=!window._docSoloPendientes;
+  const nodos=Array.from(document.querySelectorAll('[id^="nodo-"][data-pendiente]'));
+  if(window._docSoloPendientes){
+    nodos.forEach(n=>{n.style.display=n.dataset.pendiente==='true'?'flex':'none';});
+    const first=nodos.find(n=>n.dataset.pendiente==='true');
+    if(first) first.scrollIntoView({behavior:'smooth',block:'center'});
+  }else{
+    nodos.forEach(n=>{n.style.display='flex';});
+  }
+  docActualizarContadorPend();
+}
+
 function docActualizarBadge(cod){
   const safeCod = cod.replace(/[-. ]/g,'_');
   const sel = document.getElementById('select-'+safeCod);
@@ -7473,17 +7520,25 @@ function docActualizarBadge(cod){
   if(!window._clasifChanges) window._clasifChanges={};
   if(rubro) window._clasifChanges[cod]=rubro;
   else delete window._clasifChanges[cod]; // heredar de padre = borrar override
+  const nodoEl=document.getElementById('nodo-'+safeCod);
+  if(nodoEl){
+    const esAfectable=(window._nodoMap?.[cod]?.clase||'').toLowerCase()==='afectable';
+    nodoEl.dataset.pendiente=(esAfectable&&!rubro)?'true':'false';
+    if(window._docSoloPendientes&&rubro) nodoEl.style.display='none';
+  }
   if(!rubro){
     badge.style.cssText='font-size:9px;padding:1px 6px;border-radius:10px;background:#f5f5f3;color:#999';
     badge.textContent='— heredar de padre —';
+    docActualizarContadorPend();
     return;
   }
-  const rubroInfo = DOC_RUBROS.find(r=>r.id===rubro);
-  const catInfo = rubroInfo ? DOC_CATS[rubroInfo.cat] : null;
+  const rubroInfo=DOC_RUBROS.find(r=>r.id===rubro);
+  const catInfo=rubroInfo?DOC_CATS[rubroInfo.cat]:null;
   if(catInfo){
     badge.style.cssText=`font-size:9px;padding:1px 6px;border-radius:10px;background:${catInfo.bg};color:${catInfo.color}`;
     badge.textContent=rubroInfo.label;
   }
+  docActualizarContadorPend();
 }
 
 
