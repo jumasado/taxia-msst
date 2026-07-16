@@ -7421,7 +7421,7 @@ function docRenderNodo(cod, container, nivel, nodoMap, padreMap, clasifExist, op
   const badgeColor = catInfo ? `background:${catInfo.bg};color:${catInfo.color}` : 'background:#f5f5f3;color:#999';
   const badgeLabel = rubroActual ? (DOC_RUBROS.find(r=>r.id===rubroActual)||{label:'No incluir'}).label : '— sin clasificar —';
 
-  const esPend = esAfectable && !rubroActual;
+  const esPend = !rubroActual;
   const row = document.createElement('div');
   row.id = 'nodo-'+cod.replace(/[-. ]/g,'_');
   row.dataset.pendiente = esPend ? 'true' : 'false';
@@ -7522,8 +7522,7 @@ function docActualizarBadge(cod){
   else delete window._clasifChanges[cod]; // heredar de padre = borrar override
   const nodoEl=document.getElementById('nodo-'+safeCod);
   if(nodoEl){
-    const esAfectable=(window._nodoMap?.[cod]?.clase||'').toLowerCase()==='afectable';
-    nodoEl.dataset.pendiente=(esAfectable&&!rubro)?'true':'false';
+    nodoEl.dataset.pendiente=(!rubro)?'true':'false';
     if(window._docSoloPendientes&&rubro) nodoEl.style.display='none';
   }
   if(!rubro){
