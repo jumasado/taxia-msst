@@ -187,8 +187,10 @@ function getUserModules(email){
   const u=usersCache[email]||session;
   if(!u) return [];
   if(u.role==='admin') return ADMIN_ALWAYS;
-  // leer campo modulos del usuario (array guardado en Supabase)
-  if(u.modulos&&u.modulos.length) return u.modulos;
+  // Normalizar modulos: puede llegar como array JSONB o string legacy (JSON.stringify)
+  let mods=u.modulos;
+  if(typeof mods==='string'){try{mods=JSON.parse(mods);}catch(e){mods=null;}}
+  if(Array.isArray(mods)&&mods.length) return mods;
   return DEFAULT_MODULES_BY_ROLE[u.role]||['plan'];
 }
 
@@ -5203,7 +5205,10 @@ async function renderPermisos(){
   }
   const availMods=ALL_MODULES.filter(m=>!['admin','permisos'].includes(m.id));
   const cards=nonAdmin.map(u=>{
-    const mods=u.modulos&&u.modulos.length?u.modulos:DEFAULT_MODULES_BY_ROLE[u.role]||['plan'];
+    // Normalizar modulos: puede venir como array o string (legacy)
+    let rawMods=u.modulos;
+    if(typeof rawMods==='string'){try{rawMods=JSON.parse(rawMods);}catch(e){rawMods=null;}}
+    const mods=Array.isArray(rawMods)&&rawMods.length?rawMods:DEFAULT_MODULES_BY_ROLE[u.role]||['plan'];
     const checks=availMods.map(m=>`
       <label style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;cursor:pointer;background:#fafafa;border:1px solid #f0f0ec;font-size:12px">
         <input type="checkbox" data-email="${escH(u.email)}" data-mod="${m.id}" ${mods.includes(m.id)?'checked':''} onchange="permToggle(this)">
@@ -5235,12 +5240,15 @@ async function permToggle(checkbox){
   const mod=checkbox.dataset.mod;
   const u=usersCache[email];
   if(!u) return;
-  let mods=u.modulos&&u.modulos.length?[...u.modulos]:[...(DEFAULT_MODULES_BY_ROLE[u.role]||['plan'])];
+  // Normalizar modulos antes de modificar (puede ser string o array)
+  let rawMods=u.modulos;
+  if(typeof rawMods==='string'){try{rawMods=JSON.parse(rawMods);}catch(e){rawMods=null;}}
+  let mods=Array.isArray(rawMods)&&rawMods.length?[...rawMods]:[...(DEFAULT_MODULES_BY_ROLE[u.role]||['plan'])];
   if(checkbox.checked){if(!mods.includes(mod))mods.push(mod);}
   else{mods=mods.filter(m=>m!==mod);}
   u.modulos=mods;
   usersCache[email]=u;
-  await sbPatch('users','?email=eq.'+encodeURIComponent(email),{modulos:JSON.stringify(mods)});
+  await sbPatch('users','?email=eq.'+encodeURIComponent(email),{modulos:mods}); // JSONB array — sin stringify
   // Feedback visual
   const lbl=checkbox.closest('label');
   if(lbl){lbl.style.background=checkbox.checked?'#EAF3DE':'#fafafa';lbl.style.borderColor=checkbox.checked?'#3B6D11':'#f0f0ec';setTimeout(()=>{lbl.style.background='#fafafa';lbl.style.borderColor='#f0f0ec';},800);}
