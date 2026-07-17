@@ -7402,6 +7402,23 @@ function docMostrarClasifDialog(cuentas, clasifExist, subcuentaMap, nodoMap, pad
   nodosRaiz.forEach(cod => docRenderNodo(cod, container, 0, nodoMap, padreMap, clasifExist, optsGrupos));
 }
 
+
+function docEstadoSubarbol(cod, nodoMap, clasifExist){
+  function contar(cod){
+    const nodo=nodoMap[cod];
+    const hijos=nodo?nodo.hijos:[];
+    if(clasifExist[cod]) return {total:1+hijos.length,clasif:1+hijos.length};
+    if(!hijos.length) return {total:1,clasif:0};
+    let total=1,clasif=0;
+    hijos.forEach(h=>{const r=contar(h);total+=r.total;clasif+=r.clasif;});
+    return {total,clasif};
+  }
+  const {total,clasif}=contar(cod);
+  if(clasif===0) return 'rojo';
+  if(clasif>=total) return 'verde';
+  return 'amarillo';
+}
+
 function docRenderNodo(cod, container, nivel, nodoMap, padreMap, clasifExist, optsGrupos){
   const nodo = nodoMap[cod];
   const nombre = nodo ? nodo.nom : cod;
@@ -7429,12 +7446,18 @@ function docRenderNodo(cod, container, nivel, nodoMap, padreMap, clasifExist, op
   row.style.cssText = `background:${bg};border-bottom:1px solid #f0f0ec;padding:5px 12px 5px ${8+indent}px;display:flex;align-items:center;gap:8px;cursor:${tieneHijos?'pointer':'default'}`;
   row.title = tieneHijos ? 'Doble clic para expandir/colapsar dependientes' : '';
 
+  let dotSemaforo='';
+  if(tieneHijos){
+    const estado=docEstadoSubarbol(cod,nodoMap,clasifExist);
+    const dotColor=estado==='verde'?'#22c55e':estado==='amarillo'?'#f59e0b':'#ef4444';
+    const dotTitle=estado==='verde'?'Todo clasificado':estado==='amarillo'?'Clasificación parcial':'Sin clasificar';
+    dotSemaforo=`<span title="${dotTitle}" style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0;display:inline-block;margin-right:2px"></span>`;
+  }
   const expandIcon = tieneHijos ? `<span class="expand-icon" style="font-size:10px;color:#3B4BC8;width:14px;flex-shrink:0">▶</span>` : `<span style="width:14px;flex-shrink:0"></span>`;
   const codigoStyle = `font-size:11px;font-weight:700;color:#3B4BC8;white-space:nowrap;flex-shrink:0`;
   const nombreStyle = `font-size:12px;color:#444;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
 
-  row.innerHTML = `${expandIcon}
-    <span style="${codigoStyle}">${cod}</span>
+  row.innerHTML = `${expandIcon}${dotSemaforo}<span style="${codigoStyle}">${cod}</span>
     <span style="${nombreStyle}">${escH(nombre)}</span>
     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;min-width:280px">
       <span id="badge-${cod.replace(/[-. ]/g,'_')}" style="font-size:9px;padding:1px 6px;border-radius:10px;white-space:nowrap;${badgeColor}">${escH(badgeLabel)}</span>
@@ -7534,6 +7557,18 @@ function docActualizarBadge(cod){
   if(nodoEl){
     if(rubro){(window._clasifChanges=window._clasifChanges||{})[cod]=rubro;}
   else{delete (window._clasifChanges=window._clasifChanges||{})[cod];}
+  const _cActual=Object.assign({},window._clasifExist||{},window._clasifChanges||{});
+  let _anc=(window._padreMap||{})[cod];
+  while(_anc){
+    const _ancSafe=_anc.replace(/[-. ]/g,'_');
+    const _dot=document.querySelector('#nodo-'+_ancSafe+' span[title]');
+    if(_dot){
+      const _est=docEstadoSubarbol(_anc,window._nodoMap||{},_cActual);
+      _dot.style.background=_est==='verde'?'#22c55e':_est==='amarillo'?'#f59e0b':'#ef4444';
+      _dot.title=_est==='verde'?'Todo clasificado':_est==='amarillo'?'Clasificación parcial':'Sin clasificar';
+    }
+    _anc=(window._padreMap||{})[_anc];
+  }
     if(window._docSoloPendientes&&rubro) nodoEl.style.display='none';
   }
   if(!rubro){
