@@ -7400,7 +7400,6 @@ function docMostrarClasifDialog(cuentas, clasifExist, subcuentaMap, nodoMap, pad
   // Renderizar nodos raíz
   const container = document.getElementById('clasif-tree');
   nodosRaiz.forEach(cod => docRenderNodo(cod, container, 0, nodoMap, padreMap, clasifExist, optsGrupos));
-  setTimeout(()=>docActualizarContadorPend(), 100);
 }
 
 function docRenderNodo(cod, container, nivel, nodoMap, padreMap, clasifExist, optsGrupos){
@@ -7422,7 +7421,8 @@ function docRenderNodo(cod, container, nivel, nodoMap, padreMap, clasifExist, op
   const badgeColor = catInfo ? `background:${catInfo.bg};color:${catInfo.color}` : 'background:#f5f5f3;color:#999';
   const badgeLabel = rubroActual ? (DOC_RUBROS.find(r=>r.id===rubroActual)||{label:'No incluir'}).label : '— sin clasificar —';
 
-  const esPend = !rubroActual;
+  const tieneRubroPorHerencia=(function(cod){let p=padreMap[cod];while(p){if(clasifExist[p])return true;p=padreMap[p];}return false;})(cod);
+  const esPend = !rubroActual && !tieneRubroPorHerencia;
   const row = document.createElement('div');
   row.id = 'nodo-'+cod.replace(/[-. ]/g,'_');
   row.dataset.pendiente = esPend ? 'true' : 'false';
@@ -7479,6 +7479,15 @@ function docToggleNodoHijos(cod, container, nivel, nodoMap, padreMap, clasifExis
 }
 
 function docActualizarContadorPend(){
+  const clasifNow=Object.assign({},window._clasifExist||{},window._clasifChanges||{});
+  const pMap=window._padreMap||{};
+  const nMap=window._nodoMap||{};
+  const herencia=(cod)=>{let p=pMap[cod];while(p){if(clasifNow[p])return true;p=pMap[p];}return false;};
+  document.querySelectorAll('[id^="nodo-"]').forEach(el=>{
+    const rawId=el.id.replace('nodo-','');
+    let cod=Object.keys(nMap).find(k=>k.replace(/[-. ]/g,'_')===rawId)||(rawId.replace(/_/g,'-'));
+    el.dataset.pendiente=(!clasifNow[cod]&&!herencia(cod))?'true':'false';
+  });
   const nodos=Array.from(document.querySelectorAll('[id^="nodo-"][data-pendiente]'));
   const totalPend=nodos.filter(n=>n.dataset.pendiente==='true').length;
   const btnP=document.getElementById('btn-doc-pendientes');
@@ -7523,7 +7532,8 @@ function docActualizarBadge(cod){
   else delete window._clasifChanges[cod]; // heredar de padre = borrar override
   const nodoEl=document.getElementById('nodo-'+safeCod);
   if(nodoEl){
-    nodoEl.dataset.pendiente=(!rubro)?'true':'false';
+    if(rubro){(window._clasifChanges=window._clasifChanges||{})[cod]=rubro;}
+  else{delete (window._clasifChanges=window._clasifChanges||{})[cod];}
     if(window._docSoloPendientes&&rubro) nodoEl.style.display='none';
   }
   if(!rubro){
