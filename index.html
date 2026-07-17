@@ -7404,18 +7404,26 @@ function docMostrarClasifDialog(cuentas, clasifExist, subcuentaMap, nodoMap, pad
 
 
 function docEstadoSubarbol(cod, nodoMap, clasifExist){
-  function contar(cod){
+  // Analiza si las hojas del subárbol están cubiertas (rubro propio o heredado)
+  function analizar(cod, rubroHeredado){
     const nodo=nodoMap[cod];
     const hijos=nodo?nodo.hijos:[];
-    if(clasifExist[cod]) return {total:1+hijos.length,clasif:1+hijos.length};
+    const rubroEfectivo=clasifExist[cod]||rubroHeredado||'';
+    // Si tiene rubro efectivo, todas sus hojas están cubiertas
+    if(rubroEfectivo){
+      const hojas=(function h(c){const n=nodoMap[c];const hs=n?n.hijos:[];return hs.length?hs.reduce((s,hc)=>s+h(hc),0):1;})(cod);
+      return {total:hojas,clasif:hojas};
+    }
+    // Sin rubro efectivo y es hoja: no cubierta
     if(!hijos.length) return {total:1,clasif:0};
-    let total=1,clasif=0;
-    hijos.forEach(h=>{const r=contar(h);total+=r.total;clasif+=r.clasif;});
+    // Sin rubro efectivo pero tiene hijos: recorrer hijos
+    let total=0,clasif=0;
+    hijos.forEach(hc=>{const r=analizar(hc,'');total+=r.total;clasif+=r.clasif;});
     return {total,clasif};
   }
-  const {total,clasif}=contar(cod);
+  const {total,clasif}=analizar(cod,'');
+  if(total===0||clasif>=total) return 'verde';
   if(clasif===0) return 'rojo';
-  if(clasif>=total) return 'verde';
   return 'amarillo';
 }
 
