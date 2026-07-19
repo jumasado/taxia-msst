@@ -158,6 +158,27 @@ const FROM_EMAIL='onboarding@resend.dev';
 let session=null,usersCache={},clientesCache=[],gruposCache=[];
 let accesosCache=null; // IDs de clientes asignados al usuario (carga una vez al login)
 let _cacheTs=0;
+
+// ===== SUPABASE AUTH REAL (Fase 1 — arreglo de RLS) =====
+// Reemplaza la comparación manual de hash contra la tabla `users` por una sesión
+// real de Supabase Auth, para que Postgres pueda distinguir "hay alguien
+// autenticado" (rol `authenticated`) de "cualquiera" (rol `anon`).
+async function authSignIn(email,password){
+  const r=await fetch(`${SB_URL}/auth/v1/token?grant_type=password`,{
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({email,password})
+  });
+  const data=await r.json();
+  if(!r.ok) throw new Error(data.error_description||data.msg||'Correo o contraseña incorrectos');
+  return data; // {access_token, refresh_token, expires_in, user:{id,email,...}}
+}
+async function authSignOut(token){
+  if(!token)return;
+  try{
+    await fetch(`${SB_URL}/auth/v1/logout`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+token}});
+  }catch(e){/* no bloquear el logout local si esto falla */}
+}
 const CACHE_TTL=5*60*1000;
 
 // ===== MÓDULOS DEL SISTEMA =====
@@ -203,22 +224,26 @@ function userCanAccess(email,moduleId){
 const COLORS={'av-m':'#7F77DD','av-a':'#8DC63F','av-y':'#EF9F27','av-b':'#D4537E','av-x':'#378ADD'};
 const app=document.getElementById('app');
 
+// Token real del usuario logueado si existe; si no, cae a la anon key (p. ej. antes de login).
+// Ojo: con RLS ya migrado, la anon key sola no podrá leer/escribir nada — ver políticas RLS.
+function _authToken(){ return (session&&session.access_token)||SB_KEY; }
+
 async function sbGet(t,p=''){
-  const r=await fetch(`${SB_URL}/rest/v1/${t}${p}`,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+  const r=await fetch(`${SB_URL}/rest/v1/${t}${p}`,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken()}});
   return r.json();
 }
 async function sbPost(t,d,pref='return=representation'){
-  return fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':pref},body:JSON.stringify(d)});
+  return fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':pref},body:JSON.stringify(d)});
 }
 async function sbPatch(t,p,d){
-  return fetch(`${SB_URL}/rest/v1/${t}${p}`,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(d)});
+  return fetch(`${SB_URL}/rest/v1/${t}${p}`,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(d)});
 }
 async function sbUpsert(t,d,conflict=''){
   const pref=conflict?'resolution=merge-duplicates,return=representation':'return=representation';
-  return fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':pref},body:JSON.stringify(d)});
+  return fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':pref},body:JSON.stringify(d)});
 }
 async function sbDelete(t,p){
-  return fetch(`${SB_URL}/rest/v1/${t}${p}`,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+  return fetch(`${SB_URL}/rest/v1/${t}${p}`,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken()}});
 }
 
 function todayKey(){
@@ -323,6 +348,7 @@ async function registrarLogout(){
 
 async function doLogout(porInactividad=false){
   await registrarLogout();
+  await authSignOut(session&&session.access_token);
   session=null;usersCache={};clientesCache=[];gruposCache=[];accesosCache=null;_cacheTs=0;
   clearInactivityTimer();
   if(porInactividad){
@@ -510,8 +536,12 @@ async function renderLogin(){
         </div>
         <div class="login-err" id="lerr">Correo o contraseña incorrectos.</div>
         <button class="login-btn-main" onclick="doLogin()" id="lbtn">Entrar</button>
-        <div style="text-align:center;margin-top:12px">
-          <button onclick="renderOlvidePass()" style="background:none;border:none;color:#3B4BC8;font-size:13px;cursor:pointer;text-decoration:underline;opacity:.8">¿Olvidé mi contraseña?</button>
+        <div style="text-align:center;margin-top:12px;font-size:12px;color:#888">
+          ¿Olvidaste tu contraseña? Contacta al administrador para que te asigne una nueva.
+          <!-- Fase 1 (18-jul-2026): flujo de recuperación por código desactivado temporalmente.
+               El código de 6 dígitos comparaba contra la columna 'pass' de public.users, que ya
+               no es la contraseña real (ahora vive en Supabase Auth). Reconstruir con
+               supabase.auth 'recover' como tarea aparte, no bloqueante para el cierre de RLS. -->
         </div>
       </div>
 
@@ -699,21 +729,31 @@ async function doLogin(){
   }
   btn.innerHTML='<span class="spinner"></span> Verificando...';btn.disabled=true;
   try{
-    const pwHash=await hashPassword(pw);
-    const data=await sbGet('users',`?email=eq.${encodeURIComponent(em)}&pass=eq.${encodeURIComponent(pwHash)}&select=*`);
-    if(!data||!data.length){
+    // ===== Fase 1: autenticación real vía Supabase Auth =====
+    let authData;
+    try{
+      authData=await authSignIn(em,pw);
+    }catch(authErr){
       registrarIntentoFallido(em);
       const minAhora=checkLoginBloqueado(em);
-      if(minAhora>0){
-        errEl.textContent='Demasiados intentos fallidos. Cuenta bloqueada '+minAhora+' minuto(s).';
-      } else {
-        errEl.textContent='Correo o contraseña incorrectos';
-      }
+      errEl.textContent=minAhora>0
+        ?'Demasiados intentos fallidos. Cuenta bloqueada '+minAhora+' minuto(s).'
+        :'Correo o contraseña incorrectos';
+      errEl.style.display='block';btn.innerHTML='Entrar';btn.disabled=false;return;
+    }
+    // Sesión real ya válida — a partir de aquí sbGet/sbPost/etc usan el token real, no la anon key.
+    session={access_token:authData.access_token,refresh_token:authData.refresh_token};
+    // Datos de negocio (rol, módulos, nombre) siguen viviendo en public.users — se leen
+    // con el token ya autenticado, nunca se piden columnas sensibles (pass/reset_code/reset_exp).
+    const data=await sbGet('users',`?email=eq.${encodeURIComponent(em)}&select=email,name,role,modulos,av,initials`);
+    if(!data||!data.length){
+      session=null;
+      errEl.textContent='Tu cuenta de acceso existe, pero no tienes un perfil en el sistema. Contacta al administrador.';
       errEl.style.display='block';btn.innerHTML='Entrar';btn.disabled=false;return;
     }
     clearLoginIntentos(em);
-    session={...data[0]};
-    const [allU]=await Promise.all([sbGet('users','?select=*'),loadCaches()]);
+    session={...session,...data[0]};
+    const [allU]=await Promise.all([sbGet('users','?select=email,name,role,modulos,av,initials'),loadCaches()]);
     allU.forEach(u=>{usersCache[u.email]=u;});
     // Cargar accesos del usuario una sola vez al login
     if(session.role!=='admin'){
@@ -5264,9 +5304,22 @@ function renderDecAnual(){
       <button class="btn btn-sm" onclick="renderPortada()">← Módulos</button>
     </div>
     <div style="background:#fff;border:1px solid #e5e5e0;border-radius:12px;overflow:hidden;min-height:85vh">
-      <iframe id="da-pm-frame" src="da_pm.html" style="width:100%;height:85vh;border:none" title="Declaración Anual PM"></iframe>
+      <iframe id="da-pm-frame" src="da_pm.html" style="width:100%;height:85vh;border:none" title="Declaración Anual PM" onload="enviarSesionADaPm()"></iframe>
     </div>`;
 }
+
+// ===== Puente de sesión hacia el iframe de da_pm.html (Fase 1) =====
+// Antes, da_pm.html no compartía nada de la sesión y hablaba con Supabase usando
+// siempre la anon key. Con RLS ya restringido a `authenticated`, necesita el token real.
+function enviarSesionADaPm(){
+  const frame=document.getElementById('da-pm-frame');
+  if(!frame||!frame.contentWindow||!session)return;
+  frame.contentWindow.postMessage({type:'taxia_session',access_token:session.access_token},window.location.origin);
+}
+window.addEventListener('message',function(ev){
+  if(ev.origin!==window.location.origin)return; // nunca aceptar mensajes de otro origen
+  if(ev.data&&ev.data.type==='da_pm_ready') enviarSesionADaPm();
+});
 
 // ===== PAGOS PROVISIONALES =====
 
