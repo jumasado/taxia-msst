@@ -2227,7 +2227,7 @@ async function deleteGrupo(id,nombre){
 async function renderAdmin(){
   if(session.role!=='admin'){renderDashboard(todayKey());return;}
   app.innerHTML=renderTopNav('admin')+`<div class="loading" id="al"><span class="spinner"></span>Cargando...</div><div id="ac"></div>`;
-  const users=await sbGet('users','?select=*&order=role.asc');
+  const users=await sbGet('users','?select=email,name,role,modulos,av,initials&order=role.asc');
   (users||[]).forEach(u=>{usersCache[u.email]=u;});
   document.getElementById('al').style.display='none';
   const AVM={admin:'av-m',manager:'av-a',assistant:'av-y'};
@@ -5236,7 +5236,7 @@ function renderPortada(){
 async function renderPermisos(){
   if(session.role!=='admin'){renderPortada();return;}
   app.innerHTML=renderTopNav('permisos')+`<div class="loading" id="perm-load"><span class="spinner"></span>Cargando usuarios...</div><div id="perm-content"></div>`;
-  const users=await sbGet('users','?select=*&order=role.asc');
+  const users=await sbGet('users','?select=email,name,role,modulos,av,initials&order=role.asc');
   (users||[]).forEach(u=>{usersCache[u.email]=u;});
   document.getElementById('perm-load').style.display='none';
   const nonAdmin=(users||[]).filter(u=>u.role!=='admin');
