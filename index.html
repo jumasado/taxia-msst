@@ -2033,7 +2033,7 @@ async function cliToggleAcceso(clienteId, email, dar, el){
       // Usar Prefer: resolution=ignore-duplicates para evitar error de constraint único
       const r=await fetch(SB_URL+'/rest/v1/cliente_usuarios',{
         method:'POST',
-        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),
           'Content-Type':'application/json',
           'Prefer':'return=minimal,resolution=ignore-duplicates'},
         body:JSON.stringify({cliente_id:String(clienteId),user_email:email,
@@ -2047,7 +2047,7 @@ async function cliToggleAcceso(clienteId, email, dar, el){
         +'?cliente_id=eq.'+encodeURIComponent(String(clienteId))
         +'&user_email=eq.'+encodeURIComponent(email),{
         method:'DELETE',
-        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken()}
       });
       if(!r.ok){const err=await r.text();throw new Error(err);}
       if(span){span.textContent='Sin acceso';span.style.color='#888';}
@@ -5590,15 +5590,15 @@ function pCR(imp){return imp.campos.find(c=>c.tipo==='resultado')?.id||null;}
 function pDet(impId,d){const imp=IMPUESTOS_FEDERALES.find(i=>i.id===impId);if(!imp)return 0;const cr=pCR(imp);return parseFloat(d[cr]||0);}
 
 async function pSbGet(t,qs=''){
-  const r=await fetch(`${SB_URL}/rest/v1/${t}${qs}`,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'}});
+  const r=await fetch(`${SB_URL}/rest/v1/${t}${qs}`,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json'}});
   if(!r.ok)throw new Error(await r.text());return r.json();
 }
 async function pSbPost(t,body){
-  const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(body)});
+  const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(body)});
   if(!r.ok)throw new Error(await r.text());return r.json();
 }
 async function pSbPatch(t,qs,body){
-  const r=await fetch(`${SB_URL}/rest/v1/${t}${qs}`,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(body)});
+  const r=await fetch(`${SB_URL}/rest/v1/${t}${qs}`,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(body)});
   if(!r.ok)throw new Error(await r.text());return r;
 }
 
@@ -6482,7 +6482,7 @@ return {
       }else{
         const res=await fetch(`${SB_URL}/rest/v1/cliente_config_pagos`,{
           method:'POST',
-          headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation,resolution=merge-duplicates'},
+          headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':'return=representation,resolution=merge-duplicates'},
           body:JSON.stringify({cliente_id:pClienteActual.id,cliente_nombre:pClienteActual.nombre,config_impuestos:sel,config_estatales_fijos:selEst,created_at:pNow(),updated_at:pNow()})
         });
         const data=await res.json();const row=Array.isArray(data)?data[0]:data;if(row?.id)pClienteConfig.id=row.id;
@@ -7050,7 +7050,7 @@ async function afGuardarActivo(existingId){
     } else {
       await fetch(SB_URL+'/rest/v1/activos_fijos',{
         method:'POST',
-        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':'return=minimal'},
         body:JSON.stringify(payload)
       });
     }
@@ -7079,7 +7079,7 @@ async function afEliminarActivo(id, nombre){
   if(!confirm('¿Eliminar el activo "'+nombre+'"?')) return;
   try{
     await fetch(SB_URL+'/rest/v1/activos_fijos?id=eq.'+encodeURIComponent(id),{
-      method:'DELETE', headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+      method:'DELETE', headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken()}
     });
     afCache=(afCache||[]).filter(a=>a.id!==id);
     if(window._afCount) window._afCount[String(docClienteActual.id)]=(afCache||[]).length;
@@ -7763,12 +7763,12 @@ async function docGuardarClasif(){
     // Primero eliminar clasificaciones existentes del cliente
     await fetch(SB_URL+'/rest/v1/catalogo_clasificacion?cliente_id=eq.'+encodeURIComponent(clienteId),{
       method:'DELETE',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken()}
     });
     // Luego insertar todas las nuevas
     const res=await fetch(SB_URL+'/rest/v1/catalogo_clasificacion',{
       method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),
         'Content-Type':'application/json',
         'Prefer':'return=minimal'},
       body:JSON.stringify(rows)
@@ -8086,7 +8086,7 @@ async function docBorrarBalanza(docId,mes){
   try{
     await fetch(SB_URL+'/rest/v1/client_documents?id=eq.'+encodeURIComponent(docId),{
       method:'DELETE',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken()}
     });
     const idx=docCacheFin.findIndex(d=>String(d.id)===String(docId));
     if(idx>=0)docCacheFin.splice(idx,1);
@@ -8334,7 +8334,7 @@ function docExtraerCSV(text){
 async function docElimDoc(id,cat){
   if(!confirm('¿Eliminar este documento?'))return;
   try{
-    await fetch(SB_URL+'/rest/v1/client_documents?id=eq.'+id,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}});
+    await fetch(SB_URL+'/rest/v1/client_documents?id=eq.'+id,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken()}});
     if(cat==='general')docCacheGen=docCacheGen.filter(d=>String(d.id)!==String(id));
     else docCacheFin=docCacheFin.filter(d=>String(d.id)!==String(id));
     docSetTab(docTab);docToast('Documento eliminado','ok');
@@ -8828,7 +8828,7 @@ async function afImportarMasivo(datos){
     });
     const res=await fetch(SB_URL+'/rest/v1/activos_fijos',{
       method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify(rows)
     });
     if(!res.ok) throw new Error(await res.text());
