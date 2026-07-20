@@ -2284,15 +2284,37 @@ async function saveUser(){
   const initials=name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
   const av2=AVM[role]||'av-y';
   const btn=document.getElementById('subtn');btn.innerHTML='<span class="spinner"></span> Guardando...';btn.disabled=true;
-  let pass;
-  if(editing&&!passInput){
-    pass=(usersCache[editing]||{}).pass||'';
-  }else{
-    pass=await hashPassword(passInput);
+  // Solo se toca `pass` si el admin escribió una contraseña nueva — ya no se
+  // lee usersCache[editing].pass (esa columna ya no se trae en las consultas
+  // normales, a propósito) ni se sobreescribe con vacío por accidente.
+  // Nota: esta columna ya no afecta el login real (eso lo maneja Supabase
+  // Auth desde la Fase 1) — se mantiene solo por compatibilidad histórica.
+  const payload={email,name,role,initials,av:av2};
+  if(passInput) payload.pass=await hashPassword(passInput);
+  try{
+    if(editing&&editing!==email)await sbDelete('users',`?email=eq.${encodeURIComponent(editing)}`);
+    // Fetch directo (no sbUpsert) con select= explícito — igual que en
+    // Permisos, para que Supabase no intente regresar columnas sin permiso
+    // de lectura (pass/reset_code/reset_exp) y rechace todo el guardado.
+    const r=await fetch(`${SB_URL}/rest/v1/users?on_conflict=email&select=email,name,role,modulos,av,initials`,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
+      body:JSON.stringify(payload)
+    });
+    if(!r.ok){
+      const errBody=await r.text();
+      throw new Error('HTTP '+r.status+': '+errBody.slice(0,200));
+    }
+    const saved=await r.json();
+    if(!saved||!saved.length) throw new Error('Supabase no confirmó el guardado (0 filas). Revisa permisos.');
+    usersCache[email]={...usersCache[email],...saved[0]};
+  }catch(err){
+    console.error('Error guardando usuario:',err);
+    const errEl=document.getElementById('aerr');
+    errEl.textContent='Error al guardar: '+err.message;errEl.style.display='block';
+    btn.innerHTML='Guardar usuario';btn.disabled=false;
+    return;
   }
-  if(editing&&editing!==email)await sbDelete('users',`?email=eq.${encodeURIComponent(editing)}`);
-  await sbUpsert('users',{email,name,role,initials,av:av2,pass},'email');
-  usersCache[email]={email,name,role,initials,av:av2,pass};
   btn.innerHTML='Guardar usuario';btn.disabled=false;
   document.getElementById('uediting').value='';
   const ok=document.getElementById('aok');ok.style.display='block';
@@ -5292,7 +5314,7 @@ async function guardarPermisos(email){
     // Llamada directa (no sbPatch) para poder revisar de verdad si Supabase
     // aceptó el cambio — sbPatch no valida la respuesta, y por eso antes
     // parecía que guardaba aunque en realidad no se hubiera aplicado nada.
-    const r=await fetch(`${SB_URL}/rest/v1/users?email=eq.${encodeURIComponent(email)}`,{
+    const r=await fetch(`${SB_URL}/rest/v1/users?email=eq.${encodeURIComponent(email)}&select=email,name,role,modulos,av,initials`,{
       method:'PATCH',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify({modulos:mods})
