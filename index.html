@@ -1967,27 +1967,31 @@ async function generarReporteDevPDF(soloCorreo=false){
 // ===== GESTIÓN DE ACCESOS POR CLIENTE =====
 
 async function cliAccesos(clienteId, clienteNombre){
-  // Cargar usuarios y accesos actuales en paralelo
-  const [usersArr, accesosArr] = await Promise.all([
+  // Cargar usuarios, accesos manuales y el responsable del cliente en paralelo
+  const [usersArr, accesosArr, clienteArr] = await Promise.all([
     sbGet('users','?select=email,name,role&order=name.asc'),
-    sbGet('cliente_usuarios','?cliente_id=eq.'+encodeURIComponent(String(clienteId))+'&select=*')
+    sbGet('cliente_usuarios','?cliente_id=eq.'+encodeURIComponent(String(clienteId))+'&select=*'),
+    sbGet('clientes','?id=eq.'+encodeURIComponent(String(clienteId))+'&select=responsable')
   ]);
   const users = (usersArr||[]).filter(u=>u.role!=='admin'); // admin siempre tiene acceso
   const conAcceso = new Set((accesosArr||[]).map(a=>a.user_email));
+  const responsableNombre = (clienteArr&&clienteArr[0]&&clienteArr[0].responsable)||null;
 
   const filas = users.map(u=>{
     const tiene = conAcceso.has(u.email);
+    const esEncargado = responsableNombre && u.name===responsableNombre;
     const nombre = u.name||u.email;
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0ec">
       <div>
         <div style="font-size:13px;font-weight:600">${escH(nombre)}</div>
         <div style="font-size:11px;color:#888">${escH(u.email)} · ${u.role||'colaborador'}</div>
+        ${esEncargado?'<div style="font-size:10px;color:#3B6D11;margin-top:2px">⭐ Encargado del cliente — acceso automático, no depende de esta casilla</div>':''}
       </div>
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
         <input type="checkbox" data-email="${escH(u.email)}" ${tiene?'checked':''} 
           style="width:16px;height:16px;cursor:pointer"
           onchange="cliToggleAcceso('${escH(String(clienteId))}','${escH(u.email)}',this.checked,this)">
-        <span style="font-size:12px;color:${tiene?'#3B6D11':'#888'}">${tiene?'Con acceso':'Sin acceso'}</span>
+        <span style="font-size:12px;color:${tiene?'#3B6D11':'#888'}">${tiene?'Con acceso (manual)':(esEncargado?'Sin asignación manual':'Sin acceso')}</span>
       </label>
     </div>`;
   }).join('');
@@ -2008,8 +2012,9 @@ async function cliAccesos(clienteId, clienteNombre){
     </div>
 
     <div style="background:#EAF3DE;border-radius:8px;padding:8px 12px;font-size:11px;color:#3B6D11;margin:12px 0">
-      ✓ <strong>Admin (tú)</strong> siempre tiene acceso a todos los clientes.<br>
-      Activa o desactiva el acceso de cada colaborador a este cliente.
+      ✓ <strong>Admin (tú)</strong> y cualquier <strong>manager</strong> siempre tienen acceso a todos los clientes.<br>
+      ⭐ El <strong>encargado</strong> del cliente (ficha del cliente) tiene acceso automático, marcado abajo.<br>
+      La casilla de abajo es solo para dar acceso <strong>manual adicional</strong> a alguien que no sea el encargado.
     </div>
 
     <div style="max-height:360px;overflow-y:auto">
