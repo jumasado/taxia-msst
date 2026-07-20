@@ -5246,16 +5246,17 @@ async function renderPermisos(){
   }
   const availMods=ALL_MODULES.filter(m=>!['admin','permisos'].includes(m.id));
   const cards=nonAdmin.map(u=>{
+    const idSafe=u.email.replace(/[^a-zA-Z0-9]/g,'_');
     // Normalizar modulos: puede venir como array o string (legacy)
     let rawMods=u.modulos;
     if(typeof rawMods==='string'){try{rawMods=JSON.parse(rawMods);}catch(e){rawMods=null;}}
     const mods=Array.isArray(rawMods)&&rawMods.length?rawMods:DEFAULT_MODULES_BY_ROLE[u.role]||['plan'];
     const checks=availMods.map(m=>`
       <label style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;cursor:pointer;background:#fafafa;border:1px solid #f0f0ec;font-size:12px">
-        <input type="checkbox" data-email="${escH(u.email)}" data-mod="${m.id}" ${mods.includes(m.id)?'checked':''} onchange="permToggle(this)">
+        <input type="checkbox" data-mod="${m.id}" ${mods.includes(m.id)?'checked':''}>
         <span>${m.icon} ${m.label}</span>
       </label>`).join('');
-    return `<div class="card">
+    return `<div class="card" id="perm-card-${idSafe}" data-email="${escH(u.email)}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
         <div class="avatar ${av(u.av)}" style="width:36px;height:36px;font-size:12px">${u.initials||'??'}</div>
         <div>
@@ -5266,33 +5267,51 @@ async function renderPermisos(){
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px">
         ${checks}
       </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid #f0f0ec">
+        <button class="btn btn-primary btn-sm" onclick="guardarPermisos('${escH(u.email)}')">Guardar cambios</button>
+        <span id="perm-status-${idSafe}" style="font-size:12px"></span>
+      </div>
     </div>`;
   }).join('');
   document.getElementById('perm-content').innerHTML=`
     <div class="card" style="background:#3B4BC8;color:#fff;border-color:#3B4BC8;margin-bottom:0">
       <div style="font-size:13px;font-weight:600">🔑 Control de acceso a módulos</div>
-      <div style="font-size:11px;opacity:.8;margin-top:2px">Los cambios se guardan automáticamente. Solo tú (Director) ves esta sección.</div>
+      <div style="font-size:11px;opacity:.8;margin-top:2px">Marca los módulos y presiona "Guardar cambios" en cada tarjeta. Solo tú (Director) ves esta sección.</div>
     </div>
     ${cards}`;
 }
 
-async function permToggle(checkbox){
-  const email=checkbox.dataset.email;
-  const mod=checkbox.dataset.mod;
-  const u=usersCache[email];
-  if(!u) return;
-  // Normalizar modulos antes de modificar (puede ser string o array)
-  let rawMods=u.modulos;
-  if(typeof rawMods==='string'){try{rawMods=JSON.parse(rawMods);}catch(e){rawMods=null;}}
-  let mods=Array.isArray(rawMods)&&rawMods.length?[...rawMods]:[...(DEFAULT_MODULES_BY_ROLE[u.role]||['plan'])];
-  if(checkbox.checked){if(!mods.includes(mod))mods.push(mod);}
-  else{mods=mods.filter(m=>m!==mod);}
-  u.modulos=mods;
-  usersCache[email]=u;
-  await sbPatch('users','?email=eq.'+encodeURIComponent(email),{modulos:mods}); // JSONB array — sin stringify
-  // Feedback visual
-  const lbl=checkbox.closest('label');
-  if(lbl){lbl.style.background=checkbox.checked?'#EAF3DE':'#fafafa';lbl.style.borderColor=checkbox.checked?'#3B6D11':'#f0f0ec';setTimeout(()=>{lbl.style.background='#fafafa';lbl.style.borderColor='#f0f0ec';},800);}
+async function guardarPermisos(email){
+  const idSafe=email.replace(/[^a-zA-Z0-9]/g,'_');
+  const card=document.getElementById('perm-card-'+idSafe);
+  const statusEl=document.getElementById('perm-status-'+idSafe);
+  if(!card||!statusEl)return;
+  const mods=[...card.querySelectorAll('input[type=checkbox]')].filter(c=>c.checked).map(c=>c.dataset.mod);
+  statusEl.textContent='Guardando...';statusEl.style.color='#888';
+  try{
+    // Llamada directa (no sbPatch) para poder revisar de verdad si Supabase
+    // aceptó el cambio — sbPatch no valida la respuesta, y por eso antes
+    // parecía que guardaba aunque en realidad no se hubiera aplicado nada.
+    const r=await fetch(`${SB_URL}/rest/v1/users?email=eq.${encodeURIComponent(email)}`,{
+      method:'PATCH',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify({modulos:mods})
+    });
+    if(!r.ok){
+      const errBody=await r.text();
+      throw new Error('Supabase rechazó el cambio (HTTP '+r.status+'): '+errBody.slice(0,200));
+    }
+    const updated=await r.json();
+    if(!updated||!updated.length){
+      throw new Error('Supabase respondió sin error, pero no actualizó ninguna fila — probablemente un problema de permisos (RLS) que no está lanzando el error esperado.');
+    }
+    if(usersCache[email])usersCache[email].modulos=mods;
+    statusEl.textContent='✅ Guardado';statusEl.style.color='#3B6D11';
+    setTimeout(()=>{if(statusEl)statusEl.textContent='';},3000);
+  }catch(err){
+    console.error('Error guardando permisos de',email,err);
+    statusEl.textContent='❌ '+err.message;statusEl.style.color='#dc2626';
+  }
 }
 
 // ===== DECLARACIÓN ANUAL PM (iframe integrado) =====
