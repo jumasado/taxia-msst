@@ -153,8 +153,9 @@ const NEWS_POOL=[
 
 const SB_URL='https://ysctgzbqaducghivamff.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
-const RESEND_KEY='re_af8ioNRf_PL4mNcXJTDq7eRk6t8HM7DZr';
-const FROM_EMAIL='onboarding@resend.dev';
+// RESEND_KEY eliminada (20-jul-2026) — el envío de correos ahora pasa por
+// el Edge Function "send-email", que guarda la clave como secreto de
+// servidor. Nunca vuelvas a poner una clave de Resend aquí.
 let session=null,usersCache={},clientesCache=[],gruposCache=[];
 let accesosCache=null; // IDs de clientes asignados al usuario (carga una vez al login)
 let _cacheTs=0;
@@ -624,11 +625,11 @@ async function solicitarCodigo(){
     const codigo=String(Math.floor(100000+Math.random()*900000));
     const exp=new Date(Date.now()+15*60*1000).toISOString();
     await sbPatch('users','?email=eq.'+encodeURIComponent(email),{reset_code:codigo,reset_exp:exp});
-    await fetch('https://api.resend.com/emails',{
+    await fetch(`${SB_URL}/functions/v1/send-email`,{
       method:'POST',
-      headers:{'Authorization':'Bearer '+RESEND_KEY,'Content-Type':'application/json'},
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json'},
       body:JSON.stringify({
-        from:FROM_EMAIL,to:[email],
+        to:[email],
         subject:'TaxIA — Código de recuperación',
         html:`<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:2rem">
           <h2 style="color:#3B4BC8">Recuperación de contraseña</h2>
@@ -1073,7 +1074,11 @@ async function sendPlanNotification(tareas,targetEmail){
     </div>
   </div>`;
   try{
-    await fetch('https://api.resend.com/emails',{method:'POST',headers:{'Authorization':'Bearer '+RESEND_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:FROM_EMAIL,to:recipients,subject:`Tareas actualizadas — ${session.name} — ${today}`,html})});
+    await fetch(`${SB_URL}/functions/v1/send-email`,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json'},
+      body:JSON.stringify({to:recipients,subject:`Tareas actualizadas — ${session.name} — ${today}`,html})
+    });
   }catch(e){console.warn('Email error:',e);}
 }
 
