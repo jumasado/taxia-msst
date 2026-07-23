@@ -488,7 +488,7 @@ if (typeof NEWS_POOL !== 'undefined' && NEWS_POOL.length > 0) {
 
 async function fetchNoticias() {
   try {
-    const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+    const ANON_KEY=SB_KEY; // dedupe 22-jul: mismo valor que SB_KEY, ya público — evita 6 copias si se rota
     const res = await fetch(SB_URL+'/functions/v1/fetch-noticias', {
       method: 'GET',
       headers: {'Authorization': 'Bearer '+ANON_KEY}
@@ -1704,7 +1704,7 @@ async function runAnalysis(){
   const devLines=(allDev||[]).length?'\n\nDevoluciones IVA activas:\n'+(allDev||[]).map(d=>'  · '+d.cliente_nombre+' ('+d.periodo+') — '+d.status+(d.responsable?' — Resp: '+d.responsable:'')+(d.monto_solicitado?' — $'+Number(d.monto_solicitado).toLocaleString('es-MX'):'')).join('\n'):'';
   try{
     const prompt='Eres asesor senior de MSST Consulting SC, firma de asesoría fiscal mexicana en Tijuana. Analizas el desempeño del equipo operativo (excluyendo al Director que es quien lee este análisis).\n\nEstado del equipo hoy '+today+':\n\n'+lines+devLines+'\n\nAnálisis ejecutivo Big 4 (máx 6 oraciones en prosa corrida, español formal): (1) avance general del equipo hoy, (2) quién destaca positivamente y quién requiere atención, (3) estado de la cartera de devoluciones IVA si hay activas, (4) recomendación de acción puntual para el Director.';
-    const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+    const ANON_KEY=SB_KEY; // dedupe 22-jul: mismo valor que SB_KEY, ya público — evita 6 copias si se rota
     const res=await fetch(SB_URL+'/functions/v1/claude-analysis',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},body:JSON.stringify({prompt})});
     const data=await res.json();
     console.log('Edge function response:', JSON.stringify(data));
@@ -2327,7 +2327,7 @@ async function generarReporteDevPDF(soloCorreo=false){
       '</div></div></body></html>';
 
     try{
-      const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+      const ANON_KEY=SB_KEY; // dedupe 22-jul: mismo valor que SB_KEY, ya público — evita 6 copias si se rota
       const res=await fetch(SB_URL+'/functions/v1/send-reporte-dev',{
         method:'POST',
         headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},
@@ -4244,7 +4244,7 @@ async function extraerCifrasPDF(tipo){
       tipo==='bg'?
       'Del Balance General extrae el activo fijo en MXN. Responde SOLO con JSON sin markdown: {"activo_fijo_bruto":0,"depreciacion_acumulada":0}':
       'De la Balanza de Comprobacion extrae en MXN. Responde SOLO con JSON sin markdown: {"ingresos":0,"costo_ventas":0,"gastos_operacion":0,"otros_ingresos":0,"otros_gastos":0,"activo_fijo_bruto":0,"depreciacion_acumulada":0}';
-    const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+    const ANON_KEY=SB_KEY; // dedupe 22-jul: mismo valor que SB_KEY, ya público — evita 6 copias si se rota
     const apiRes=await fetch(SB_URL+'/functions/v1/claude-analysis',{
       method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},
       body:JSON.stringify({prompt,pdf_base64:base64,pdf_media_type:'application/pdf'})
@@ -4440,7 +4440,7 @@ function initReporteGerencial(){
     document.head.appendChild(se);
   }
 
-  const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzY3RnemJxYWR1Y2doaXZhbWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODk2MDUsImV4cCI6MjA5MDA2NTYwNX0.w2yWu_hwSW69rnGsiD6FCqHe7GaNuLD_lU3WdgbidKI';
+  const ANON_KEY=SB_KEY; // dedupe 22-jul: mismo valor que SB_KEY, ya público — evita 6 copias si se rota
 
   // Usuarios del sistema
   const AC_URL='https://app.msstconsulting.com';
