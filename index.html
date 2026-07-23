@@ -1460,226 +1460,432 @@ async function sendPlanNotification(tareas,targetEmail){
 }
 
 /* ===== DASHBOARD ===== */
+// ===== CALENDARIO DE OBLIGACIONES FISCALES =====
+// Validado contra la RMF 2026 el 22-jul-2026. Actualizar cada ejercicio.
+// Fechas ya ajustadas a día hábil cuando el día 17 cae en fin de semana.
+// Facilidad de sexto dígito del RFC (Decreto DOF 26-dic-2013, art. 5.1) puede
+// dar hasta 5 días hábiles adicionales por cliente — no incluida aquí por cliente,
+// solo como nota general.
+const OBLIGACIONES_FISCALES=[
+  {fecha:'2026-08-17',t:'Pagos provisionales ISR + pago definitivo IVA — julio 2026',f:'Arts. 14 LISR y 5-D LIVA · facilidad de sexto dígito del RFC (Decreto DOF 26-dic-2013, art. 5.1) salvo contribuyentes excluidos'},
+  {fecha:'2026-08-17',t:'DIOT — julio 2026',f:'Art. 32, fr. VIII, LIVA · mismo plazo que la declaración de IVA'},
+  {fecha:'2026-08-31',t:'Operaciones relevantes — 2° trimestre (abr-jun 2026)',f:'Art. 31-A CFF, forma oficial 76 · no aplica si el acumulado del ejercicio no rebasa $60,000,000'},
+  {fecha:'2026-09-17',t:'Pagos provisionales ISR + pago definitivo IVA — agosto 2026',f:'Arts. 14 LISR y 5-D LIVA'},
+  {fecha:'2026-09-17',t:'DIOT — agosto 2026',f:'Art. 32, fr. VIII, LIVA'},
+  {fecha:'2026-10-19',t:'Pagos provisionales ISR + pago definitivo IVA — septiembre 2026',f:'Arts. 14 LISR y 5-D LIVA · el día 17 cae sábado, se recorre al siguiente día hábil'},
+  {fecha:'2026-10-19',t:'DIOT — septiembre 2026',f:'Art. 32, fr. VIII, LIVA'},
+  {fecha:'2026-11-30',t:'Operaciones relevantes — 3er trimestre (jul-sep 2026)',f:'Art. 31-A CFF, forma oficial 76'}
+];
+
 async function renderDashboard(date){
   app.innerHTML=renderTopNav('dashboard')+`<div class="loading" id="dl"><span class="spinner"></span>Cargando...</div><div id="dc"></div>`;
+  await loadCaches();
   const visible=visibleEmails();
-  const [allTareas, allDev]=await Promise.all([
-    sbGet('tareas',`?email=in.(${visible.map(e=>`"${e}"`).join(',')})&select=*&order=created_at.asc`),
-    sbGet('devoluciones_iva','?select=*&order=created_at.desc')
-  ]);
   const today=todayKey();
-  const byEmail={};
-  visible.forEach(em=>{
-    const ut=(allTareas||[]).filter(t=>t.email===em&&(t.status==='pendiente'||t.status==='standby'||(t.status==='concluida'&&t.fecha_conclusion&&t.fecha_conclusion.startsWith(today))||(t.status==='eliminada'&&t.updated_at&&t.updated_at.startsWith(today))));
-    byEmail[em]=ut;
-  });
+  const hoyD=new Date(today+'T12:00:00');
+  const anioActual=hoyD.getFullYear(), mesActual=hoyD.getMonth()+1;
+  let mesCump=mesActual-1, anioCump=anioActual; if(mesCump<1){mesCump=12;anioCump--;}
+  const inicioMesActual=anioActual+'-'+String(mesActual).padStart(2,'0')+'-01';
+  const ejercicioAnterior=anioActual-1;
+
+  const [allTareas, allDev, cfgPagos, ppMes, docsGen, proyecciones, decAnual, sesionesMes]=await Promise.all([
+    sbGet('tareas',`?email=in.(${visible.map(e=>`"${e}"`).join(',')})&select=*&order=created_at.asc`),
+    sbGet('devoluciones_iva','?select=*&order=created_at.desc'),
+    sbGet('cliente_config_pagos','?select=cliente_id,config_impuestos'),
+    sbGet('pago_provisional',`?anio=eq.${anioCump}&mes=eq.${mesCump}&select=cliente_id,status`),
+    sbGet('client_documents','?categoria=eq.general&select=cliente_id,tipo,status'),
+    sbGet('pf_proyecciones',`?ejercicio=eq.${anioActual}&select=cliente_id`),
+    sbGet('da_declaraciones',`?ejercicio=eq.${ejercicioAnterior}&select=cliente_id,status`),
+    sbGet('sesiones',`?login_at=gte.${inicioMesActual}&select=email,login_at,logout_at,duracion_min`)
+  ]);
+
   document.getElementById('dl').style.display='none';
   const dc=document.getElementById('dc');
 
-  let sumRows='';
-  visible.forEach(em=>{
-    const u=usersCache[em];if(!u)return;
-    const tareas=byEmail[em]||[];
-    const total=tareas.length;
-    const done=tareas.filter(t=>t.status==='concluida').length;
-    const pct=total>0?Math.round(done/total*100):0;
-    const color=pc(em);
-    const tList=total>0?tareas.map(t=>`<div style="display:flex;align-items:center;gap:6px;margin:2px 0;font-size:13px;color:${t.status==='concluida'?'#999':'#555'}">
-      <span style="color:${t.status==='concluida'?'#8DC63F':'#d1d1d1'};font-size:11px">${t.status==='concluida'?'✓':'○'}</span>
-      <span style="${t.status==='concluida'?'text-decoration:line-through':''}">${escH(t.descripcion)}</span>
-      ${t.client_name?`<span style="font-size:11px;color:#999">(${escH(t.client_name)})</span>`:''}
-    </div>
-    <div style="display:flex;gap:10px;margin-left:18px;margin-top:2px;flex-wrap:wrap">
-      <span style="font-size:10px;color:#bbb">📅 Alta: ${t.fecha_creacion||'—'}</span>
-      ${t.status==='concluida'&&t.fecha_conclusion?`<span style="font-size:10px;color:#1D9E75;font-weight:500">✓ Concluida: ${t.fecha_conclusion.slice(0,10)}</span>`:''}
-      ${t.status==='standby'?`<span style="font-size:10px;color:#3B4BC8;font-weight:500">⏸ Stand By</span>`:''}
-    </div>
-  </div>`).join(''):'<div style="font-size:13px;color:#bbb">Sin tareas registradas</div>';
-    const canActOn=(session.role==='admin')||(session.role==='manager'&&u.role==='assistant');
-    const isMe=em===session.email;
-    sumRows+=`<div style="padding:12px 0;border-bottom:1px solid #f0f0ec">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-        <div class="avatar ${av(u.av)}" style="width:32px;height:32px;font-size:12px">${u.initials||'??'}</div>
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-            <span style="font-size:14px;font-weight:600">${u.name}</span>${roleBadge(u.role)}
-            <span style="font-size:12px;color:#888;margin-left:auto">${done}/${total}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-            <span style="font-size:12px;font-weight:600;color:${color};min-width:32px">${pct}%</span>
-          </div>
-        </div>
-        ${canActOn||isMe?`<div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="btn btn-sm btn-primary" onclick="renderMisPlan('${em}')" style="font-size:12px;padding:5px 10px">
-            ${isMe?'Mis tareas':'Gestionar'}
-          </button>
-        </div>`:''}
-      </div>
-      ${tList}
-    </div>`;
-  });
+  const esDir=session.role==='admin', esMgr=session.role==='manager', esJr=session.role==='assistant';
+  const clientesRol=clientesCache||[];
 
+  // ===== Equipo (resumen, sin detalle de tareas — el detalle vive en Módulo 2) =====
+  const byEmail={};
+  visible.forEach(em=>{
+    byEmail[em]=(allTareas||[]).filter(t=>t.email===em&&(t.status==='pendiente'||t.status==='standby'||(t.status==='concluida'&&t.fecha_conclusion&&t.fecha_conclusion.startsWith(today))));
+  });
   const totalDone=visible.reduce((s,em)=>s+(byEmail[em]||[]).filter(t=>t.status==='concluida').length,0);
   const totalStandby=visible.reduce((s,em)=>s+(byEmail[em]||[]).filter(t=>t.status==='standby').length,0);
   const totalAll=visible.reduce((s,em)=>s+(byEmail[em]||[]).length,0);
-  const registros=visible.filter(em=>(byEmail[em]||[]).length>0).length;
 
-  // ===== DEVOLUCIONES IVA PARA DASHBOARD =====
-  const devActivas=(allDev||[]).filter(d=>d.status!=='devuelta'&&d.status!=='negada');
-  const devTotal=(allDev||[]).length;
-  const devEnProceso=devActivas.length;
-  const devConReq=devActivas.filter(d=>d.status==='requerimiento_sat').length;
+  // ===== Devoluciones IVA — filtradas por responsable si es Consultor Junior =====
+  const devTodas=(allDev||[]);
+  const devVisibles=esJr?devTodas.filter(d=>d.responsable===session.name):devTodas;
+  const devActivas=devVisibles.filter(d=>d.status!=='devuelta'&&d.status!=='negada');
   const montoCartera=devActivas.reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
-  const montoDev=(allDev||[]).filter(d=>d.status==='devuelta').reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
 
-  // Alertas de plazos críticos (<=5 días hábiles)
   const alertasDev=devActivas.map(d=>{
     const plazos=calcPlazos(d);
-    const alerts=[];
+    const out=[];
     if(!d.fecha_presentacion_sat&&plazos.presentacion){
       const dr=diasRestantes(plazos.presentacion);
-      if(dr<=5) alerts.push({tipo:'Presentar SAT',dias:dr,cliente:d.cliente_nombre,periodo:d.periodo,id:d.id});
+      if(dr<=5) out.push({dias:dr,mod:'M5 · Devoluciones',t:d.cliente_nombre||'—',s:(d.periodo||'')+' — presentar ante el SAT (art. 22 CFF)'});
     }
     if(d.fecha_presentacion_sat&&plazos.limite_resolucion){
       const dr=diasRestantes(plazos.limite_resolucion);
-      if(dr<=10) alerts.push({tipo:'Vence plazo resolución',dias:dr,cliente:d.cliente_nombre,periodo:d.periodo,id:d.id});
+      if(dr<=10) out.push({dias:dr,mod:'M5 · Devoluciones',t:d.cliente_nombre||'—',s:(d.periodo||'')+' — vence plazo de resolución del SAT (art. 22, párr. 6°, CFF)'});
     }
-    return alerts;
+    return out;
   }).flat();
 
-  // Filas tabla devoluciones activas
-  let devRows='';
-  if(devActivas.length){
-    devRows=devActivas.slice(0,8).map(d=>{
-      const plazos=calcPlazos(d);
-      const dr=d.fecha_presentacion_sat?diasRestantes(plazos.limite_resolucion):(plazos.presentacion?diasRestantes(plazos.presentacion):null);
-      const drLabel=d.fecha_presentacion_sat?'Resolución':'Presentar';
-      let drBadge='';
-      if(dr!==null){
-        if(dr<0) drBadge='<span style="background:#fef2f2;color:#dc2626;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600">Vencido '+Math.abs(dr)+'d</span>';
-        else if(dr<=5) drBadge='<span style="background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600">'+drLabel+': '+dr+'d</span>';
-        else drBadge='<span style="background:#f0f7d4;color:#5a8a1a;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600">'+drLabel+': '+dr+'d</span>';
-      }
-      const s=DEV_STATUS[d.status]||{label:d.status,color:'#888',bg:'#f5f5f3'};
-      return '<tr onclick="nav(\'devoluciones\')" style="cursor:pointer">'+
-        '<td style="font-weight:500">'+escH(d.cliente_nombre||'—')+'</td>'+
-        '<td style="color:#888">'+escH(d.periodo||'—')+'</td>'+
-        '<td><span style="background:'+s.bg+';color:'+s.color+';padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">'+s.label+'</span></td>'+
-        '<td style="font-size:12px;color:#3B4BC8;font-weight:500">'+fmtMXN(d.monto_solicitado)+'</td>'+
-        '<td>'+drBadge+'</td>'+
-        '<td style="font-size:11px;color:#888">'+escH(d.responsable||'—')+'</td>'+
-      '</tr>';
-    }).join('');
-  } else {
-    devRows='<tr><td colspan="6" style="text-align:center;color:#bbb;padding:1rem">Sin solicitudes activas</td></tr>';
+  // ===== Universo M6 — clientes con isr_pm o isr_pf configurado (cliente_config_pagos) =====
+  const cfgByCliente={};
+  (cfgPagos||[]).forEach(c=>{cfgByCliente[String(c.cliente_id)]=c.config_impuestos||[];});
+  const clientesConISR=clientesRol.filter(c=>{
+    const cfg=cfgByCliente[String(c.id)];
+    return cfg&&(cfg.includes('isr_pm')||cfg.includes('isr_pf'));
+  });
+  const sinConfigurar=clientesRol.filter(c=>!cfgByCliente[String(c.id)]);
+
+  const ppByCliente={};
+  (ppMes||[]).forEach(p=>{ppByCliente[String(p.cliente_id)]=p.status;});
+  let m6ok=0,m6proc=0,m6pen=0;
+  clientesConISR.forEach(c=>{
+    const st=ppByCliente[String(c.id)];
+    if(st==='revisado')m6ok++; else if(st==='alerta'||st==='pendiente')m6proc++; else m6pen++;
+  });
+  const cumplimiento=clientesConISR.length?Math.round(m6ok/clientesConISR.length*100):0;
+
+  // ===== Universo M3 — Clientes (expediente base) =====
+  let m3ok=0,m3proc=0,m3pen=0;
+  clientesRol.forEach(c=>{ if(c.rfc&&c.responsable)m3ok++; else if(c.rfc)m3proc++; else m3pen++; });
+
+  // ===== Universo M4 — Documentación (según tipo PM/PF) =====
+  const docsByCliente={};
+  (docsGen||[]).forEach(d=>{
+    const k=String(d.cliente_id);
+    if(!docsByCliente[k])docsByCliente[k]=new Set();
+    if(d.status==='cargado')docsByCliente[k].add(d.tipo);
+  });
+  const esPFTipo=c=>{const t=(c.tipo||'').toLowerCase();return t==='pf'||t.includes('fisica');};
+  let m4ok=0,m4proc=0,m4pen=0;
+  clientesRol.forEach(c=>{
+    const reqs=(esPFTipo(c)?DOC_TIPOS_GENERAL_PF:DOC_TIPOS_GENERAL_PM).filter(d=>d.req).map(d=>d.id);
+    const cargados=docsByCliente[String(c.id)]||new Set();
+    const faltan=reqs.filter(r=>!cargados.has(r)).length;
+    if(faltan===0)m4ok++; else if(faltan<reqs.length)m4proc++; else m4pen++;
+  });
+
+  // ===== Universo M7 — Proyección Anual (mismo universo que M6) =====
+  const proyByCliente=new Set((proyecciones||[]).map(p=>String(p.cliente_id)));
+  const m7ok=clientesConISR.filter(c=>proyByCliente.has(String(c.id))).length;
+  const m7pen=clientesConISR.length-m7ok;
+
+  // ===== Universo M8 — Declaración Anual (toda la cartera, PM y PF) =====
+  const decByCliente={};
+  (decAnual||[]).forEach(d=>{decByCliente[String(d.cliente_id)]=d.status;});
+  let m8ok=0,m8proc=0,m8pen=0;
+  clientesRol.forEach(c=>{
+    const st=decByCliente[String(c.id)];
+    if(st==='listo')m8ok++; else if(st==='en_proceso')m8proc++; else m8pen++;
+  });
+
+  // ===== Universo M5 — Devoluciones (solicitudes, no clientes) =====
+  const m5ok=devVisibles.filter(d=>d.status==='devuelta').length;
+  const m5pen=devVisibles.filter(d=>d.status==='requisitos_pendientes'||d.status==='negada').length;
+  const m5proc=devVisibles.length-m5ok-m5pen;
+
+  const MATRIZ=[
+    {num:3,name:'Clientes',desc:'Expediente base y responsable asignado',uni:clientesRol.length,ok:m3ok,proc:m3proc,pen:m3pen,color:'#374151',uniNota:'Cartera visible'},
+    {num:4,name:'Documentación',desc:'Documentos generales obligatorios',uni:clientesRol.length,ok:m4ok,proc:m4proc,pen:m4pen,color:'#0f4c81',uniNota:'Cartera visible'},
+    {num:5,name:'Devoluciones IVA',desc:'Solicitudes en trámite ante el SAT',uni:devVisibles.length,ok:m5ok,proc:m5proc,pen:m5pen,color:'#0C447C',uniNota:'Solicitudes, no clientes'},
+    {num:6,name:'Pagos Provisionales',desc:'Revisión de '+DOC_MESES_L[mesCump-1]+' '+anioCump,uni:clientesConISR.length,ok:m6ok,proc:m6proc,pen:m6pen,color:'#72243E',uniNota:'Con ISR PM/PF configurado'},
+    {num:7,name:'Proyección Anual',desc:'Cierre estimado ejercicio '+anioActual,uni:clientesConISR.length,ok:m7ok,proc:0,pen:m7pen,color:'#5a8a1a',uniNota:'Con ISR PM/PF configurado'},
+    {num:8,name:'Declaración Anual',desc:'Ejercicio '+ejercicioAnterior+' — papeles de trabajo',uni:clientesRol.length,ok:m8ok,proc:m8proc,pen:m8pen,color:'#633806',uniNota:'Toda la cartera (PM y PF)'}
+  ];
+  const matrizVisible=esJr?[]:MATRIZ;
+
+  // ===== Banda de riesgo consolidada =====
+  let alertas=[...alertasDev];
+  if(hoyD.getDate()>17&&!esJr){
+    const pend=clientesConISR.filter(c=>ppByCliente[String(c.id)]!=='revisado');
+    if(pend.length) alertas.push({dias:2,mod:'M6 · Pagos Prov.',t:pend.length+' cliente'+(pend.length>1?'s':'')+' sin revisión de '+DOC_MESES_L[mesCump-1].toLowerCase()+' '+anioCump,s:'Vencimiento del día 17 ya transcurrido'});
   }
+  if(sinConfigurar.length&&!esJr){
+    alertas.push({dias:9,mod:'M6 · Pagos Prov.',t:sinConfigurar.length+' cliente'+(sinConfigurar.length>1?'s':'')+' sin obligaciones configuradas',s:'No forman parte de ningún universo de cumplimiento — el % del tablero los excluye'});
+  }
+  const m4faltantes=clientesRol.length-m4ok;
+  if(m4faltantes>0&&!esJr){
+    alertas.push({dias:9,mod:'M4 · Documentación',t:m4faltantes+' expediente'+(m4faltantes>1?'s':'')+' con documentación faltante',s:'Documentos generales obligatorios sin cargar'});
+  }
+  if(m7pen>0&&!esJr){
+    alertas.push({dias:24,mod:'M7 · Proyección',t:m7pen+' cliente'+(m7pen>1?'s':'')+' sin proyección '+anioActual,s:'Sin escenario de ISR anual cargado'});
+  }
+  alertas.sort((a,b)=>a.dias-b.dias);
+  if(esJr) alertas=alertas.slice(0,4);
 
-  dc.innerHTML=`
-  <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Operaciones del equipo — ${formatDate(today)}</div>
-  <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:1rem">
-    <div class="metric"><div class="metric-label">Con tareas activas</div><div class="metric-val">${registros}<span style="font-size:14px;color:#888">/${visible.length}</span></div></div>
-    <div class="metric"><div class="metric-label">Concluidas hoy</div><div class="metric-val">${totalDone}<span style="font-size:14px;color:#888">/${totalAll}</span></div></div>
-    <div class="metric"><div class="metric-label">En Stand By</div><div class="metric-val">${totalStandby}</div></div>
-  </div>
+  const proximos=OBLIGACIONES_FISCALES.filter(o=>o.fecha>=today).slice(0,5);
 
-  <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Cartera devoluciones IVA</div>
-  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:1rem">
-    <div class="metric" style="border-left:3px solid #3B4BC8">
-      <div class="metric-label">En proceso</div>
-      <div class="metric-val" style="color:#3B4BC8">${devEnProceso}</div>
-      <div style="font-size:11px;color:#888;margin-top:2px">de ${devTotal} totales</div>
-    </div>
-    <div class="metric" style="border-left:3px solid #EF9F27">
-      <div class="metric-label">Con requerimiento SAT</div>
-      <div class="metric-val" style="color:#EF9F27">${devConReq}</div>
-      <div style="font-size:11px;color:#888;margin-top:2px">${devConReq>0?'Atención requerida':'Sin alertas'}</div>
-    </div>
-    <div class="metric" style="border-left:3px solid #3B4BC8">
-      <div class="metric-label">Monto en cartera</div>
-      <div class="metric-val" style="font-size:16px;color:#3B4BC8">${montoCartera>0?'$'+Math.round(montoCartera/1000)+'K':'—'}</div>
-      <div style="font-size:11px;color:#888;margin-top:2px">MXN solicitado</div>
-    </div>
-    <div class="metric" style="border-left:3px solid #8DC63F">
-      <div class="metric-label">Monto recuperado</div>
-      <div class="metric-val" style="font-size:16px;color:#8DC63F">${montoDev>0?'$'+Math.round(montoDev/1000)+'K':'—'}</div>
-      <div style="font-size:11px;color:#888;margin-top:2px">MXN devuelto</div>
-    </div>
-  </div>
+  // ===== Módulo 9 — actividad del despacho =====
+  const mesActualStr=today.slice(0,7);
+  const mesAntStr=anioCump+'-'+String(mesCump).padStart(2,'0');
+  const concluidasMes=(allTareas||[]).filter(t=>t.status==='concluida'&&t.fecha_conclusion&&t.fecha_conclusion.slice(0,7)===mesActualStr).length;
+  const concluidasMesAnt=(allTareas||[]).filter(t=>t.status==='concluida'&&t.fecha_conclusion&&t.fecha_conclusion.slice(0,7)===mesAntStr).length;
+  const sesionesValidas=(sesionesMes||[]).filter(s=>s.duracion_min!=null&&(esJr?s.email===session.email:true));
+  const horasEquipo=Math.round(sesionesValidas.reduce((s,x)=>s+(x.duracion_min||0),0)/60);
+  const diasActivos=new Set(sesionesValidas.map(s=>s.login_at.slice(0,10))).size;
+  const varMes=concluidasMesAnt>0?Math.round((concluidasMes-concluidasMesAnt)/concluidasMesAnt*100):null;
 
-  ${alertasDev.length?`
-  <div class="card" style="margin-bottom:1rem;border-left:3px solid #dc2626">
+  // ===== KPIs =====
+  const kpis=esJr?[
+    {k:'#3B4BC8',l:'Mis tareas de hoy',v:totalDone+'<small style="font-size:14px;color:#bbb"> /'+totalAll+'</small>',f:totalStandby+' en stand by'},
+    {k:'#0C447C',l:'Mis devoluciones',v:devVisibles.length,f:'en trámite ante el SAT'},
+    {k:'#633806',l:'Monto bajo mi cargo',v:fmtMXNCompact(montoCartera),f:'MXN solicitado'},
+    {k:alertas.length?'#dc2626':'#5a8a1a',l:'Asuntos con plazo',v:alertas.length,f:alertas.length?'requieren atención':'sin pendientes críticos'}
+  ]:[
+    {k:'#1a1a1a',l:'Clientes en cartera',v:clientesRol.length,f:clientesRol.filter(c=>!esPFTipo(c)).length+' PM · '+clientesRol.filter(esPFTipo).length+' PF'},
+    {k:cumplimiento>=90?'#5a8a1a':cumplimiento>=70?'#EF9F27':'#dc2626',l:'Cumplimiento del mes',v:cumplimiento+'%',f:m6ok+' de '+clientesConISR.length+' con obligación mensual'+(sinConfigurar.length?' · <span style="color:#dc2626;font-weight:600">'+sinConfigurar.length+' sin configurar</span>':'')},
+    {k:'#0C447C',l:'IVA en trámite',v:fmtMXNCompact(montoCartera),f:devActivas.length+' solicitudes ante el SAT'},
+    {k:alertas.length?'#dc2626':'#5a8a1a',l:'Asuntos con plazo',v:alertas.length,f:alertas.length?'requieren decisión esta semana':'sin plazos críticos'}
+  ];
+
+  dc.innerHTML=renderDashboardHTML({
+    today,esDir,esMgr,esJr,MATRIZ:matrizVisible,alertas,proximos,kpis,
+    devActivas,devVisibles,montoCartera,visible,byEmail,totalDone,totalStandby,totalAll,
+    concluidasMes,concluidasMesAnt,varMes,horasEquipo,diasActivos,sesionesN:sesionesValidas.length,
+    sinConfigurar
+  });
+
+  buildDashboardCharts(visible,byEmail,MATRIZ);
+}
+
+function fmtMXNCompact(n){
+  n=Number(n||0);
+  if(n>=1e6) return '$'+(n/1e6).toFixed(1)+' M';
+  if(n>=1e3) return '$'+Math.round(n/1e3)+' K';
+  return '$'+Math.round(n);
+}
+
+function renderDashboardHTML(d){
+  const kpiHTML=d.kpis.map(k=>`
+    <div class="metric" style="border-left:3px solid ${k.k}">
+      <div class="metric-label">${k.l}</div>
+      <div class="metric-val" style="color:${k.k};${String(k.v).length>4?'font-size:19px':''}">${k.v}</div>
+      <div style="font-size:11px;color:#888;margin-top:4px">${k.f}</div>
+    </div>`).join('');
+
+  const riskHTML=d.alertas.length?`
+  <div class="card" style="border-left:3px solid #dc2626">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <div style="width:8px;height:8px;border-radius:50%;background:#dc2626;flex-shrink:0"></div>
-      <div style="font-size:12px;font-weight:600;color:#dc2626;text-transform:uppercase;letter-spacing:.06em">Alertas de plazos críticos (${alertasDev.length})</div>
+      <div style="font-size:12px;font-weight:600;color:#dc2626;text-transform:uppercase;letter-spacing:.06em">${d.alertas.length} asunto${d.alertas.length>1?'s':''} con plazo próximo o vencido</div>
     </div>
-    ${alertasDev.map(a=>'<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid #f0f0ec;cursor:pointer" onclick="nav(\'devoluciones\')">'+
-      '<span style="background:'+(a.dias<0?'#fef2f2':a.dias<=2?'#fef2f2':'#FEF3C7')+';color:'+(a.dias<=2?'#dc2626':'#92400E')+';padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;flex-shrink:0">'+
-        (a.dias<0?'VENCIDO':''+a.dias+'d')+
-      '</span>'+
-      '<div style="flex:1">'+
-        '<div style="font-size:13px;font-weight:500">'+escH(a.cliente)+'</div>'+
-        '<div style="font-size:11px;color:#888">'+escH(a.periodo)+' · '+a.tipo+'</div>'+
-      '</div>'+
-    '</div>').join('')}
-  </div>`:''}
+    ${d.alertas.map(a=>{
+      const bg=a.dias<0?'#fef2f2':a.dias<=5?'#FEF3C7':'#f5f5f3';
+      const fg=a.dias<0?'#dc2626':a.dias<=5?'#92400E':'#888';
+      const lbl=a.dias<0?'VENCIDO':a.dias===0?'HOY':a.dias+'d';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f0f0ec">
+        <span style="background:${bg};color:${fg};padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;min-width:52px;text-align:center;flex-shrink:0">${lbl}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500">${escH(a.t)}</div>
+          <div style="font-size:11px;color:#888">${escH(a.s)}</div>
+        </div>
+        <span style="font-size:10px;color:#bbb;white-space:nowrap">${a.mod}</span>
+      </div>`;
+    }).join('')}
+  </div>`:'';
 
-  <div class="card" style="margin-bottom:1rem">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div class="sec-label">Devoluciones IVA activas</div>
-      <button class="btn btn-sm btn-purple" onclick="nav(\'devoluciones\')" style="font-size:11px">Ver todas →</button>
+  const matrizHTML=d.MATRIZ.length?`
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap">
+      <div>
+        <div class="sec-label" style="margin-bottom:2px">Matriz de cumplimiento por módulo</div>
+        <div style="font-size:11px;color:#aaa">Universo = clientes con la obligación aplicable en el período</div>
+      </div>
     </div>
     <div class="table-wrap">
       <table class="data-table">
-        <thead><tr><th>Cliente</th><th>Período</th><th>Estatus</th><th>Monto</th><th>Plazo</th><th>Responsable</th></tr></thead>
-        <tbody>${devRows}</tbody>
+        <thead><tr><th>Módulo</th><th style="text-align:right">Universo</th><th style="text-align:right">Concluido</th><th style="text-align:right">Proceso</th><th style="text-align:right">Sin iniciar</th><th style="width:160px">Avance</th></tr></thead>
+        <tbody>
+        ${d.MATRIZ.map(m=>{
+          const pct=m.uni?Math.round(m.ok/m.uni*100):0;
+          const w=x=>m.uni?(x/m.uni*100).toFixed(1)+'%':'0%';
+          const pcol=pct>=90?'#5a8a1a':pct>=70?'#EF9F27':'#dc2626';
+          return `<tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="font-size:10px;font-weight:800;color:#ccc;width:14px;text-align:right">${m.num}</span>
+                <span style="width:3px;height:24px;border-radius:2px;background:${m.color};flex-shrink:0;display:inline-block"></span>
+                <div><div style="font-size:13px;font-weight:600">${m.name}</div><div style="font-size:10.5px;color:#aaa">${m.desc} · ${m.uniNota}</div></div>
+              </div>
+            </td>
+            <td style="text-align:right;font-size:12.5px;color:#888">${m.uni}</td>
+            <td style="text-align:right;font-size:12.5px;font-weight:600;color:#5a8a1a">${m.ok}</td>
+            <td style="text-align:right;font-size:12.5px;color:#EF9F27">${m.proc||'—'}</td>
+            <td style="text-align:right;font-size:12.5px;font-weight:600;color:${m.pen>0?'#dc2626':'#ccc'}">${m.pen||'—'}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="progress-bar-wrap" style="height:8px">
+                  <div style="display:flex;height:100%;width:100%;overflow:hidden;border-radius:999px">
+                    <span style="width:${w(m.ok)};background:#8DC63F;display:block"></span>
+                    <span style="width:${w(m.proc)};background:#EF9F27;display:block"></span>
+                    <span style="width:${w(m.pen)};background:#f0d5d5;display:block"></span>
+                  </div>
+                </div>
+                <span style="font-size:13px;font-weight:700;color:${pcol};min-width:36px;text-align:right">${pct}%</span>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+        </tbody>
       </table>
+    </div>
+    ${d.sinConfigurar.length?`<div style="margin-top:11px;padding:9px 11px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font-size:11.5px;color:#991B1B;line-height:1.45;cursor:pointer" onclick="nav('pp')">
+      <strong>${d.sinConfigurar.length} cliente${d.sinConfigurar.length>1?'s':''} sin obligaciones configuradas.</strong> No forman parte de ningún universo, por lo que no están reflejados en los porcentajes de arriba. Configurar en el Módulo 6 →
+    </div>`:''}
+  </div>`:'';
+
+  const calHTML=d.proximos.map(o=>{
+    const dt=new Date(o.fecha+'T12:00:00');
+    const dd=dt.getDate();
+    const mm=dt.toLocaleDateString('es-MX',{month:'short'}).toUpperCase().replace('.','');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0ec">
+      <div style="width:40px;flex-shrink:0;text-align:center;border:1px solid #e5e5e0;border-radius:7px;padding:3px 0;background:#fafaf8">
+        <div style="font-size:14px;font-weight:700">${dd}</div><div style="font-size:9px;font-weight:700;color:#aaa">${mm}</div>
+      </div>
+      <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600">${escH(o.t)}</div><div style="font-size:10.5px;color:#aaa">${escH(o.f)}</div></div>
+    </div>`;
+  }).join('');
+
+  const devRows=d.devActivas.length?d.devActivas.slice(0,8).map(dv=>{
+    const plazos=calcPlazos(dv);
+    const dr=dv.fecha_presentacion_sat?diasRestantes(plazos.limite_resolucion):(plazos.presentacion?diasRestantes(plazos.presentacion):null);
+    let drBadge='—';
+    if(dr!==null){
+      const bg=dr<0?'#fef2f2':dr<=5?'#FEF3C7':'#f0f7d4', fg=dr<0?'#dc2626':dr<=5?'#92400E':'#5a8a1a';
+      drBadge=`<span style="background:${bg};color:${fg};padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600">${dr<0?'Vencido '+Math.abs(dr)+'d':dr+'d'}</span>`;
+    }
+    return `<tr onclick="nav('devoluciones')" style="cursor:pointer">
+      <td style="font-weight:500">${escH(dv.cliente_nombre||'—')}</td>
+      <td style="color:#888">${escH(dv.periodo||'—')}</td>
+      <td>${devStatusBadge(dv.status)}</td>
+      <td style="font-size:12px;color:#3B4BC8;font-weight:600">${fmtMXN(dv.monto_solicitado)}</td>
+      <td>${drBadge}</td>
+      <td style="font-size:11px;color:#888">${escH(dv.responsable||'—')}</td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="6" style="text-align:center;color:#bbb;padding:1rem">Sin solicitudes activas'+(d.esJr?' asignadas':'')+'</td></tr>';
+
+  const equipoHTML=d.visible.map(em=>{
+    const u=usersCache[em]; if(!u) return '';
+    const tareas=d.byEmail[em]||[];
+    const total=tareas.length, done=tareas.filter(t=>t.status==='concluida').length;
+    const sb=tareas.filter(t=>t.status==='standby').length;
+    const pct=total>0?Math.round(done/total*100):0;
+    const color=pc(em);
+    const canActOn=(session.role==='admin')||(session.role==='manager'&&u.role==='assistant');
+    const isMe=em===session.email;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f0f0ec">
+      <div class="avatar ${av(u.av)}" style="width:30px;height:30px;font-size:11px">${u.initials||'??'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:baseline;gap:7px">
+          <span style="font-size:13px;font-weight:600">${u.name}</span>${roleBadge(u.role)}
+          <span style="font-size:11.5px;color:#888;margin-left:auto">${done}/${total}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:5px">
+          <div class="progress-bar-wrap" style="height:7px"><div class="progress-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+          <span style="font-size:11px;font-weight:700;color:${color};min-width:30px;text-align:right">${pct}%</span>
+        </div>
+      </div>
+      ${sb?`<span class="badge" style="background:#EEEDFE;color:#3B4BC8">${sb} stand by</span>`:''}
+      ${canActOn||isMe?`<button class="btn btn-sm btn-primary" onclick="renderMisPlan('${em}')" style="font-size:11px">${isMe?'Mis tareas':'Ver'}</button>`:''}
+    </div>`;
+  }).join('');
+
+  return `
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:1rem;padding-bottom:.75rem;border-bottom:2px solid #1a1a1a">
+    <div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3B4BC8">MSST Consulting SC · TaxIA</div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:-.02em;margin-top:2px">Tablero de control</div>
+      <div style="font-size:12px;color:#888;margin-top:3px">${formatDate(d.today)} · ${session.name}</div>
     </div>
   </div>
 
-  <div class="card">
-    <div class="sec-label">Progreso del equipo</div>
-    ${sumRows||'<div style="font-size:14px;color:#888">Sin tareas registradas.</div>'}
+  ${riskHTML}
+
+  <div class="metric-grid" style="grid-template-columns:repeat(${d.kpis.length},minmax(0,1fr))">${kpiHTML}</div>
+
+  ${matrizHTML}
+
+  <div class="grid2" style="display:grid;grid-template-columns:1.3fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="card" style="margin:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="sec-label" style="margin:0">Devoluciones IVA ${d.esJr?'— mis casos':'en trámite'}</div>
+        <button class="btn btn-sm btn-purple" onclick="nav('devoluciones')" style="font-size:11px">Ver todas →</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Cliente</th><th>Período</th><th>Estatus</th><th>Monto</th><th>Plazo</th><th>Responsable</th></tr></thead>
+          <tbody>${devRows}</tbody>
+        </table>
+      </div>
+      <div style="font-size:10px;color:#ccc;margin-top:9px;padding-top:8px;border-top:1px solid #f0f0ec">Plazos en días hábiles conforme al art. 22 CFF.</div>
+    </div>
+    <div class="card" style="margin:0">
+      <div class="sec-label">Próximos vencimientos</div>
+      ${calHTML}
+    </div>
   </div>
-  <div class="grid2" style="margin-bottom:1rem">
+
+  <div class="card"><div class="sec-label">Productividad del equipo — hoy</div>${equipoHTML}</div>
+
+  <div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
     <div class="card" style="margin:0"><div class="sec-label">Historial — tareas concluidas por día</div><canvas id="chart-hist" height="200"></canvas></div>
-    <div class="card" style="margin:0"><div class="sec-label">Avance hoy por persona</div><canvas id="chart-comp" height="200"></canvas></div>
+    <div class="card" style="margin:0">
+      <div class="sec-label">Actividad del despacho — módulo 9</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px">
+        <div style="background:#f5f5f3;border-radius:8px;padding:9px 11px">
+          <div style="font-size:9.5px;color:#999;font-weight:700;text-transform:uppercase">Concluidas este mes</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-top:3px">
+            <span style="font-size:19px;font-weight:700">${d.concluidasMes}</span>
+            ${d.varMes!==null?`<span style="font-size:10.5px;font-weight:700;color:${d.varMes>=0?'#5a8a1a':'#dc2626'}">${d.varMes>=0?'▲':'▼'} ${Math.abs(d.varMes)}%</span>`:''}
+          </div>
+          <div style="font-size:9.5px;color:#ccc;margin-top:1px">vs ${d.concluidasMesAnt} el mes anterior</div>
+        </div>
+        <div style="background:#f5f5f3;border-radius:8px;padding:9px 11px">
+          <div style="font-size:9.5px;color:#999;font-weight:700;text-transform:uppercase">Horas de sesión</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-top:3px"><span style="font-size:19px;font-weight:700">${d.horasEquipo}</span><span style="font-size:10.5px;color:#bbb">h</span></div>
+          <div style="font-size:9.5px;color:#ccc;margin-top:1px">${d.sesionesN} sesiones · ${d.diasActivos} días activos</div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:#ccc">Sesiones sin cierre registrado se excluyen del conteo de horas (piso, no total).</div>
+      ${!d.esJr?`<div class="sec-label" style="margin-top:14px">Avance por módulo</div><canvas id="chart-mod" height="140"></canvas>`:''}
+    </div>
   </div>
+
   <div class="card">
     <div class="sec-label">Análisis ejecutivo — Claude</div>
     <div class="analysis-box" id="abox"><span style="color:#bbb;font-style:italic">Presiona "Analizar" para el resumen ejecutivo.</span></div>
     <button class="btn btn-purple btn-full" style="margin-top:12px" onclick="runAnalysis()">Analizar con Claude ↗</button>
   </div>`;
-
-  buildCharts(visible,allTareas||[],byEmail);
 }
 
-function buildCharts(visible,allTareas,byEmail){
-  // Historial: últimos 14 días, tareas concluidas por día por persona
+function buildDashboardCharts(visible,byEmail,MATRIZ){
   const dateMap={};
-  allTareas.forEach(t=>{
-    if(!visible.includes(t.email)||t.status!=='concluida'||!t.fecha_conclusion)return;
+  visible.forEach(em=>(byEmail[em]||[]).forEach(t=>{
+    if(t.status!=='concluida'||!t.fecha_conclusion)return;
     const d=t.fecha_conclusion.slice(0,10);
-    if(!dateMap[d])dateMap[d]={};
-    dateMap[d][t.email]=(dateMap[d][t.email]||0)+1;
-  });
+    dateMap[d]=(dateMap[d]||0)+1;
+  }));
   const dates=Object.keys(dateMap).sort().slice(-14);
-  const labels=dates.map(formatDateShort);
-  const datasets=visible.map(em=>{
-    const u=usersCache[em];
-    return{label:u?u.name.split(' ')[0]:em,data:dates.map(d=>(dateMap[d]||{})[em]||0),borderColor:pc(em),backgroundColor:pc(em)+'33',tension:.3,fill:false,pointRadius:4};
-  });
   const ctx1=document.getElementById('chart-hist');
-  if(ctx1&&labels.length) new Chart(ctx1,{type:'line',data:{labels,datasets},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},scales:{y:{min:0,ticks:{stepSize:1},grid:{color:'#f0f0ec'}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
-  else if(ctx1) ctx1.parentElement.innerHTML+='<div style="font-size:13px;color:#bbb;padding:1rem 0;text-align:center">Sin historial aún</div>';
-
-  const ctx2=document.getElementById('chart-comp');
-  if(ctx2) new Chart(ctx2,{type:'bar',data:{
-    labels:visible.map(em=>usersCache[em]?usersCache[em].name.split(' ')[0]:em),
-    datasets:[
-      {label:'Total',data:visible.map(em=>(byEmail[em]||[]).length),backgroundColor:'#e5e5e0'},
-      {label:'Concluidas',data:visible.map(em=>(byEmail[em]||[]).filter(t=>t.status==='concluida').length),backgroundColor:visible.map(em=>pc(em))}
-    ]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},scales:{y:{min:0,ticks:{stepSize:1},grid:{color:'#f0f0ec'}},x:{grid:{display:false}}}}});
+  if(ctx1&&dates.length){
+    new Chart(ctx1,{type:'line',data:{labels:dates.map(formatDateShort),datasets:[{label:'Concluidas',data:dates.map(d=>dateMap[d]||0),borderColor:'#3B4BC8',backgroundColor:'#3B4BC833',tension:.3,fill:true,pointRadius:3}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{min:0,ticks:{stepSize:1},grid:{color:'#f0f0ec'}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
+  } else if(ctx1){
+    ctx1.parentElement.innerHTML+='<div style="font-size:13px;color:#bbb;padding:1rem 0;text-align:center">Sin historial aún</div>';
+  }
+  const ctx2=document.getElementById('chart-mod');
+  if(ctx2&&MATRIZ.length){
+    new Chart(ctx2,{type:'bar',data:{
+      labels:MATRIZ.map(m=>m.name),
+      datasets:[{label:'% Concluido',data:MATRIZ.map(m=>m.uni?Math.round(m.ok/m.uni*100):0),backgroundColor:MATRIZ.map(m=>m.color)}]
+    },options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{min:0,max:100,grid:{color:'#f0f0ec'}},y:{grid:{display:false},ticks:{font:{size:10.5}}}}}});
+  }
 }
 
 async function runAnalysis(){
