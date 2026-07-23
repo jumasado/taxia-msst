@@ -1528,12 +1528,30 @@ async function renderDashboard(date){
   // Misma visibilidad que el resto del Dashboard: admin ve todo el equipo, manager ve
   // su equipo (sin el Director), cada consultor ve solo las suyas — es la MISMA lista
   // "visible" ya usada arriba, sin regla adicional.
-  const vencidas=(allTareas||[]).filter(t=>visible.includes(t.email)&&t.status==='pendiente'&&t.fecha_creacion&&t.fecha_creacion<today)
+  const vencidasTX=(allTareas||[]).filter(t=>visible.includes(t.email)&&t.status==='pendiente'&&t.fecha_creacion&&t.fecha_creacion<today)
     .map(t=>{
       const u=usersCache[t.email]||{};
       const dias=Math.round((hoyD-new Date(t.fecha_creacion+'T12:00:00'))/86400000);
-      return {...t,userName:u.name||t.email,userAv:u.av,dias};
-    }).sort((a,b)=>b.dias-a.dias);
+      return {...t,userName:u.name||t.email,userAv:u.av,dias,fuente:'TX'};
+    });
+
+  // Active Collab — resumido, mismas columnas que TaxIA (tarea/cliente, resp., fecha, atraso).
+  // Nunca puede tumbar el Dashboard: si AC no responde, simplemente no aparece nada de AC aquí
+  // (el detalle completo sigue disponible en su pestaña del Módulo 2).
+  let vencidasAC=[];
+  try{
+    const acTodo=await acCargarTodo();
+    visible.filter(em=>AC_IDS[em]).forEach(em=>{
+      const u=usersCache[em]||{};
+      const tareasAc=(acTodo.usuarios[em]&&acTodo.usuarios[em].tareas)||[];
+      tareasAc.filter(t=>t.diasVence!=null&&t.diasVence<0).forEach(t=>{
+        vencidasAC.push({descripcion:t.nombre,client_name:t.proyecto,email:em,userName:u.name||em,userAv:u.av,
+          fecha_creacion:t.creada||null,dias:Math.abs(t.diasVence),fuente:'AC'});
+      });
+    });
+  }catch(e){ console.warn('Dashboard: Active Collab no disponible —', e.message); }
+
+  const vencidas=[...vencidasTX,...vencidasAC].sort((a,b)=>b.dias-a.dias);
 
   // ===== Devoluciones IVA — filtradas por responsable (junior) o por cartera visible (manager) =====
   const devTodas=(allDev||[]);
@@ -1697,8 +1715,11 @@ function renderDashboardHTML(d){
   const vencidasRows=d.vencidas.length?d.vencidas.slice(0,10).map(v=>{
     const bg=v.dias>30?'#fef2f2':v.dias>14?'#FAEEDA':'#FEF3C7';
     const fg=v.dias>30?'#dc2626':v.dias>14?'#854F0B':'#92400E';
+    const fuenteBadge=v.fuente==='AC'
+      ?'<span style="background:#E6F1FB;color:#185FA5;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;margin-right:5px">AC</span>'
+      :'<span style="background:#EEEDFE;color:#3B4BC8;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;margin-right:5px">TX</span>';
     return `<tr>
-      <td><div style="font-weight:600">${escH(v.descripcion||'—')}</div>${v.client_name?`<div style="font-size:10.5px;color:#888">${escH(v.client_name)}</div>`:''}</td>
+      <td><div style="font-weight:600">${fuenteBadge}${escH(v.descripcion||'—')}</div>${v.client_name?`<div style="font-size:10.5px;color:#888;margin-left:26px">${escH(v.client_name)}</div>`:''}</td>
       <td><div class="avatar ${av(v.userAv)}" style="width:22px;height:22px;font-size:9px" title="${escH(v.userName)}">${(usersCache[v.email]&&usersCache[v.email].initials)||'??'}</div></td>
       <td style="font-size:11px;color:#888">${v.fecha_creacion||'—'}</td>
       <td style="text-align:right"><span style="background:${bg};color:${fg};padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700">${v.dias} días</span></td>
