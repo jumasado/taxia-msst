@@ -174,6 +174,61 @@ async function authSignIn(email,password){
   if(!r.ok) throw new Error(data.error_description||data.msg||'Correo o contraseña incorrectos');
   return data; // {access_token, refresh_token, expires_in, user:{id,email,...}}
 }
+// ===== RENOVACIÓN DE SESIÓN (22-jul-2026) =====
+// Los JWT de Supabase caducan a los 60 min. Antes se guardaba el refresh_token
+// y nunca se usaba: quien trabajaba más de una hora seguida empezaba a recibir
+// 401 en todas las consultas sin explicación. Ahora se renueva solo.
+let _refreshEnVuelo=null;
+
+async function authRefresh(){
+  const rt=session&&session.refresh_token;
+  if(!rt) throw new Error('SIN_REFRESH');
+  const r=await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`,{
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({refresh_token:rt})
+  });
+  const d=await r.json();
+  if(!r.ok||!d.access_token) throw new Error(d.error_description||d.msg||'REFRESH_FALLIDO');
+  return d;
+}
+
+// Renueva el token si le quedan menos de 2 minutos. Se llama antes de cada
+// consulta; si varias coinciden, todas esperan la misma renovación.
+async function ensureFreshToken(){
+  if(!session||!session.access_token||!session.expires_at) return;
+  if(Date.now() < session.expires_at-120000) return;
+  if(_refreshEnVuelo) return _refreshEnVuelo;
+  _refreshEnVuelo=(async()=>{
+    try{
+      const d=await authRefresh();
+      session.access_token=d.access_token;
+      // Supabase rota el refresh_token en cada uso: hay que guardar el nuevo.
+      if(d.refresh_token) session.refresh_token=d.refresh_token;
+      session.expires_at=Date.now()+((d.expires_in||3600)*1000);
+    }catch(e){
+      sesionCaducada();
+      throw e;
+    }finally{ _refreshEnVuelo=null; }
+  })();
+  return _refreshEnVuelo;
+}
+
+// La sesión ya no se puede recuperar: se corta limpio en vez de dejar
+// que el usuario siga chocando contra 401 en cada pantalla.
+function sesionCaducada(){
+  session=null;usersCache={};clientesCache=[];gruposCache=[];accesosCache=null;_cacheTs=0;
+  try{clearInactivityTimer();}catch(e){}
+  renderLogin();
+  setTimeout(()=>{
+    const msg=document.createElement('div');
+    msg.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:10px 20px;border-radius:8px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.2)';
+    msg.textContent='Tu sesión caducó. Vuelve a entrar.';
+    document.body.appendChild(msg);
+    setTimeout(()=>msg.remove(),4000);
+  },100);
+}
+
 async function authSignOut(token){
   if(!token)return;
   try{
@@ -230,20 +285,25 @@ const app=document.getElementById('app');
 function _authToken(){ return (session&&session.access_token)||SB_KEY; }
 
 async function sbGet(t,p=''){
+  await ensureFreshToken();
   const r=await fetch(`${SB_URL}/rest/v1/${t}${p}`,{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken()}});
   return r.json();
 }
 async function sbPost(t,d,pref='return=representation'){
+  await ensureFreshToken();
   return fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':pref},body:JSON.stringify(d)});
 }
 async function sbPatch(t,p,d){
+  await ensureFreshToken();
   return fetch(`${SB_URL}/rest/v1/${t}${p}`,{method:'PATCH',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(d)});
 }
 async function sbUpsert(t,d,conflict=''){
+  await ensureFreshToken();
   const pref=conflict?'resolution=merge-duplicates,return=representation':'return=representation';
   return fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':pref},body:JSON.stringify(d)});
 }
 async function sbDelete(t,p){
+  await ensureFreshToken();
   return fetch(`${SB_URL}/rest/v1/${t}${p}`,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken()}});
 }
 
@@ -751,7 +811,8 @@ async function doLogin(){
       errEl.style.display='block';btn.innerHTML='Entrar';btn.disabled=false;return;
     }
     // Sesión real ya válida — a partir de aquí sbGet/sbPost/etc usan el token real, no la anon key.
-    session={access_token:authData.access_token,refresh_token:authData.refresh_token};
+    session={access_token:authData.access_token,refresh_token:authData.refresh_token,
+             expires_at:Date.now()+((authData.expires_in||3600)*1000)};
     // Datos de negocio (rol, módulos, nombre) siguen viviendo en public.users — se leen
     // con el token ya autenticado, nunca se piden columnas sensibles (pass/reset_code/reset_exp).
     const data=await sbGet('users',`?email=eq.${encodeURIComponent(em)}&select=email,name,role,modulos,av,initials`);
@@ -852,6 +913,7 @@ let _acAll=null;   // {ts, usuarios:{correo:{ok,tareas}}}
 // el navegador: CORS lo bloquea. El puente vive en Supabase.
 async function acCargarTodo(forzar){
   if(!forzar && _acAll && (Date.now()-_acAll.ts)<AC_TTL) return _acAll;
+  await ensureFreshToken();
   const ctrl=new AbortController();
   const timer=setTimeout(()=>ctrl.abort(),20000);
   let r;
