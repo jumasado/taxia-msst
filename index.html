@@ -795,7 +795,6 @@ const AC_IDS={
 };
 let _acTab='plan';
 let _acStore={};
-let _acProy=null;
 let _acOrden='antiguas';
 let _acBusca='';
 const AC_TTL=5*60*1000;
@@ -847,54 +846,41 @@ function acTabsHTML(email){
   </div>`;
 }
 
-function acFetch(path,ms){
-  const ctrl=new AbortController();
-  const timer=setTimeout(()=>ctrl.abort(),ms||8000);
-  return fetch(AC_BASE+path,{headers:{'X-Requested-With':'XMLHttpRequest'},credentials:'include',signal:ctrl.signal}).finally(()=>clearTimeout(timer));
-}
+let _acAll=null;   // {ts, usuarios:{correo:{ok,tareas}}}
 
-async function acProyectos(){
-  if(_acProy) return _acProy;
-  _acProy={};
+// Llama a la Edge Function "ac-tareas". No se habla con Active Collab desde
+// el navegador: CORS lo bloquea. El puente vive en Supabase.
+async function acCargarTodo(forzar){
+  if(!forzar && _acAll && (Date.now()-_acAll.ts)<AC_TTL) return _acAll;
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),20000);
+  let r;
   try{
-    const r=await acFetch('/api/v1/projects');
-    if(r.ok){
-      const d=await r.json();
-      (Array.isArray(d)?d:(d.projects||d.data||[])).forEach(p=>{_acProy[p.id]=p.name;});
-    }
-  }catch(e){}
-  return _acProy;
+    r=await fetch(SB_URL+'/functions/v1/ac-tareas',{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json'},
+      body:'{}',
+      signal:ctrl.signal
+    });
+  } finally { clearTimeout(timer); }
+  if(!r.ok) throw new Error('HTTP_'+r.status);
+  const d=await r.json();
+  if(!d.ok) throw new Error(d.error||'ERROR_AC');
+  _acAll={ts:Date.now(),usuarios:d.usuarios||{}};
+  for(const correo in _acAll.usuarios){
+    _acStore[correo]={ts:_acAll.ts,tasks:_acAll.usuarios[correo].tareas||[]};
+  }
+  return _acAll;
 }
 
 async function cargarAcPendientes(email,forzar){
-  const acId=AC_IDS[email];
-  if(!acId) throw new Error('SIN_ID');
+  if(!AC_IDS[email]) throw new Error('SIN_ID');
   const c=_acStore[email];
-  if(!forzar&&c&&(Date.now()-c.ts)<AC_TTL) return c.tasks;
-  const PMAP=await acProyectos();
-  const r=await acFetch('/api/v1/users/'+acId+'/tasks?page=1&per_page=200');
-  if(!r.ok) throw new Error('HTTP_'+r.status);
-  const d=await r.json();
-  const hoy=Math.floor(Date.now()/1000);
-  const tasks=(Array.isArray(d)?d:(d.tasks||d.data||[])).filter(t=>!t.is_completed&&!t.is_trashed).map(t=>({
-    id:t.id,
-    num:t.task_number,
-    nombre:t.name||'(sin nombre)',
-    proyecto:PMAP[t.project_id]||('Proyecto '+t.project_id),
-    url:t.url_path||('/projects/'+t.project_id+'/tasks/'+t.id),
-    creada:t.created_on?new Date(t.created_on*1000).toISOString().slice(0,10):null,
-    edad:t.created_on?Math.floor((hoy-t.created_on)/86400):null,
-    vence:t.due_on?new Date(t.due_on*1000).toISOString().slice(0,10):null,
-    diasVence:t.due_on?Math.round((t.due_on-hoy)/86400):null,
-    subAbiertas:t.open_subtasks||0,
-    subTotal:t.total_subtasks||0,
-    coment:t.comments_count||0,
-    estimado:t.estimate||0,
-    importante:!!t.is_important,
-    etiquetas:(t.labels||[]).map(l=>l.name||l).filter(Boolean)
-  }));
-  _acStore[email]={ts:Date.now(),tasks};
-  return tasks;
+  if(!forzar && c && (Date.now()-c.ts)<AC_TTL) return c.tasks;
+  const todo=await acCargarTodo(forzar);
+  const u=todo.usuarios[email];
+  if(u && u.ok===false) throw new Error(u.error||'ERROR_USUARIO');
+  return (_acStore[email]||{tasks:[]}).tasks;
 }
 
 function acPrecargarConteo(email){
@@ -924,8 +910,16 @@ async function renderPanelAC(email){
   try{
     tasks=await cargarAcPendientes(email);
   }catch(e){
-    const sinSesion=e.name==='AbortError'||String(e.message).indexOf('HTTP_4')===0;
-    pf.innerHTML=acAviso(sinSesion?'No hay sesión activa en Active Collab.':'No se pudo conectar con Active Collab.',sinSesion?'Abre app.msstconsulting.com en otra pestaña de este mismo navegador, inicia sesión y vuelve aquí.':'Revisa tu conexión y vuelve a intentar. El plan del día sigue funcionando con normalidad.',email);
+    const m=String(e.message||'');
+    let titulo='No se pudo consultar Active Collab.';
+    let detalle='Vuelve a intentar en un momento. El plan del día sigue funcionando con normalidad.';
+    if(m.indexOf('HTTP_404')===0){ titulo='La función ac-tareas no está desplegada.'; detalle='Falta publicarla en Supabase. Avisa al administrador.'; }
+    else if(m.indexOf('HTTP_405')===0){ titulo='La función rechazó el método de la llamada.'; detalle='Debe invocarse con POST. Avisa al administrador.'; }
+    else if(m.indexOf('HTTP_401')===0){ titulo='Tu sesión expiró.'; detalle='Vuelve a iniciar sesión en TaxIA y entra de nuevo a esta pestaña.'; }
+    else if(m.indexOf('ACTIVECOLLAB_TOKEN')>=0){ titulo='Falta configurar el acceso a Active Collab.'; detalle='El token no está registrado como secreto en Supabase. Avisa al administrador.'; }
+    else if(m.indexOf('AC 401')>=0||m.indexOf('AC 403')>=0){ titulo='Active Collab rechazó las credenciales.'; detalle='El token expiró o fue revocado. Hay que generarlo de nuevo.'; }
+    else if(e.name==='AbortError'){ titulo='Active Collab tardó demasiado en responder.'; detalle='Vuelve a intentar. Si persiste, revisa que app.msstconsulting.com esté en línea.'; }
+    pf.innerHTML=acAviso(titulo,detalle,email);
     return;
   }
   const vencidas=tasks.filter(t=>t.diasVence!==null&&t.diasVence<0).length;
@@ -976,8 +970,7 @@ function acBuscar(v,email){_acBusca=v;acPintarLista(email);}
 function acOrdenar(v,email){_acOrden=v;acPintarLista(email);}
 
 async function acRecargar(email){
-  delete _acStore[email];
-  _acProy=null;
+  _acAll=null; _acStore={};
   await renderPanelAC(email);
 }
 
