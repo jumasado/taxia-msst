@@ -243,7 +243,7 @@ const ALL_MODULES=[
   {id:'clientes',    num:3,  label:'Clientes',               icon:'🏢', desc:'Directorio de clientes, grupos y datos generales',                     color:'#374151', bg:'#f3f4f6'},
   {id:'doc',         num:4,  label:'Documentación',          icon:'📁', desc:'Expediente digital: estados financieros y generales del cliente',       color:'#0f4c81', bg:'#dbeafe'},
   {id:'devoluciones',num:5,  label:'Devoluciones IVA',       icon:'🔄', desc:'Gestión de trámites de devolución ante el SAT',                        color:'#0C447C', bg:'#E6F1FB'},
-  {id:'pp',          num:6,  label:'Pagos Provisionales',    icon:'💳', desc:'Cálculo y revisión mensual de obligaciones federales y estatales',      color:'#72243E', bg:'#FBEAF0'},
+  {id:'pp',          num:6,  label:'Tax Compliance',          icon:'⚖️',  desc:'Cumplimiento fiscal integral: federal, estatal, seguridad social y LFPIORPI', color:'#1B3A6B', bg:'#E8EEF7'},
   {id:'proyeccion',  num:7,  label:'Proyección Anual',       icon:'📊', desc:'Estimación de ISR anual y escenarios fiscales por ejercicio',           color:'#5a8a1a', bg:'#EAF3DE'},
   {id:'da_pm',       num:8,  label:'Declaración Anual',      icon:'📋', desc:'Papeles de trabajo y determinación de Declaración Anual PM',            color:'#633806', bg:'#FAEEDA'},
   {id:'historial',   num:9,  label:'Historial',              icon:'📅', desc:'Registro histórico de actividades y cierres',                           color:'#374151', bg:'#f3f4f6'},
@@ -1637,7 +1637,7 @@ async function renderDashboard(date){
     {num:3,name:'Clientes',desc:'Expediente base y responsable asignado',uni:clientesRol.length,ok:m3ok,proc:m3proc,pen:m3pen,color:'#374151',uniNota:'Cartera visible'},
     {num:4,name:'Documentación',desc:'Documentos generales obligatorios',uni:clientesRol.length,ok:m4ok,proc:m4proc,pen:m4pen,color:'#0f4c81',uniNota:'Cartera visible'},
     {num:5,name:'Devoluciones IVA',desc:'Solicitudes en trámite ante el SAT',uni:devVisibles.length,ok:m5ok,proc:m5proc,pen:m5pen,color:'#0C447C',uniNota:'Solicitudes, no clientes'},
-    {num:6,name:'Pagos Provisionales',desc:'Revisión de '+DOC_MESES_L[mesCump-1]+' '+anioCump,uni:clientesConISR.length,ok:m6ok,proc:m6proc,pen:m6pen,color:'#72243E',uniNota:'Con ISR PM/PF configurado'},
+    {num:6,name:'Tax Compliance',desc:'Revisión de '+DOC_MESES_L[mesCump-1]+' '+anioCump,uni:clientesConISR.length,ok:m6ok,proc:m6proc,pen:m6pen,color:'#1B3A6B',uniNota:'Con obligaciones configuradas'},
     {num:7,name:'Proyección Anual',desc:'Cierre estimado ejercicio '+anioActual,uni:clientesConISR.length,ok:m7ok,proc:0,pen:m7pen,color:'#5a8a1a',uniNota:'Con ISR PM/PF configurado'},
     {num:8,name:'Declaración Anual',desc:'Ejercicio '+ejercicioAnterior+' — papeles de trabajo',uni:clientesRol.length,ok:m8ok,proc:m8proc,pen:m8pen,color:'#633806',uniNota:'Toda la cartera (PM y PF)'}
   ];
@@ -1647,10 +1647,10 @@ async function renderDashboard(date){
   let alertas=[...alertasDev];
   if(hoyD.getDate()>17&&!esJr){
     const pend=clientesConISR.filter(c=>ppByCliente[String(c.id)]!=='revisado');
-    if(pend.length) alertas.push({dias:2,mod:'M6 · Pagos Prov.',t:pend.length+' cliente'+(pend.length>1?'s':'')+' sin revisión de '+DOC_MESES_L[mesCump-1].toLowerCase()+' '+anioCump,s:'Vencimiento del día 17 ya transcurrido'});
+    if(pend.length) alertas.push({dias:2,mod:'M6 · Tax Compliance',t:pend.length+' cliente'+(pend.length>1?'s':'')+' sin revisión de '+DOC_MESES_L[mesCump-1].toLowerCase()+' '+anioCump,s:'Vencimiento del día 17 ya transcurrido'});
   }
   if(sinConfigurar.length&&!esJr){
-    alertas.push({dias:9,mod:'M6 · Pagos Prov.',t:sinConfigurar.length+' cliente'+(sinConfigurar.length>1?'s':'')+' sin obligaciones configuradas',s:'No forman parte de ningún universo de cumplimiento — el % del tablero los excluye'});
+    alertas.push({dias:9,mod:'M6 · Tax Compliance',t:sinConfigurar.length+' cliente'+(sinConfigurar.length>1?'s':'')+' sin obligaciones configuradas',s:'No forman parte de ningún universo de cumplimiento — el % del tablero los excluye'});
   }
   const m4faltantes=clientesRol.length-m4ok;
   if(m4faltantes>0&&!esJr){
@@ -5272,18 +5272,18 @@ window.addEventListener('message',function(ev){
   if(ev.data&&ev.data.type==='da_pm_ready') enviarSesionADaPm();
 });
 
-// ===== PAGOS PROVISIONALES =====
+// ===== TAX COMPLIANCE — MÓDULO 6 =====
 
-// ===== PAGOS PROVISIONALES — MÓDULO ORIGINAL =====
+// ===== TAX COMPLIANCE — ENTRY POINT =====
 async function renderPagosProv(){
   if(!userCanAccess(session.email,'pp')){renderPortada();return;}
   await loadCaches();
-  PAGOS.init();
+  tcRenderHome(); // Tax Compliance — pantalla principal con 4 sub-módulos
 }
 
 
 // ===================================================
-// ===== MÓDULO PAGOS PROVISIONALES — PAGOS IIFE =====
+// ===== TAX COMPLIANCE — IIFE =====
 // ===================================================
 
 const PAGOS = (function(){
@@ -5522,8 +5522,123 @@ function pToast(msg,tipo){
 }
 
 // ===== RENDER PRINCIPAL =====
+
+// ─────────────────────────────────────────────────────
+//  TAX COMPLIANCE — HOME (4 SUB-MÓDULOS)
+// ─────────────────────────────────────────────────────
+let tcSubModulo='federal';
+
+const TC_SUBMODS=[
+  {id:'federal',  label:'Impuestos Federales', icon:'🏛', color:'#1B3A6B', bg:'#E8EEF7', badge:'SAT',             desc:'ISR, IVA, IEPS y retenciones federales',              fundamento:'LISR · LIVA · LIEPS · CFF',                     activo:true},
+  {id:'estatal',  label:'Impuestos Estatales', icon:'🗺', color:'#0C6B45', bg:'#E6F4EE', badge:'ESTATAL',         desc:'ISN, ISH, cedular y otros impuestos locales',         fundamento:'Leyes de Hacienda Estatales',                    activo:false,proximamente:true},
+  {id:'ss',       label:'Seguridad Social',    icon:'🏥', color:'#7A3B8F', bg:'#F3EDF8', badge:'IMSS · INFONAVIT',desc:'Cuotas IMSS, aportaciones INFONAVIT y SUA',           fundamento:'LSS · LIV · Acuerdo ACDO.SA3.HCT',              activo:false,proximamente:true},
+  {id:'lfpiorpi', label:'LFPIORPI',            icon:'🔍', color:'#854F0B', bg:'#FDF3E7', badge:'UIF',             desc:'Obligaciones antilavado y avisos a la UIF',           fundamento:'LFPIORPI · Reglas de Carácter General UIF',     activo:false,proximamente:true},
+];
+
+function tcRenderHome(){
+  pApp().innerHTML=renderTopNav('pp')+`
+    <div style="max-width:960px;margin:0 auto;padding:0 1rem 2rem">
+
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.75rem;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:#8FB832;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">MSST Consulting · TaxIA · Módulo 6</div>
+          <div style="font-size:28px;font-weight:800;color:#1B3A6B;letter-spacing:-.4px">Tax Compliance</div>
+          <div style="font-size:12px;color:#888;margin-top:5px;max-width:500px">Plataforma integral de cumplimiento fiscal federal, estatal, seguridad social y obligaciones antilavado.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#1B3A6B,#2A5298);border-radius:10px;padding:10px 16px">
+          <span style="font-size:18px">⚖️</span>
+          <div>
+            <div style="font-size:10px;color:rgba(255,255,255,.7);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Tax Compliance</div>
+            <div style="font-size:12px;color:#fff;font-weight:700">MSST Consulting SC</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:1.75rem">
+        ${TC_SUBMODS.map(sm=>`
+          <div onclick="${sm.activo?`tcEntrar('${sm.id}')`:''}"
+               style="border:1.5px solid ${sm.activo?sm.color+'55':'#e5e5e0'};border-radius:14px;padding:22px;background:${sm.activo?sm.bg:'#fafafa'};cursor:${sm.activo?'pointer':'default'};transition:all .18s;position:relative;overflow:hidden${sm.activo?'':';opacity:.7'}"
+               ${sm.activo?`onmouseenter="this.style.borderColor='${sm.color}';this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 24px ${sm.color}25'" onmouseleave="this.style.borderColor='${sm.color}55';this.style.transform='translateY(0)';this.style.boxShadow='none'"`:''}>
+            <div style="position:absolute;left:0;top:0;bottom:0;width:5px;background:${sm.color};border-radius:14px 0 0 14px"></div>
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;padding-left:10px">
+              <div style="width:44px;height:44px;border-radius:12px;background:${sm.color};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;box-shadow:0 2px 8px ${sm.color}40">${sm.icon}</div>
+              <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+                ${sm.proximamente?'<span style="font-size:9px;font-weight:700;background:#F1EFE8;color:#5F5E5A;border:1px solid #ddd;padding:2px 7px;border-radius:999px">PRÓXIMAMENTE</span>':'<span style="font-size:9px;font-weight:700;background:#EAF3DE;color:#3B6D11;border:1px solid #C0DD97;padding:2px 7px;border-radius:999px">✓ ACTIVO</span>'}
+                <span style="font-size:9px;font-weight:700;background:${sm.color};color:#fff;padding:2px 8px;border-radius:999px">${sm.badge}</span>
+              </div>
+            </div>
+            <div style="padding-left:10px">
+              <div style="font-size:16px;font-weight:800;color:${sm.activo?sm.color:'#999'};margin-bottom:4px;letter-spacing:-.2px">${sm.label}</div>
+              <div style="font-size:12px;color:#666;margin-bottom:8px;line-height:1.4">${sm.desc}</div>
+              <div style="font-size:10px;color:#aaa;font-style:italic">${sm.fundamento}</div>
+            </div>
+            <div style="padding-left:10px;margin-top:16px;padding-top:14px;border-top:1px solid ${sm.activo?sm.color+'22':'#f0f0f0'}">
+              ${sm.activo
+                ?`<div style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${sm.color}">Abrir módulo <span>→</span></div>`
+                :`<div style="font-size:11px;color:#bbb">En desarrollo — próximamente disponible</div>`}
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <div id="tc-resumen-global">
+        <div style="background:#fff;border:1px solid #e5e5e0;border-radius:12px;padding:14px 18px">
+          <div style="font-size:10px;color:#aaa;text-align:center">Cargando resumen de cumplimiento...</div>
+        </div>
+      </div>
+    </div>`;
+  tcRenderResumen();
+}
+
+async function tcRenderResumen(){
+  const el=document.getElementById('tc-resumen-global');
+  if(!el)return;
+  let total=0,conObl=0;
+  try{const r=await pSbGet('cliente_config_pagos','?select=cliente_id,config_impuestos&limit=500');total=(r||[]).length;conObl=(r||[]).filter(c=>(c.config_impuestos||[]).length>0).length;}catch(e){}
+  el.innerHTML=`
+    <div style="background:#fff;border:1px solid #e5e5e0;border-radius:12px;padding:16px 20px">
+      <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Resumen de cumplimiento configurado</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+        <div style="text-align:center;padding:12px 8px;background:#E8EEF7;border-radius:10px">
+          <div style="font-size:22px;font-weight:800;color:#1B3A6B">${total}</div>
+          <div style="font-size:10px;color:#1B3A6B;margin-top:2px;font-weight:600">Clientes configurados</div>
+          <div style="font-size:9px;color:#888;margin-top:1px">Impuestos Federales</div>
+        </div>
+        <div style="text-align:center;padding:12px 8px;background:#EAF3DE;border-radius:10px">
+          <div style="font-size:22px;font-weight:800;color:#3B6D11">${conObl}</div>
+          <div style="font-size:10px;color:#3B6D11;margin-top:2px;font-weight:600">Con obligaciones</div>
+          <div style="font-size:9px;color:#888;margin-top:1px">Al menos 1 impuesto activo</div>
+        </div>
+        <div style="text-align:center;padding:12px 8px;background:#F3EDF8;border-radius:10px;opacity:.55">
+          <div style="font-size:22px;font-weight:800;color:#7A3B8F">—</div>
+          <div style="font-size:10px;color:#7A3B8F;margin-top:2px;font-weight:600">Seg. Social</div>
+          <div style="font-size:9px;color:#888;margin-top:1px">En desarrollo</div>
+        </div>
+        <div style="text-align:center;padding:12px 8px;background:#FDF3E7;border-radius:10px;opacity:.55">
+          <div style="font-size:22px;font-weight:800;color:#854F0B">—</div>
+          <div style="font-size:10px;color:#854F0B;margin-top:2px;font-weight:600">LFPIORPI</div>
+          <div style="font-size:9px;color:#888;margin-top:1px">En desarrollo</div>
+        </div>
+      </div>
+      <div style="margin-top:10px;font-size:10px;color:#ccc;text-align:right">MSST Consulting SC · Tax Compliance M6 · ${new Date().getFullYear()}</div>
+    </div>`;
+}
+
+function tcEntrar(submod){
+  tcSubModulo=submod;
+  if(submod==='federal'){if(!pClienteActual){pRenderClientes();return;}pRenderModulo();}
+}
+
+function tcVolverHome(){
+  pClienteActual=null;pClienteConfig=null;pPagosCache=[];pPagoActual=null;tcSubModulo='federal';
+  tcRenderHome();
+}
+
 function pRender(){
-  if(!pClienteActual){pRenderClientes();return;}
+  if(!pClienteActual){
+    if(tcSubModulo==='federal'){pRenderClientes();}
+    else{tcRenderHome();}
+    return;
+  }
   pRenderModulo();
 }
 
@@ -5532,43 +5647,64 @@ let pTipoPersona='pm'; // 'pm' | 'pf'
 
 function pRenderClientes(){
   const esPM=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pm'||t.includes('moral')||!t; };
-  const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pf'||t.includes('fisica'); };
-  const listaPM=clientesCache.filter(c=>c.activo!==false&&esPM(c)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
-  const listaPF=clientesCache.filter(c=>c.activo!==false&&esPF(c)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
+  const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pf'||t.includes('f\xedsica'); };
+  const listaPM=(clientesCache||[]).filter(esPM);
+  const listaPF=(clientesCache||[]).filter(esPF);
   const listaActual=pTipoPersona==='pm'?listaPM:listaPF;
-
   pApp().innerHTML=renderTopNav('pp')+`
-    <div style="max-width:620px;margin:0 auto">
+    <div style="max-width:680px;margin:0 auto;padding:0 1rem 2rem">
+
+      <!-- BREADCRUMB -->
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:1.25rem;flex-wrap:wrap">
+        <button onclick="tcVolverHome()" style="background:none;border:none;cursor:pointer;font-size:12px;color:#1B3A6B;font-weight:600;padding:4px 8px;border-radius:6px;font-family:inherit;display:flex;align-items:center;gap:4px" onmouseenter="this.style.background='#E8EEF7'" onmouseleave="this.style.background='none'">
+          ⚖️ Tax Compliance
+        </button>
+        <span style="color:#ccc;font-size:12px">›</span>
+        <span style="font-size:12px;font-weight:700;color:#1B3A6B;background:#E8EEF7;padding:4px 10px;border-radius:6px">🏛 Impuestos Federales</span>
+      </div>
+
+      <!-- HEADER -->
       <div style="margin-bottom:1.25rem">
-        <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.04em">MSST Consulting · TaxIA</div>
-        <div style="font-size:22px;font-weight:700;margin-top:2px">Pagos Provisionales</div>
-        <div style="font-size:12px;color:#888;margin-top:2px">Revisión mensual de obligaciones federales y estatales</div>
+        <div style="font-size:22px;font-weight:800;color:#1B3A6B">Impuestos Federales</div>
+        <div style="font-size:12px;color:#888;margin-top:3px">Selecciona el tipo de contribuyente para iniciar la revisión mensual</div>
       </div>
-      <!-- Selector PM/PF -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1rem">
-        <div onclick="PAGOS.setTipoPersona('pm')" style="border:2px solid ${pTipoPersona==='pm'?'#3B4BC8':'#e5e5e0'};border-radius:12px;padding:14px 16px;cursor:pointer;background:${pTipoPersona==='pm'?'#EEEDFE':'#fff'};transition:all .15s">
-          <div style="font-size:13px;font-weight:700;color:${pTipoPersona==='pm'?'#3B4BC8':'#1a1a1a'}">🏢 Personas Morales</div>
-          <div style="font-size:11px;color:#888;margin-top:2px">${listaPM.length} clientes · Art. 14 LISR</div>
+
+      <!-- SELECTOR PM / PF -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.25rem">
+        <div onclick="PAGOS.setTipoPersona('pm')"
+             style="border:2px solid ${pTipoPersona==='pm'?'#1B3A6B':'#e5e5e0'};border-radius:12px;padding:16px 18px;cursor:pointer;background:${pTipoPersona==='pm'?'#E8EEF7':'#fff'};transition:all .15s">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <div style="width:32px;height:32px;border-radius:8px;background:${pTipoPersona==='pm'?'#1B3A6B':'#f5f5f3'};display:flex;align-items:center;justify-content:center;font-size:14px">🏢</div>
+            <div style="font-size:13px;font-weight:700;color:${pTipoPersona==='pm'?'#1B3A6B':'#1a1a1a'}">Personas Morales</div>
+          </div>
+          <div style="font-size:11px;color:#888;padding-left:40px">${listaPM.length} cliente${listaPM.length!==1?'s':''} · Art. 14 LISR</div>
+          ${pTipoPersona==='pm'?'<div style="margin-top:8px;padding-left:40px;font-size:10px;font-weight:700;color:#8FB832">● SELECCIONADO</div>':''}
         </div>
-        <div onclick="PAGOS.setTipoPersona('pf')" style="border:2px solid ${pTipoPersona==='pf'?'#72243E':'#e5e5e0'};border-radius:12px;padding:14px 16px;cursor:pointer;background:${pTipoPersona==='pf'?'#FBEAF0':'#fff'};transition:all .15s">
-          <div style="font-size:13px;font-weight:700;color:${pTipoPersona==='pf'?'#72243E':'#1a1a1a'}">👤 Personas Físicas</div>
-          <div style="font-size:11px;color:#888;margin-top:2px">${listaPF.length} clientes · Art. 106 LISR</div>
+        <div onclick="PAGOS.setTipoPersona('pf')"
+             style="border:2px solid ${pTipoPersona==='pf'?'#1B3A6B':'#e5e5e0'};border-radius:12px;padding:16px 18px;cursor:pointer;background:${pTipoPersona==='pf'?'#E8EEF7':'#fff'};transition:all .15s">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <div style="width:32px;height:32px;border-radius:8px;background:${pTipoPersona==='pf'?'#1B3A6B':'#f5f5f3'};display:flex;align-items:center;justify-content:center;font-size:14px">👤</div>
+            <div style="font-size:13px;font-weight:700;color:${pTipoPersona==='pf'?'#1B3A6B':'#1a1a1a'}">Personas Físicas</div>
+          </div>
+          <div style="font-size:11px;color:#888;padding-left:40px">${listaPF.length} cliente${listaPF.length!==1?'s':''} · Art. 106 LISR</div>
+          ${pTipoPersona==='pf'?'<div style="margin-top:8px;padding-left:40px;font-size:10px;font-weight:700;color:#8FB832">● SELECCIONADO</div>':''}
         </div>
       </div>
+
+      <!-- LISTA CLIENTES -->
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div class="sec-label" style="margin-bottom:0">${pTipoPersona==='pm'?'Personas Morales':'Personas Físicas'}</div>
+          <div class="sec-label" style="margin-bottom:0">${pTipoPersona==='pm'?'Personas Morales':'Personas Físicas'} — ${listaActual.length} cliente${listaActual.length!==1?'s':''}</div>
         </div>
         <div style="position:relative;margin-bottom:10px">
           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;pointer-events:none">🔍</span>
-          <input type="text" id="p-cli-buscar" placeholder="Buscar por nombre..." oninput="PAGOS.filtrarCli(this.value)" style="padding-left:32px">
+          <input type="text" id="p-cli-buscar" placeholder="Buscar por nombre o RFC..." oninput="PAGOS.filtrarCli(this.value)" style="padding-left:32px">
         </div>
-        <div id="p-cli-lista" style="max-height:380px;overflow-y:auto">${pListaCli(listaActual)}</div>
-        ${pTipoPersona==='pf'?'<div style="margin-top:10px;padding:8px 12px;background:#FBEAF0;border-radius:8px;font-size:11px;color:#72243E">⚠ El módulo de Personas Físicas está en desarrollo. Por ahora puedes registrar períodos usando los impuestos aplicables (ISR PF, IVA, Retenciones).</div>':''}
+        <div id="p-cli-lista" style="max-height:420px;overflow-y:auto">${pListaCli(listaActual)}</div>
+        ${pTipoPersona==='pf'?'<div style="margin-top:10px;padding:8px 12px;background:#FDF3E7;border:1px solid #FAC775;border-radius:8px;font-size:11px;color:#854F0B">⚠ El módulo de Personas Físicas está en desarrollo. Por ahora puedes registrar períodos usando los impuestos aplicables (ISR PF, IVA, Retenciones).</div>':''}
       </div>
     </div>`;
 }
-
 function pListaCli(lista){
   if(!lista.length)return '<div style="text-align:center;padding:1.5rem;color:#888;font-size:13px">Sin clientes de este tipo. Verifica el campo "tipo" en el catálogo de clientes.</div>';
   return lista.map(c=>{
@@ -5587,35 +5723,54 @@ function pRenderModulo(){
   const aler=pPagosCache.filter(p=>p.status==='alerta').length;
   const pend=pPagosCache.filter(p=>!p.status||p.status==='pendiente').length;
   pApp().innerHTML=renderTopNav('pp')+`
-    <div style="max-width:900px;margin:0 auto">
+    <div style="max-width:960px;margin:0 auto;padding:0 1rem 2rem">
+
+      <!-- BREADCRUMB -->
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:1.1rem;flex-wrap:wrap">
+        <button onclick="tcVolverHome()" style="background:none;border:none;cursor:pointer;font-size:12px;color:#1B3A6B;font-weight:600;padding:4px 8px;border-radius:6px;font-family:inherit" onmouseenter="this.style.background='#E8EEF7'" onmouseleave="this.style.background='none'">⚖️ Tax Compliance</button>
+        <span style="color:#ccc;font-size:12px">›</span>
+        <button onclick="PAGOS.volverCli()" style="background:none;border:none;cursor:pointer;font-size:12px;color:#1B3A6B;font-weight:600;padding:4px 8px;border-radius:6px;font-family:inherit" onmouseenter="this.style.background='#E8EEF7'" onmouseleave="this.style.background='none'">🏛 Impuestos Federales</button>
+        <span style="color:#ccc;font-size:12px">›</span>
+        <span style="font-size:12px;font-weight:700;color:#1B3A6B;background:#E8EEF7;padding:4px 10px;border-radius:6px">${pH(pClienteActual.nombre)}</span>
+      </div>
+
+      <!-- HEADER -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.04em">MSST Consulting · TaxIA</div>
-          <div style="font-size:22px;font-weight:700;margin-top:2px">Pagos Provisionales</div>
+          <div style="font-size:10px;font-weight:700;color:#8FB832;text-transform:uppercase;letter-spacing:.1em">Tax Compliance · Impuestos Federales</div>
+          <div style="font-size:20px;font-weight:800;color:#1B3A6B;margin-top:2px">${pH(pClienteActual.nombre)}</div>
         </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-sm" onclick="PAGOS.volverCli()">← Clientes</button>
-          <button class="btn btn-primary btn-sm" onclick="PAGOS.abrirNuevoPeriodo()">+ Nuevo período</button>
+        <button class="btn btn-primary btn-sm" onclick="PAGOS.abrirNuevoPeriodo()" style="background:#1B3A6B;border-color:#1B3A6B">+ Nuevo período</button>
+      </div>
+
+      <!-- KPI STRIP -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1rem">
+        <div style="background:#E8EEF7;border-radius:10px;padding:10px 14px">
+          <div style="font-size:10px;color:#1B3A6B;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Períodos</div>
+          <div style="font-size:20px;font-weight:800;color:#1B3A6B;margin-top:2px">${pPagosCache.length}</div>
+        </div>
+        <div style="background:#EAF3DE;border-radius:10px;padding:10px 14px">
+          <div style="font-size:10px;color:#3B6D11;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Revisados</div>
+          <div style="font-size:20px;font-weight:800;color:#3B6D11;margin-top:2px">${rev}</div>
+        </div>
+        <div style="background:${aler?'#FAEEDA':'#f5f5f3'};border-radius:10px;padding:10px 14px">
+          <div style="font-size:10px;color:${aler?'#854F0B':'#888'};font-weight:600;text-transform:uppercase;letter-spacing:.04em">Con alerta</div>
+          <div style="font-size:20px;font-weight:800;color:${aler?'#854F0B':'#888'};margin-top:2px">${aler}</div>
+        </div>
+        <div style="background:${pend?'#F1EFE8':'#f5f5f3'};border-radius:10px;padding:10px 14px">
+          <div style="font-size:10px;color:${pend?'#5F5E5A':'#888'};font-weight:600;text-transform:uppercase;letter-spacing:.04em">Pendientes</div>
+          <div style="font-size:20px;font-weight:800;color:${pend?'#5F5E5A':'#888'};margin-top:2px">${pend}</div>
         </div>
       </div>
-      <div class="card" style="padding:10px 14px;margin-bottom:8px">
-        <div style="display:flex;align-items:center;gap:12px">
-          <div style="width:40px;height:40px;border-radius:10px;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#3C3489;flex-shrink:0">${pClienteActual.nombre.charAt(0).toUpperCase()}</div>
-          <div><div style="font-size:15px;font-weight:700">${pH(pClienteActual.nombre)}</div><div style="font-size:11px;color:#888">ID: ${pH(String(pClienteActual.id))}</div></div>
-          <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
-            ${rev?`<span class="badge badge-ok">${rev} revisado${rev>1?'s':''}</span>`:''}
-            ${aler?`<span class="badge badge-warn">${aler} con alerta</span>`:''}
-            ${pend?`<span class="badge badge-pend">${pend} pendiente${pend>1?'s':''}</span>`:''}
-            ${!rev&&!aler&&!pend?`<span class="badge badge-pend">Sin pagos</span>`:''}
-          </div>
-        </div>
+
+      <!-- TABS -->
+      <div style="display:flex;gap:0;border-bottom:2px solid #e5e5e0;margin-bottom:1.25rem">
+        ${['revision','historico','informe','config'].map(t=>`
+          <button style="padding:10px 20px;font-size:12px;font-weight:${pTab===t?'700':'500'};cursor:pointer;color:${pTab===t?'#1B3A6B':'#888'};border-bottom:${pTab===t?'2px solid #1B3A6B':'2px solid transparent'};margin-bottom:-2px;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit" onclick="PAGOS.setTab('${t}')">
+            ${{revision:'Revisión mensual',historico:'Histórico',informe:'Informe de revisión',config:'Configuración'}[t]}
+          </button>`).join('')}
       </div>
-      <div class="tab-row">
-        <button class="tab ${pTab==='revision'?'active':''}" onclick="PAGOS.setTab('revision')">Revisión mensual</button>
-        <button class="tab ${pTab==='historico'?'active':''}" onclick="PAGOS.setTab('historico')">Histórico</button>
-        <button class="tab ${pTab==='informe'?'active':''}" onclick="PAGOS.setTab('informe')">Informe de revisión</button>
-        <button class="tab ${pTab==='config'?'active':''}" onclick="PAGOS.setTab('config')">Configuración</button>
-      </div>
+
       <div id="p-tab">${pTabContent()}</div>
     </div>`;
 }
@@ -5896,7 +6051,7 @@ function pContenidoInforme(anio,per){
   const thr='background:#3B4BC8;color:#fff;padding:6px 10px;font-size:10px;font-weight:600;text-align:right';
   return `
     <div class="card">
-      <div style="background:#3B4BC8;color:#fff;padding:8px 14px;border-radius:8px 8px 0 0;font-size:12px;font-weight:700;display:flex;justify-content:space-between;margin:-1rem -1.25rem 12px"><span>INFORME DE REVISIÓN — PAGOS PROVISIONALES</span><span>${pH(tit)}</span></div>
+      <div style="background:#1B3A6B;color:#fff;padding:8px 14px;border-radius:8px 8px 0 0;font-size:12px;font-weight:700;display:flex;justify-content:space-between;margin:-1rem -1.25rem 12px"><span>INFORME DE REVISIÓN — TAX COMPLIANCE</span><span>${pH(tit)}</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
         <div><div class="sec-label">Cliente</div><div style="font-size:14px;font-weight:700">${pH(pClienteActual.nombre)}</div></div>
         <div><div class="sec-label">Elaborado por</div><div style="font-size:13px;font-weight:600">MSST Consulting SC</div><div style="font-size:11px;color:#888">${new Date().toLocaleDateString('es-MX')}</div></div>
@@ -6177,7 +6332,7 @@ return {
     }catch(e){pClienteConfig=null;}
     pTab='revision';pRender();
   },
-  volverCli: function(){pClienteActual=null;pClienteConfig=null;pPagosCache=[];pPagoActual=null;pRender();},
+  volverCli: function(){pClienteActual=null;pClienteConfig=null;pPagosCache=[];pPagoActual=null;pRenderClientes();}, // stays in Federal sub-module
   setTab: function(t){if(t!=='revision')pPagoActual=null;pTab=t;pRenderModulo();},
   setSub: function(s){if(pPagoActual)pPagoActual._sub=s;pRefreshTab();},
   updateMeses: function(a){const mp={};pPagosCache.filter(p=>p.anio==a).forEach(p=>{mp[p.anio+'-'+p.mes]=p.status;});const el=document.getElementById('p-meses');if(el)el.innerHTML=pMesesGrid(a,mp);},
@@ -6351,9 +6506,9 @@ return {
     </head><body>
     <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #3B4BC8;padding-bottom:10px;margin-bottom:18px">
       <div><div style="font-size:10px;color:#888;text-transform:uppercase;font-weight:600">MSST Consulting SC</div>
-      <div style="font-size:18px;font-weight:700;margin-top:2px">Informe Pagos Provisionales</div>
+      <div style="font-size:18px;font-weight:700;margin-top:2px">Informe Tax Compliance</div>
       <div style="font-size:12px;color:#888;margin-top:2px">${pH(pClienteActual.nombre)} · ${pH(tit)}</div></div>
-      <div style="text-align:right"><div style="font-size:14px;font-weight:700;color:#3B4BC8">CONFIDENCIAL</div><div style="font-size:10px;color:#888">${new Date().toLocaleDateString('es-MX')}</div></div>
+      <div style="text-align:right"><div style="font-size:14px;font-weight:700;color:#1B3A6B">CONFIDENCIAL</div><div style="font-size:10px;color:#888">${new Date().toLocaleDateString('es-MX')}</div></div>
     </div>
     ${cuerpo}</body></html>`);
     w.document.close();setTimeout(()=>w.print(),600);
@@ -6401,23 +6556,33 @@ return {
     }catch(err){pToast('Error al guardar: '+err.message,'err');}
   },
 };
-})(); // fin PAGOS IIFE
+})(); // fin TAX COMPLIANCE IIFE
 
 // ===== HELPERS GLOBALES =====
 function ppCliClick(el){ PAGOS.selCli(el.dataset.id, el.dataset.nombre); }
 function docCliClick(el){ docSelCliente(el.dataset.id, el.dataset.nombre); }
 
-// CSS adicional para pagos provisionales
+// CSS adicional — Tax Compliance M6
 (function(){
   const s=document.createElement('style');
   s.textContent=`
-    .impuesto-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #e5e5e0;border-radius:8px;margin-bottom:6px;background:#fafafa;cursor:pointer;transition:border-color .15s}
-    .impuesto-row:hover{border-color:#3B4BC8;background:#f5f6ff}
+    /* ── Tax Compliance M6 — MSST color system ── */
+    .tc-navy{color:#1B3A6B}.tc-lime{color:#8FB832}
+    .impuesto-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1.5px solid #e5e5e0;border-radius:10px;margin-bottom:6px;background:#fafafa;cursor:pointer;transition:all .15s}
+    .impuesto-row:hover{border-color:#1B3A6B;background:#E8EEF7;transform:translateX(2px)}
     .impuesto-row.revisado{border-color:#3B6D11;background:#f0f7f0}
     .impuesto-row.alerta{border-color:#854F0B;background:#fffbf5}
     .imp-left{display:flex;align-items:center;gap:10px}
     .btn-success{background:#EAF3DE;color:#3B6D11;border-color:#c0dd97}
     .btn-success:hover{background:#d8eece}
+    .btn-navy{background:#1B3A6B;color:#fff;border-color:#1B3A6B}
+    .btn-navy:hover{background:#152f57}
+    .tc-card-fed{border-left:4px solid #1B3A6B}
+    .tc-card-est{border-left:4px solid #0C6B45}
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1rem}
+    .kpi{border-radius:10px;padding:10px 14px}
+    .kpi-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+    .kpi-val{font-size:20px;font-weight:800;margin-top:2px}
   `;
   document.head.appendChild(s);
 })();
