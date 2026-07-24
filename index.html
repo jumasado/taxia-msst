@@ -6290,9 +6290,14 @@ async function tcRenderResumen(){
     </div>`;
 }
 
-function tcEntrar(submod){
+async function tcEntrar(submod){
   tcSubModulo=submod;
-  if(submod==='federal'){if(!pClienteActual){pRenderClientes();return;}pRenderModulo();}
+  if(submod==='federal'){
+    // Asegurar que clientesCache esté cargado antes de renderizar
+    if(typeof loadCaches==='function') await loadCaches();
+    if(!pClienteActual){pRenderClientes();return;}
+    pRenderModulo();
+  }
 }
 
 function tcVolverHome(){
@@ -6318,7 +6323,7 @@ return {
   },
   tcRenderHome: function(){ tcRenderHome(); },
   tcVolverHome: function(){ tcVolverHome(); },
-  tcEntrar: function(sub){ tcEntrar(sub); },
+  tcEntrar: function(sub){ tcEntrar(sub).catch(e=>console.error('tcEntrar:',e)); },
   filtrarCli: function(q){
     const esPM=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pm'||t.includes('moral')||!t; };
     const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pf'||t.includes('fisica'); };
@@ -6566,7 +6571,7 @@ return {
 })(); // fin TAX COMPLIANCE IIFE
 
 // ── Tax Compliance — wrappers globales (onclick seguro) ──────────────
-function tcEntrarGlobal(sub){ if(window.PAGOS && PAGOS.tcEntrar){ PAGOS.tcEntrar(sub); } }
+function tcEntrarGlobal(sub){ if(window.PAGOS && PAGOS.tcEntrar){ PAGOS.tcEntrar(sub).catch(function(e){console.error('tcEntrar error:',e);}); } }
 function tcVolverHomeGlobal(){ if(window.PAGOS && PAGOS.tcVolverHome){ PAGOS.tcVolverHome(); } }
 
 
