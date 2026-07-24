@@ -6311,7 +6311,7 @@ return {
       const cfgRows=await pSbGet('cliente_config_pagos','?cliente_id=eq.'+encodeURIComponent(id)+'&limit=1');
       pClienteConfig=Array.isArray(cfgRows)&&cfgRows[0]?cfgRows[0]:null;
     }catch(e){pClienteConfig=null;}
-    pTab='revision';pRender();
+    pTab='revision';pRenderModulo();
   },
   volverCli: function(){pClienteActual=null;pClienteConfig=null;pPagosCache=[];pPagoActual=null;window.tcRenderHome();}, // back to TC home
   setTab: function(t){if(t!=='revision')pPagoActual=null;pTab=t;pRenderModulo();},
