@@ -5278,13 +5278,122 @@ window.addEventListener('message',function(ev){
 async function renderPagosProv(){
   if(!userCanAccess(session.email,'pp')){renderPortada();return;}
   await loadCaches();
-  PAGOS.tcRenderHome(); // Tax Compliance — pantalla principal con 4 sub-módulos
+  window.tcRenderHome(); // Tax Compliance — pantalla principal con 4 sub-módulos
 }
 
 
 // ===================================================
 // ===== TAX COMPLIANCE — IIFE =====
 // ===================================================
+
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  TAX COMPLIANCE M6 — VARIABLES Y FUNCIONES GLOBALES     ║
+// ║  Definidas FUERA del IIFE para acceso desde onclick      ║
+// ╚══════════════════════════════════════════════════════════╝
+
+window.tcSubModulo = 'federal';
+
+window.TC_SUBMODS = [
+  {id:'federal',  label:'Impuestos Federales', icon:'🏛', color:'#1B3A6B', bg:'#E8EEF7', badge:'SAT',             desc:'ISR, IVA, IEPS y retenciones federales',       fundamento:'LISR · LIVA · LIEPS · CFF',                  activo:true},
+  {id:'estatal',  label:'Impuestos Estatales', icon:'🗺', color:'#0C6B45', bg:'#E6F4EE', badge:'ESTATAL',         desc:'ISN, ISH, cedular y otros impuestos locales',  fundamento:'Leyes de Hacienda Estatales',                activo:false, proximamente:true},
+  {id:'ss',       label:'Seguridad Social',    icon:'🏥', color:'#7A3B8F', bg:'#F3EDF8', badge:'IMSS · INFONAVIT',desc:'Cuotas IMSS, aportaciones INFONAVIT y SUA',    fundamento:'LSS · LIV · Acuerdo ACDO.SA3.HCT',          activo:false, proximamente:true},
+  {id:'lfpiorpi', label:'LFPIORPI',            icon:'🔍', color:'#854F0B', bg:'#FDF3E7', badge:'UIF',             desc:'Obligaciones antilavado y avisos a la UIF',    fundamento:'LFPIORPI · Reglas de Carácter General UIF', activo:false, proximamente:true},
+];
+
+// Render the Tax Compliance home screen
+window.tcRenderHome = function() {
+  const appEl = document.getElementById('app');
+  if(!appEl) return;
+  appEl.innerHTML = renderTopNav('pp') + `
+    <div style="max-width:960px;margin:0 auto;padding:0 1rem 2rem">
+
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.75rem;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:#8FB832;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">MSST Consulting · TaxIA · Módulo 6</div>
+          <div style="font-size:28px;font-weight:800;color:#1B3A6B;letter-spacing:-.4px">Tax Compliance</div>
+          <div style="font-size:12px;color:#888;margin-top:5px;max-width:500px">Plataforma integral de cumplimiento fiscal federal, estatal, seguridad social y obligaciones antilavado.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#1B3A6B,#2A5298);border-radius:10px;padding:10px 16px">
+          <span style="font-size:18px">⚖️</span>
+          <div>
+            <div style="font-size:10px;color:rgba(255,255,255,.7);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Tax Compliance</div>
+            <div style="font-size:12px;color:#fff;font-weight:700">MSST Consulting SC</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:1.75rem">
+        ${TC_SUBMODS.map(function(sm){
+          var onclk = sm.activo ? 'onclick="tcEntrarGlobal(\'' + sm.id + '\')"' : '';
+          var hoverIn  = sm.activo ? 'onmouseenter="this.style.borderColor=\'' + sm.color + '\';this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 6px 24px ' + sm.color + '25\'"' : '';
+          var hoverOut = sm.activo ? 'onmouseleave="this.style.borderColor=\'' + sm.color + '55\';this.style.transform=\'translateY(0)\';this.style.boxShadow=\'none\'"' : '';
+          return '<div ' + onclk + ' ' + hoverIn + ' ' + hoverOut + ' style="border:1.5px solid ' + (sm.activo ? sm.color+'55' : '#e5e5e0') + ';border-radius:14px;padding:22px;background:' + (sm.activo ? sm.bg : '#fafafa') + ';cursor:' + (sm.activo ? 'pointer' : 'default') + ';transition:all .18s;position:relative;overflow:hidden' + (sm.activo ? '' : ';opacity:.7') + '">'
+            + '<div style="position:absolute;left:0;top:0;bottom:0;width:5px;background:' + sm.color + ';border-radius:14px 0 0 14px"></div>'
+            + '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;padding-left:10px">'
+            +   '<div style="width:44px;height:44px;border-radius:12px;background:' + sm.color + ';display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;box-shadow:0 2px 8px ' + sm.color + '40">' + sm.icon + '</div>'
+            +   '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end">'
+            +     (sm.proximamente ? '<span style="font-size:9px;font-weight:700;background:#F1EFE8;color:#5F5E5A;border:1px solid #ddd;padding:2px 7px;border-radius:999px">PRÓXIMAMENTE</span>' : '<span style="font-size:9px;font-weight:700;background:#EAF3DE;color:#3B6D11;border:1px solid #C0DD97;padding:2px 7px;border-radius:999px">✓ ACTIVO</span>')
+            +     '<span style="font-size:9px;font-weight:700;background:' + sm.color + ';color:#fff;padding:2px 8px;border-radius:999px">' + sm.badge + '</span>'
+            +   '</div>'
+            + '</div>'
+            + '<div style="padding-left:10px">'
+            +   '<div style="font-size:16px;font-weight:800;color:' + (sm.activo ? sm.color : '#999') + ';margin-bottom:4px;letter-spacing:-.2px">' + sm.label + '</div>'
+            +   '<div style="font-size:12px;color:#666;margin-bottom:8px;line-height:1.4">' + sm.desc + '</div>'
+            +   '<div style="font-size:10px;color:#aaa;font-style:italic">' + sm.fundamento + '</div>'
+            + '</div>'
+            + '<div style="padding-left:10px;margin-top:16px;padding-top:14px;border-top:1px solid ' + (sm.activo ? sm.color+'22' : '#f0f0f0') + '">'
+            +   (sm.activo ? '<div style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:' + sm.color + '">Abrir módulo <span>→</span></div>' : '<div style="font-size:11px;color:#bbb">En desarrollo — próximamente disponible</div>')
+            + '</div>'
+            + '</div>';
+        }).join('')}
+      </div>
+
+      <div id="tc-resumen-global">
+        <div style="background:#fff;border:1px solid #e5e5e0;border-radius:12px;padding:14px 18px">
+          <div style="font-size:10px;color:#aaa;text-align:center">Cargando resumen...</div>
+        </div>
+      </div>
+    </div>`;
+  tcRenderResumen();
+};
+
+window.tcRenderResumen = async function() {
+  var el = document.getElementById('tc-resumen-global');
+  if(!el) return;
+  var total=0, conObl=0;
+  try {
+    if(typeof sbGet === 'function') {
+      var r = await sbGet('cliente_config_pagos','?select=cliente_id,config_impuestos&limit=500');
+      total = (r||[]).length;
+      conObl = (r||[]).filter(function(c){ return (c.config_impuestos||[]).length > 0; }).length;
+    }
+  } catch(e) {}
+  el.innerHTML = '<div style="background:#fff;border:1px solid #e5e5e0;border-radius:12px;padding:16px 20px">'
+    + '<div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Resumen de cumplimiento configurado</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">'
+    + '<div style="text-align:center;padding:12px 8px;background:#E8EEF7;border-radius:10px"><div style="font-size:22px;font-weight:800;color:#1B3A6B">' + total + '</div><div style="font-size:10px;color:#1B3A6B;margin-top:2px;font-weight:600">Clientes configurados</div><div style="font-size:9px;color:#888;margin-top:1px">Impuestos Federales</div></div>'
+    + '<div style="text-align:center;padding:12px 8px;background:#EAF3DE;border-radius:10px"><div style="font-size:22px;font-weight:800;color:#3B6D11">' + conObl + '</div><div style="font-size:10px;color:#3B6D11;margin-top:2px;font-weight:600">Con obligaciones</div><div style="font-size:9px;color:#888;margin-top:1px">Al menos 1 impuesto activo</div></div>'
+    + '<div style="text-align:center;padding:12px 8px;background:#F3EDF8;border-radius:10px;opacity:.55"><div style="font-size:22px;font-weight:800;color:#7A3B8F">—</div><div style="font-size:10px;color:#7A3B8F;margin-top:2px;font-weight:600">Seg. Social</div><div style="font-size:9px;color:#888;margin-top:1px">En desarrollo</div></div>'
+    + '<div style="text-align:center;padding:12px 8px;background:#FDF3E7;border-radius:10px;opacity:.55"><div style="font-size:22px;font-weight:800;color:#854F0B">—</div><div style="font-size:10px;color:#854F0B;margin-top:2px;font-weight:600">LFPIORPI</div><div style="font-size:9px;color:#888;margin-top:1px">En desarrollo</div></div>'
+    + '</div>'
+    + '<div style="margin-top:10px;font-size:10px;color:#ccc;text-align:right">MSST Consulting SC · Tax Compliance M6</div>'
+    + '</div>';
+};
+
+window.tcEntrarGlobal = async function(submod) {
+  window.tcSubModulo = submod;
+  if(submod === 'federal') {
+    if(typeof loadCaches === 'function') await loadCaches();
+    PAGOS.init();
+  }
+};
+
+window.tcVolverHomeGlobal = function() {
+  window.tcSubModulo = 'federal';
+  window.tcRenderHome();
+};
+
 
 const PAGOS = (function(){
 
@@ -6193,133 +6302,11 @@ function pCedula(){
 //  TAX COMPLIANCE — SUB-MÓDULOS HOME
 // ─────────────────────────────────────────────────────
 
-let tcSubModulo='federal';
-
-const TC_SUBMODS=[
-  {id:'federal',  label:'Impuestos Federales', icon:'🏛', color:'#1B3A6B', bg:'#E8EEF7', badge:'SAT',             desc:'ISR, IVA, IEPS y retenciones federales',              fundamento:'LISR · LIVA · LIEPS · CFF',                     activo:true},
-  {id:'estatal',  label:'Impuestos Estatales', icon:'🗺', color:'#0C6B45', bg:'#E6F4EE', badge:'ESTATAL',         desc:'ISN, ISH, cedular y otros impuestos locales',         fundamento:'Leyes de Hacienda Estatales',                    activo:false,proximamente:true},
-  {id:'ss',       label:'Seguridad Social',    icon:'🏥', color:'#7A3B8F', bg:'#F3EDF8', badge:'IMSS · INFONAVIT',desc:'Cuotas IMSS, aportaciones INFONAVIT y SUA',           fundamento:'LSS · LIV · Acuerdo ACDO.SA3.HCT',              activo:false,proximamente:true},
-  {id:'lfpiorpi', label:'LFPIORPI',            icon:'🔍', color:'#854F0B', bg:'#FDF3E7', badge:'UIF',             desc:'Obligaciones antilavado y avisos a la UIF',           fundamento:'LFPIORPI · Reglas de Carácter General UIF',     activo:false,proximamente:true},
-];
-
-function tcRenderHome(){
-  pApp().innerHTML=renderTopNav('pp')+`
-    <div style="max-width:960px;margin:0 auto;padding:0 1rem 2rem">
-
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.75rem;flex-wrap:wrap;gap:12px">
-        <div>
-          <div style="font-size:10px;font-weight:700;color:#8FB832;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">MSST Consulting · TaxIA · Módulo 6</div>
-          <div style="font-size:28px;font-weight:800;color:#1B3A6B;letter-spacing:-.4px">Tax Compliance</div>
-          <div style="font-size:12px;color:#888;margin-top:5px;max-width:500px">Plataforma integral de cumplimiento fiscal federal, estatal, seguridad social y obligaciones antilavado.</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#1B3A6B,#2A5298);border-radius:10px;padding:10px 16px">
-          <span style="font-size:18px">⚖️</span>
-          <div>
-            <div style="font-size:10px;color:rgba(255,255,255,.7);font-weight:600;text-transform:uppercase;letter-spacing:.06em">Tax Compliance</div>
-            <div style="font-size:12px;color:#fff;font-weight:700">MSST Consulting SC</div>
-          </div>
-        </div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:1.75rem">
-        ${TC_SUBMODS.map(sm=>`
-          <div onclick="${sm.activo?('tcEntrarGlobal(\''+sm.id+'\')'):''}"
-               style="border:1.5px solid ${sm.activo?sm.color+'55':'#e5e5e0'};border-radius:14px;padding:22px;background:${sm.activo?sm.bg:'#fafafa'};cursor:${sm.activo?'pointer':'default'};transition:all .18s;position:relative;overflow:hidden${sm.activo?'':';opacity:.7'}"
-               ${sm.activo?`onmouseenter="this.style.borderColor='${sm.color}';this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 24px ${sm.color}25'" onmouseleave="this.style.borderColor='${sm.color}55';this.style.transform='translateY(0)';this.style.boxShadow='none'"`:''}>
-            <div style="position:absolute;left:0;top:0;bottom:0;width:5px;background:${sm.color};border-radius:14px 0 0 14px"></div>
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;padding-left:10px">
-              <div style="width:44px;height:44px;border-radius:12px;background:${sm.color};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;box-shadow:0 2px 8px ${sm.color}40">${sm.icon}</div>
-              <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-                ${sm.proximamente?'<span style="font-size:9px;font-weight:700;background:#F1EFE8;color:#5F5E5A;border:1px solid #ddd;padding:2px 7px;border-radius:999px">PRÓXIMAMENTE</span>':'<span style="font-size:9px;font-weight:700;background:#EAF3DE;color:#3B6D11;border:1px solid #C0DD97;padding:2px 7px;border-radius:999px">✓ ACTIVO</span>'}
-                <span style="font-size:9px;font-weight:700;background:${sm.color};color:#fff;padding:2px 8px;border-radius:999px">${sm.badge}</span>
-              </div>
-            </div>
-            <div style="padding-left:10px">
-              <div style="font-size:16px;font-weight:800;color:${sm.activo?sm.color:'#999'};margin-bottom:4px;letter-spacing:-.2px">${sm.label}</div>
-              <div style="font-size:12px;color:#666;margin-bottom:8px;line-height:1.4">${sm.desc}</div>
-              <div style="font-size:10px;color:#aaa;font-style:italic">${sm.fundamento}</div>
-            </div>
-            <div style="padding-left:10px;margin-top:16px;padding-top:14px;border-top:1px solid ${sm.activo?sm.color+'22':'#f0f0f0'}">
-              ${sm.activo
-                ?`<div style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${sm.color}">Abrir módulo <span>→</span></div>`
-                :`<div style="font-size:11px;color:#bbb">En desarrollo — próximamente disponible</div>`}
-            </div>
-          </div>`).join('')}
-      </div>
-
-      <div id="tc-resumen-global">
-        <div style="background:#fff;border:1px solid #e5e5e0;border-radius:12px;padding:14px 18px">
-          <div style="font-size:10px;color:#aaa;text-align:center">Cargando resumen de cumplimiento...</div>
-        </div>
-      </div>
-    </div>`;
-  tcRenderResumen();
-}
-
-async function tcRenderResumen(){
-  const el=document.getElementById('tc-resumen-global');
-  if(!el)return;
-  let total=0,conObl=0;
-  try{const r=await pSbGet('cliente_config_pagos','?select=cliente_id,config_impuestos&limit=500');total=(r||[]).length;conObl=(r||[]).filter(c=>(c.config_impuestos||[]).length>0).length;}catch(e){}
-  el.innerHTML=`
-    <div style="background:#fff;border:1px solid #e5e5e0;border-radius:12px;padding:16px 20px">
-      <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Resumen de cumplimiento configurado</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
-        <div style="text-align:center;padding:12px 8px;background:#E8EEF7;border-radius:10px">
-          <div style="font-size:22px;font-weight:800;color:#1B3A6B">${total}</div>
-          <div style="font-size:10px;color:#1B3A6B;margin-top:2px;font-weight:600">Clientes configurados</div>
-          <div style="font-size:9px;color:#888;margin-top:1px">Impuestos Federales</div>
-        </div>
-        <div style="text-align:center;padding:12px 8px;background:#EAF3DE;border-radius:10px">
-          <div style="font-size:22px;font-weight:800;color:#3B6D11">${conObl}</div>
-          <div style="font-size:10px;color:#3B6D11;margin-top:2px;font-weight:600">Con obligaciones</div>
-          <div style="font-size:9px;color:#888;margin-top:1px">Al menos 1 impuesto activo</div>
-        </div>
-        <div style="text-align:center;padding:12px 8px;background:#F3EDF8;border-radius:10px;opacity:.55">
-          <div style="font-size:22px;font-weight:800;color:#7A3B8F">—</div>
-          <div style="font-size:10px;color:#7A3B8F;margin-top:2px;font-weight:600">Seg. Social</div>
-          <div style="font-size:9px;color:#888;margin-top:1px">En desarrollo</div>
-        </div>
-        <div style="text-align:center;padding:12px 8px;background:#FDF3E7;border-radius:10px;opacity:.55">
-          <div style="font-size:22px;font-weight:800;color:#854F0B">—</div>
-          <div style="font-size:10px;color:#854F0B;margin-top:2px;font-weight:600">LFPIORPI</div>
-          <div style="font-size:9px;color:#888;margin-top:1px">En desarrollo</div>
-        </div>
-      </div>
-      <div style="margin-top:10px;font-size:10px;color:#ccc;text-align:right">MSST Consulting SC · Tax Compliance M6 · ${new Date().getFullYear()}</div>
-    </div>`;
-}
-
-async function tcEntrar(submod){
-  tcSubModulo=submod;
-  if(submod==='federal'){
-    // Asegurar que clientesCache esté cargado antes de renderizar
-    if(typeof loadCaches==='function') await loadCaches();
-    if(!pClienteActual){pRenderClientes();return;}
-    pRenderModulo();
-  }
-}
-
-function tcVolverHome(){
-  pClienteActual=null;pClienteConfig=null;pPagosCache=[];pPagoActual=null;tcSubModulo='federal';
-  tcRenderHome();
-}
-
-function pRender(){
-  if(!pClienteActual){
-    if(tcSubModulo==='federal'){pRenderClientes();}
-    else{tcRenderHome();}
-    return;
-  }
-  pRenderModulo();
-}
-
-
-
 // ===== PUBLIC API =====
 return {
   init: async function(){
-    pRender();
+    // If entering from TC home, always show client selector (federal)
+    if(!pClienteActual){ pRenderClientes(); } else { pRenderModulo(); }
   },
   tcRenderHome: function(){ tcRenderHome(); },
   tcVolverHome: function(){ tcVolverHome(); },
@@ -6344,7 +6331,7 @@ return {
     }catch(e){pClienteConfig=null;}
     pTab='revision';pRender();
   },
-  volverCli: function(){pClienteActual=null;pClienteConfig=null;pPagosCache=[];pPagoActual=null;pRenderClientes();}, // stays in Federal sub-module
+  volverCli: function(){pClienteActual=null;pClienteConfig=null;pPagosCache=[];pPagoActual=null;window.tcRenderHome();}, // back to TC home
   setTab: function(t){if(t!=='revision')pPagoActual=null;pTab=t;pRenderModulo();},
   setSub: function(s){if(pPagoActual)pPagoActual._sub=s;pRefreshTab();},
   updateMeses: function(a){const mp={};pPagosCache.filter(p=>p.anio==a).forEach(p=>{mp[p.anio+'-'+p.mes]=p.status;});const el=document.getElementById('p-meses');if(el)el.innerHTML=pMesesGrid(a,mp);},
@@ -6570,9 +6557,6 @@ return {
 };
 })(); // fin TAX COMPLIANCE IIFE
 
-// ── Tax Compliance — wrappers globales (onclick seguro) ──────────────
-function tcEntrarGlobal(sub){ if(window.PAGOS && PAGOS.tcEntrar){ PAGOS.tcEntrar(sub).catch(function(e){console.error('tcEntrar error:',e);}); } }
-function tcVolverHomeGlobal(){ if(window.PAGOS && PAGOS.tcVolverHome){ PAGOS.tcVolverHome(); } }
 
 
 // ===== HELPERS GLOBALES =====
