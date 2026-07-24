@@ -6223,7 +6223,7 @@ function tcRenderHome(){
 
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:1.75rem">
         ${TC_SUBMODS.map(sm=>`
-          <div onclick="${sm.activo?`tcEntrarGlobal('${sm.id}')`:''}"
+          <div onclick="${sm.activo?('tcEntrarGlobal(\''+sm.id+'\')'):''}"
                style="border:1.5px solid ${sm.activo?sm.color+'55':'#e5e5e0'};border-radius:14px;padding:22px;background:${sm.activo?sm.bg:'#fafafa'};cursor:${sm.activo?'pointer':'default'};transition:all .18s;position:relative;overflow:hidden${sm.activo?'':';opacity:.7'}"
                ${sm.activo?`onmouseenter="this.style.borderColor='${sm.color}';this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 24px ${sm.color}25'" onmouseleave="this.style.borderColor='${sm.color}55';this.style.transform='translateY(0)';this.style.boxShadow='none'"`:''}>
             <div style="position:absolute;left:0;top:0;bottom:0;width:5px;background:${sm.color};border-radius:14px 0 0 14px"></div>
