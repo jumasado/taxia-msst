@@ -5524,80 +5524,68 @@ function pToast(msg,tipo){
 // ===== RENDER PRINCIPAL =====
 
 
-let pTipoPersona='pm'; // 'pm' | 'pf'
+let pTipoPersona=null; // null | 'pm' | 'pf'
 
 function pRenderClientes(){
-  const esPM=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pm'||t.includes('moral')||!t; };
-  const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pf'||t.includes('fisica')||t.includes('f.sica'); };
-  const listaPM=(clientesCache||[]).filter(esPM);
-  const listaPF=(clientesCache||[]).filter(esPF);
-  const listaActual=pTipoPersona==='pm'?listaPM:listaPF;
+  const esPM=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); return t==='pm'||t.includes('moral')||!t; };
+  const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); return t==='pf'||t.includes('fisica')||t.includes('f.sica'); };
+  const listaPM=(clientesCache||[]).filter(esPM).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
+  const listaPF=(clientesCache||[]).filter(esPF).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
   pApp().innerHTML=renderTopNav('pp')+`
-    <div style="max-width:680px;margin:0 auto;padding:0 1rem 2rem">
-
-      <!-- BREADCRUMB -->
+    <div style="max-width:860px;margin:0 auto;padding:0 1rem 2rem">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:1.25rem;flex-wrap:wrap">
-        <button onclick="tcVolverHomeGlobal()" style="background:none;border:none;cursor:pointer;font-size:12px;color:#1B3A6B;font-weight:600;padding:4px 8px;border-radius:6px;font-family:inherit;display:flex;align-items:center;gap:4px" onmouseenter="this.style.background='#E8EEF7'" onmouseleave="this.style.background='none'">
-          ⚖️ Tax Compliance
-        </button>
+        <button onclick="tcVolverHomeGlobal()" style="background:none;border:none;cursor:pointer;font-size:12px;color:#1B3A6B;font-weight:600;padding:4px 8px;border-radius:6px;font-family:inherit" onmouseenter="this.style.background='#E8EEF7'" onmouseleave="this.style.background='none'">⚖️ Tax Compliance</button>
         <span style="color:#ccc;font-size:12px">›</span>
         <span style="font-size:12px;font-weight:700;color:#1B3A6B;background:#E8EEF7;padding:4px 10px;border-radius:6px">🏛 Impuestos Federales</span>
       </div>
-
-      <!-- HEADER -->
-      <div style="margin-bottom:1.25rem">
-        <div style="font-size:22px;font-weight:800;color:#1B3A6B">Impuestos Federales</div>
-        <div style="font-size:12px;color:#888;margin-top:3px">Selecciona el tipo de contribuyente para iniciar la revisión mensual</div>
-      </div>
-
-      <!-- SELECTOR PM / PF -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.25rem">
-        <div onclick="PAGOS.setTipoPersona('pm')"
-             style="border:2px solid ${pTipoPersona==='pm'?'#1B3A6B':'#e5e5e0'};border-radius:12px;padding:16px 18px;cursor:pointer;background:${pTipoPersona==='pm'?'#E8EEF7':'#fff'};transition:all .15s">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <div style="width:32px;height:32px;border-radius:8px;background:${pTipoPersona==='pm'?'#1B3A6B':'#f5f5f3'};display:flex;align-items:center;justify-content:center;font-size:14px">🏢</div>
-            <div style="font-size:13px;font-weight:700;color:${pTipoPersona==='pm'?'#1B3A6B':'#1a1a1a'}">Personas Morales</div>
-          </div>
-          <div style="font-size:11px;color:#888;padding-left:40px">${listaPM.length} cliente${listaPM.length!==1?'s':''} · Art. 14 LISR</div>
-          ${pTipoPersona==='pm'?'<div style="margin-top:8px;padding-left:40px;font-size:10px;font-weight:700;color:#8FB832">● SELECCIONADO</div>':''}
-        </div>
-        <div onclick="PAGOS.setTipoPersona('pf')"
-             style="border:2px solid ${pTipoPersona==='pf'?'#1B3A6B':'#e5e5e0'};border-radius:12px;padding:16px 18px;cursor:pointer;background:${pTipoPersona==='pf'?'#E8EEF7':'#fff'};transition:all .15s">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <div style="width:32px;height:32px;border-radius:8px;background:${pTipoPersona==='pf'?'#1B3A6B':'#f5f5f3'};display:flex;align-items:center;justify-content:center;font-size:14px">👤</div>
-            <div style="font-size:13px;font-weight:700;color:${pTipoPersona==='pf'?'#1B3A6B':'#1a1a1a'}">Personas Físicas</div>
-          </div>
-          <div style="font-size:11px;color:#888;padding-left:40px">${listaPF.length} cliente${listaPF.length!==1?'s':''} · Art. 106 LISR</div>
-          ${pTipoPersona==='pf'?'<div style="margin-top:8px;padding-left:40px;font-size:10px;font-weight:700;color:#8FB832">● SELECCIONADO</div>':''}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:22px;font-weight:800;color:#1B3A6B">Impuestos Federales</div>
+          <div style="font-size:12px;color:#888;margin-top:3px">Selecciona el contribuyente para iniciar la revisión mensual</div>
         </div>
       </div>
-
-      <!-- LISTA CLIENTES -->
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div class="sec-label" style="margin-bottom:0">${pTipoPersona==='pm'?'Personas Morales':'Personas Físicas'} — ${listaActual.length} cliente${listaActual.length!==1?'s':''}</div>
+      <div style="position:relative;margin-bottom:1rem">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none">🔍</span>
+        <input type="text" id="p-cli-buscar" placeholder="Buscar contribuyente por nombre o RFC..." oninput="PAGOS.filtrarCli(this.value)" style="padding-left:36px;font-size:13px">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
+        <div style="border:1px solid #e5e5e0;border-radius:12px;overflow:hidden">
+          <div style="background:#1B3A6B;color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:16px">🏢</span>
+              <div><div style="font-size:12px;font-weight:700">Personas Morales</div><div style="font-size:10px;opacity:.75">Art. 14 LISR</div></div>
+            </div>
+            <span style="background:rgba(255,255,255,.25);font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px">${listaPM.length}</span>
+          </div>
+          <div id="p-lista-pm" style="max-height:460px;overflow-y:auto;padding:8px">${pListaCliTipo(listaPM,'pm')}</div>
         </div>
-        <div style="position:relative;margin-bottom:10px">
-          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;pointer-events:none">🔍</span>
-          <input type="text" id="p-cli-buscar" placeholder="Buscar por nombre o RFC..." oninput="PAGOS.filtrarCli(this.value)" style="padding-left:32px">
+        <div style="border:1px solid #e5e5e0;border-radius:12px;overflow:hidden">
+          <div style="background:#0C4A6E;color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:16px">👤</span>
+              <div><div style="font-size:12px;font-weight:700">Personas Físicas</div><div style="font-size:10px;opacity:.75">Art. 106 LISR</div></div>
+            </div>
+            <span style="background:rgba(255,255,255,.25);font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px">${listaPF.length}</span>
+          </div>
+          <div id="p-lista-pf" style="max-height:460px;overflow-y:auto;padding:8px">${pListaCliTipo(listaPF,'pf')}</div>
         </div>
-        <div id="p-cli-lista" style="max-height:420px;overflow-y:auto">${pListaCli(listaActual)}</div>
-        ${pTipoPersona==='pf'?'<div style="margin-top:10px;padding:8px 12px;background:#FDF3E7;border:1px solid #FAC775;border-radius:8px;font-size:11px;color:#854F0B">⚠ El módulo de Personas Físicas está en desarrollo. Por ahora puedes registrar períodos usando los impuestos aplicables (ISR PF, IVA, Retenciones).</div>':''}
       </div>
     </div>`;
 }
-function pListaCli(lista){
-  if(!lista.length)return '<div style="text-align:center;padding:1.5rem;color:#888;font-size:13px">Sin clientes de este tipo. Verifica el campo "tipo" en el catálogo de clientes.</div>';
-  return lista.map(c=>{
-    const color=pTipoPersona==='pm'?'#3C3489':'#72243E';
-    const bg=pTipoPersona==='pm'?'#EEEDFE':'#FBEAF0';
-    return '<div data-id="'+pH(String(c.id))+'" data-nombre="'+pH(c.nombre)+'" onclick="ppCliClick(this)" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1.5px solid #e5e5e0;border-radius:10px;cursor:pointer;margin-bottom:6px;background:#fafafa">'
-      +'<div style="width:38px;height:38px;border-radius:10px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:'+color+';flex-shrink:0">'+c.nombre.charAt(0).toUpperCase()+'</div>'
-      +'<div style="flex:1"><div style="font-size:14px;font-weight:600">'+pH(c.nombre)+'</div>'
-      +(c.rfc?'<div style="font-size:11px;color:#888;margin-top:1px">'+pH(c.rfc)+'</div>':'')
-      +'</div></div>';
-  }).join('');
+
+function pListaCliTipo(lista,tipo){
+  if(!lista.length)return '<div style="text-align:center;padding:1.5rem;color:#aaa;font-size:12px">Sin contribuyentes registrados.</div>';
+  const color=tipo==='pm'?'#1B3A6B':'#0C4A6E';
+  const bg=tipo==='pm'?'#E8EEF7':'#E0F2FE';
+  return lista.map(c=>'<div data-id="'+pH(String(c.id))+'" data-nombre="'+pH(c.nombre)+'" onclick="ppCliClick(this)" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #e5e5e0;border-radius:8px;cursor:pointer;margin-bottom:5px;background:#fafafa" onmouseenter="this.style.borderColor=\''+color+'\';this.style.background=\''+bg+'\';" onmouseleave="this.style.borderColor=\'#e5e5e0\';this.style.background=\'#fafafa\';">'
+    +'<div style="width:34px;height:34px;border-radius:8px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:'+color+';flex-shrink:0">'+c.nombre.charAt(0).toUpperCase()+'</div>'
+    +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+pH(c.nombre)+'</div>'
+    +(c.rfc?'<div style="font-size:10px;color:#888;margin-top:1px">'+pH(c.rfc)+'</div>':'')
+    +'</div></div>';
+  ).join('');
 }
+function pListaCli(lista){ return pListaCliTipo(lista, pTipoPersona||'pm'); }
+
 
 function pRenderModulo(){
   const rev=pPagosCache.filter(p=>p.status==='revisado').length;
@@ -6325,12 +6313,15 @@ return {
   tcVolverHome: function(){ tcVolverHome(); },
   tcEntrar: function(sub){ tcEntrar(sub).catch(e=>console.error('tcEntrar:',e)); },
   filtrarCli: function(q){
-    const esPM=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pm'||t.includes('moral')||!t; };
-    const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pf'||t.includes('fisica'); };
-    const base=clientesCache.filter(c=>c.activo!==false&&(pTipoPersona==='pm'?esPM(c):esPF(c)));
-    const f=base.filter(c=>!q||(c.nombre||'').toLowerCase().includes(q.toLowerCase()));
-    const el=document.getElementById('p-cli-lista');if(el)el.innerHTML=pListaCli(f);
-  },
+    const esPM=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); return t==='pm'||t.includes('moral')||!t; };
+    const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); return t==='pf'||t.includes('fisica')||t.includes('f.sica'); };
+    const qn=(q||'').toLowerCase();
+    const match=c=>!qn||(c.nombre||'').toLowerCase().includes(qn)||(c.rfc||'').toLowerCase().includes(qn);
+    const pm=(clientesCache||[]).filter(c=>c.activo!==false&&esPM(c)&&match(c));
+    const pf=(clientesCache||[]).filter(c=>c.activo!==false&&esPF(c)&&match(c));
+    const elPM=document.getElementById('p-lista-pm');if(elPM)elPM.innerHTML=pListaCliTipo(pm,'pm');
+    const elPF=document.getElementById('p-lista-pf');if(elPF)elPF.innerHTML=pListaCliTipo(pf,'pf');
+  },,
   setTipoPersona: function(tipo){
     pTipoPersona=tipo;
     pRenderClientes();
@@ -6344,7 +6335,7 @@ return {
     }catch(e){pClienteConfig=null;}
     pTab='revision';pRender();
   },
-  volverCli: function(){pClienteActual=null;pClienteConfig=null;pPagosCache=[];pPagoActual=null;pRenderClientes();}, // stays in Federal sub-module
+  volverCli: function(){pClienteActual=null;pClienteConfig=null;pPagosCache=[];pPagoActual=null;pTipoPersona=null;window.tcRenderHome();}, // back to TC home
   setTab: function(t){if(t!=='revision')pPagoActual=null;pTab=t;pRenderModulo();},
   setSub: function(s){if(pPagoActual)pPagoActual._sub=s;pRefreshTab();},
   updateMeses: function(a){const mp={};pPagosCache.filter(p=>p.anio==a).forEach(p=>{mp[p.anio+'-'+p.mes]=p.status;});const el=document.getElementById('p-meses');if(el)el.innerHTML=pMesesGrid(a,mp);},
