@@ -6272,6 +6272,270 @@ function pModalFijo(idx){
   document.body.appendChild(m);
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// CÉDULAS DE TRABAJO PROFESIONAL — IMPUESTOS ESTATALES (BIG 4)
+// ═══════════════════════════════════════════════════════════════════
+
+const CEDULAS_ESTATALES = {
+  isn: {
+    titulo:'ISN — Impuesto sobre Nómina', icono:'👥', color:'#0C6B45',
+    ley:'Ley de Hacienda Estatal · Capítulo de erogaciones laborales',
+    hecho_imp:'Las erogaciones realizadas en dinero o especie por concepto de remuneraciones al trabajo personal subordinado, prestado dentro del Estado.',
+    sujeto:'Las personas físicas y morales que realicen erogaciones por remuneraciones al trabajo personal subordinado en el territorio del Estado.',
+    base:'El monto total de las erogaciones realizadas por concepto de remuneraciones al trabajo personal subordinado, incluyendo sueldos, salarios, gratificaciones y prestaciones.',
+    pasos:[
+      {num:'I',   label:'Total de remuneraciones brutas pagadas', campo:'total_nomina', tipo:'input',
+       nota:'Sueldos, salarios, comisiones, honorarios asimilados, gratificaciones, prima dominical, incentivos y cualquier otra erogación por trabajo personal. Fuente: CFDI de nómina del período (Art. 40 Ley de Hacienda Estatal aplicable).'},
+      {num:'II',  label:'Menos: Erogaciones excluidas de la base', campo:'excluidas', tipo:'input',
+       nota:'Art. 41 Ley de Hacienda Estatal (o equivalente en cada estado): horas extra dobles hasta el límite legal, gratificación anual proporcional a 15 días de SMG, PTU, prima vacacional, prima de antigüedad. En Baja California: Art. 41 LHBC. Verificar el artículo de exclusiones en la ley del estado correspondiente.'},
+      {num:'III', label:'Base gravable del ISN  (I − II)', campo:'base_gravable', tipo:'calc',
+       nota:'Fundamento: artículo de la Ley de Hacienda Estatal que define la base del impuesto.'},
+      {num:'IV',  label:'Tasa del impuesto (%)', campo:'tasa', tipo:'pct',
+       nota:'Verificar tasa vigente conforme a la Ley de Ingresos o Ley de Hacienda del Estado para el ejercicio. Tasas orientativas: BC 3% · CDMX 3% · NL 3% · JAL 2.5% · SLP 3%.'},
+      {num:'V',   label:'ISN determinado  (III × IV ÷ 100)', campo:'isn_cargo', tipo:'calc', highlight:true,
+       nota:'Impuesto a cargo del período conforme al procedimiento de la Ley de Hacienda Estatal.'},
+      {num:'VI',  label:'ISN a pagar', campo:'isn_pagar', tipo:'resultado',
+       nota:'En ausencia de reducciones, compensaciones o saldos a favor, el ISN a pagar es igual al ISN determinado. Fecha límite: generalmente día 17 del mes siguiente.'},
+    ],
+    verificacion:[
+      {campo:'linea_captura', label:'Número de línea de captura / referencia de pago', tipo:'texto'},
+      {campo:'fecha_pago',    label:'Fecha de pago', tipo:'fecha'},
+      {campo:'importe_pagado',label:'Importe efectivamente pagado', tipo:'monto'},
+      {campo:'diferencia',    label:'Diferencia (pagado − determinado)', tipo:'diferencia'},
+    ],
+  },
+  ish: {
+    titulo:'ISH — Impuesto sobre Hospedaje', icono:'🏨', color:'#1B3A6B',
+    ley:'Ley de Hacienda Estatal · Impuesto sobre servicios de hospedaje',
+    hecho_imp:'La prestación de servicios de hospedaje, alojamiento, albergue o cualquier servicio de hospedaje temporal a cambio de una contraprestación, dentro del territorio del Estado.',
+    sujeto:'Las personas físicas y morales que presten servicios de hospedaje dentro del Estado, incluyendo hoteles, moteles, casas de huéspedes y plataformas de hospedaje digital.',
+    base:'El valor total de la contraprestación por los servicios de hospedaje prestados en el período, sin incluir el IVA.',
+    pasos:[
+      {num:'I',   label:'Ingresos por servicios de hospedaje del período', campo:'ingresos_hospedaje', tipo:'input',
+       nota:'Total de ingresos cobrados por concepto de hospedaje, alojamiento o albergue en el período. Incluye ingresos por plataformas digitales (Airbnb, Booking, etc.). Fuente: registros contables y CFDI emitidos.'},
+      {num:'II',  label:'Menos: Devoluciones, descuentos y bonificaciones', campo:'excluidas', tipo:'input',
+       nota:'Importes efectivamente devueltos o cancelados sobre ingresos de hospedaje durante el período. Deben estar soportados con documentación comprobatoria.'},
+      {num:'III', label:'Base gravable del ISH  (I − II)', campo:'base_gravable', tipo:'calc',
+       nota:'Importe sobre el cual se aplica la tasa del impuesto conforme a la Ley de Hacienda Estatal.'},
+      {num:'IV',  label:'Tasa del impuesto (%)', campo:'tasa', tipo:'pct',
+       nota:'Verificar tasa vigente en la ley correspondiente. Varía entre entidades: generalmente 2% a 5%. BC: 3%. CDMX: 3.5% (Ley de Hacienda CDMX).'},
+      {num:'V',   label:'ISH determinado  (III × IV ÷ 100)', campo:'isn_cargo', tipo:'calc', highlight:true,
+       nota:'Impuesto a cargo del período. Deberá enterarse a la Secretaría de Finanzas del Estado en el plazo establecido.'},
+      {num:'VI',  label:'ISH a pagar', campo:'isn_pagar', tipo:'resultado',
+       nota:'Impuesto a enterar. Fecha límite conforme a la Ley de Hacienda Estatal (generalmente día 17 del mes siguiente).'},
+    ],
+    verificacion:[
+      {campo:'linea_captura', label:'Número de referencia / línea de captura estatal', tipo:'texto'},
+      {campo:'fecha_pago',    label:'Fecha de pago', tipo:'fecha'},
+      {campo:'importe_pagado',label:'Importe efectivamente pagado', tipo:'monto'},
+      {campo:'diferencia',    label:'Diferencia (pagado − determinado)', tipo:'diferencia'},
+    ],
+  },
+  cedular: {
+    titulo:'ISR Cedular — Honorarios / Arrendamiento', icono:'📋', color:'#7A3B8F',
+    ley:'Código Fiscal Estatal · Impuesto cedular a los ingresos de personas físicas',
+    hecho_imp:'La obtención de ingresos por honorarios, servicios profesionales independientes y/o arrendamiento de bienes inmuebles ubicados en el Estado, percibidos por personas físicas.',
+    sujeto:'Las personas físicas residentes en el Estado o con inmuebles ubicados en el Estado, que obtengan ingresos por honorarios, servicios profesionales o arrendamiento.',
+    base:'Los ingresos brutos percibidos en el período por las actividades gravadas, sin deducción alguna (salvo lo que establezca expresamente el Código Fiscal Estatal).',
+    pasos:[
+      {num:'I',   label:'Honorarios / servicios profesionales cobrados en el período', campo:'total_nomina', tipo:'input',
+       nota:'Total de ingresos efectivamente cobrados por prestación de servicios profesionales independientes. Fuente: CFDI emitidos y registros de cobro del período (verificar retención ISR federal 10% vs cedular estatal).'},
+      {num:'II',  label:'Más: Ingresos por arrendamiento cobrados en el período', campo:'excluidas', tipo:'input',
+       nota:'Total de rentas cobradas por inmuebles ubicados en el Estado durante el período. Fuente: CFDI y recibos de arrendamiento. Nota: el ISR cedular estatal es independiente del ISR federal.'},
+      {num:'III', label:'Base gravable total  (I + II)', campo:'base_gravable', tipo:'calc',
+       nota:'Suma de los ingresos por honorarios y arrendamiento sobre la cual se aplica la tasa cedular estatal.'},
+      {num:'IV',  label:'Tasa cedular (%)', campo:'tasa', tipo:'pct',
+       nota:'Verificar tasa vigente en el Código Fiscal Estatal correspondiente. Generalmente entre 2% y 5% sobre los ingresos brutos. No es acreditable contra el ISR federal.'},
+      {num:'V',   label:'ISR cedular determinado  (III × IV ÷ 100)', campo:'isn_cargo', tipo:'calc', highlight:true,
+       nota:'Impuesto cedular a cargo del período. Es un pago definitivo al fisco estatal.'},
+      {num:'VI',  label:'ISR cedular a pagar', campo:'isn_pagar', tipo:'resultado',
+       nota:'Pago definitivo a enterar a la Secretaría de Finanzas del Estado. Fecha límite: conforme al Código Fiscal Estatal.'},
+    ],
+    verificacion:[
+      {campo:'linea_captura', label:'Número de referencia / línea de captura estatal', tipo:'texto'},
+      {campo:'fecha_pago',    label:'Fecha de pago', tipo:'fecha'},
+      {campo:'importe_pagado',label:'Importe efectivamente pagado', tipo:'monto'},
+      {campo:'diferencia',    label:'Diferencia (pagado − determinado)', tipo:'diferencia'},
+    ],
+  },
+  otro: {
+    titulo:'Impuesto Estatal — Procedimiento de determinación', icono:'⚖️', color:'#854F0B',
+    ley:'Ley de Hacienda / Código Fiscal Estatal aplicable',
+    hecho_imp:'El hecho imponible está definido en la Ley de Hacienda Estatal o Código Fiscal de la entidad federativa correspondiente. Verificar el ordenamiento legal aplicable.',
+    sujeto:'Las personas físicas y morales que realicen el hecho imponible dentro del territorio del Estado conforme al ordenamiento fiscal estatal aplicable.',
+    base:'Conforme a la Ley de Hacienda Estatal o Código Fiscal correspondiente. Revisar el artículo específico que define la base del impuesto.',
+    pasos:[
+      {num:'I',   label:'Importe que constituye la base del impuesto', campo:'total_nomina', tipo:'input',
+       nota:'Importe determinado conforme al artículo de la ley que define la base gravable. Indicar la fuente y el fundamento legal específico en las observaciones.'},
+      {num:'II',  label:'Menos: Deducciones o exclusiones aplicables', campo:'excluidas', tipo:'input',
+       nota:'Importes que conforme a la ley estatal no forman parte de la base gravable. Indicar el fundamento legal de cada exclusión.'},
+      {num:'III', label:'Base gravable neta  (I − II)', campo:'base_gravable', tipo:'calc',
+       nota:'Base neta sobre la cual se aplica la tasa o cuota establecida en la ley. Verificar si aplican reducciones, estímulos o exenciones adicionales.'},
+      {num:'IV',  label:'Tasa o cuota aplicable (%)', campo:'tasa', tipo:'pct',
+       nota:'Tasa o cuota vigente conforme a la Ley de Hacienda Estatal o Ley de Ingresos del Estado para el ejercicio fiscal. Verificar vigencia.'},
+      {num:'V',   label:'Impuesto determinado  (III × IV ÷ 100)', campo:'isn_cargo', tipo:'calc', highlight:true,
+       nota:'Impuesto a cargo del período conforme al procedimiento legal aplicable.'},
+      {num:'VI',  label:'Impuesto a pagar', campo:'isn_pagar', tipo:'resultado',
+       nota:'Importe a enterar al fisco estatal en el plazo establecido en la Ley de Hacienda Estatal o Código Fiscal correspondiente.'},
+    ],
+    verificacion:[
+      {campo:'linea_captura', label:'Número de referencia / línea de captura estatal', tipo:'texto'},
+      {campo:'fecha_pago',    label:'Fecha de pago', tipo:'fecha'},
+      {campo:'importe_pagado',label:'Importe efectivamente pagado', tipo:'monto'},
+      {campo:'diferencia',    label:'Diferencia (pagado − determinado)', tipo:'diferencia'},
+    ],
+  },
+};
+
+function pModalEstProfesional(anio,mes,idx){
+  if(!pEstCliente)return;
+  var MESES_F=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var pagoMes=pEstPagoCache.find(function(p){return p.anio==anio&&p.mes==mes;});
+  if(!pagoMes){pagoMes={anio:anio,mes:mes,cliente_id:pEstCliente.id,cliente_nombre:pEstCliente.nombre,impuestos_federales:{},impuestos_estatales:[],status:'pendiente'};pEstPagoCache.push(pagoMes);}
+  pPagoActual={anio:anio,mes:mes,data:pagoMes,_sub:'impuestos'};
+  pClienteActual=pEstCliente;
+  var e=(pagoMes.impuestos_estatales||[])[idx];
+  var tipoId=e?e.tipo_id:null;
+  var m=document.createElement('div');m.className='modal-overlay';m.id='pm-est-pro';
+  if(!tipoId){
+    // Selector de tipo
+    m.innerHTML='<div class="modal-box" style="max-width:560px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
+      +'<div><div style="font-size:16px;font-weight:700;color:#0C6B45">Nueva cédula estatal</div>'
+      +'<div style="font-size:11px;color:#888;margin-top:2px">'+MESES_F[mes-1]+' '+anio+' · '+pH(pEstCliente.nombre)+'</div></div>'
+      +'<button onclick="document.getElementById(\'pm-est-pro\').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button>'
+      +'</div>'
+      +'<div class="sec-label">Selecciona el tipo de impuesto estatal</div>'
+      +Object.entries(CEDULAS_ESTATALES).map(function(entry){
+        var k=entry[0],c=entry[1];
+        return '<div onclick="PAGOS.abrirCedulaEstatal('+anio+','+mes+','+idx+',\''+k+'\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1.5px solid #e5e5e0;border-radius:10px;cursor:pointer;margin-bottom:8px;background:#fafafa">'
+          +'<div style="width:40px;height:40px;border-radius:10px;background:'+c.color+';display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">'+c.icono+'</div>'
+          +'<div><div style="font-size:13px;font-weight:700;color:'+c.color+'">'+c.titulo+'</div>'
+          +'<div style="font-size:11px;color:#888;margin-top:2px">'+c.ley+'</div></div>'
+          +'</div>';
+      }).join('')
+      +'</div>';
+  } else {
+    m.innerHTML=pBuiltCedula(anio,mes,idx,tipoId,e,MESES_F);
+  }
+  document.body.appendChild(m);
+}
+
+function pBuiltCedula(anio,mes,idx,tipoId,e,MESES_F){
+  var ced=CEDULAS_ESTATALES[tipoId]||CEDULAS_ESTATALES.otro;
+  var v=function(c){return e&&e[c]!==undefined?e[c]:'';};
+  var fechaHoy=new Date().toLocaleDateString('es-MX',{year:'numeric',month:'long',day:'numeric'});
+  function inp(campo,tipo){
+    var val=v(campo);
+    var base='width:100%;padding:6px 10px;border:none;font-size:12px;text-align:right;font-variant-numeric:tabular-nums;font-family:inherit';
+    if(tipo==='calc')      return '<input type="number" id="pep-'+campo+'" value="'+val+'" step="0.01" readonly style="'+base+';background:#f5f5f3">';
+    if(tipo==='resultado') return '<input type="number" id="pep-'+campo+'" value="'+val+'" step="0.01" readonly style="'+base+';background:#EAF3DE;font-weight:800;color:#0C6B45">';
+    if(tipo==='input')     return '<input type="number" id="pep-'+campo+'" value="'+val+'" step="0.01" placeholder="0.00" style="'+base+';background:transparent" oninput="PAGOS.recalcCedula()">';
+    if(tipo==='pct')       return '<input type="number" id="pep-'+campo+'" value="'+(val||'3')+'" step="0.01" style="'+base+';background:transparent" oninput="PAGOS.recalcCedula()">';
+    return '';
+  }
+  function verInp(campo,tipo){
+    var val=v(campo);
+    var bs='width:100%;padding:7px 10px;border:1px solid #e0e0db;border-radius:7px;font-size:12px;font-family:inherit';
+    if(tipo==='texto')     return '<input type="text" id="pep-'+campo+'" value="'+pH(String(val))+'" placeholder="—" style="'+bs+'">';
+    if(tipo==='fecha')     return '<input type="date" id="pep-'+campo+'" value="'+val+'" style="'+bs+'">';
+    if(tipo==='monto')     return '<input type="number" id="pep-'+campo+'" value="'+val+'" step="0.01" placeholder="0.00" style="'+bs+';text-align:right" oninput="PAGOS.recalcCedula()">';
+    if(tipo==='diferencia')return '<input type="number" id="pep-'+campo+'" value="'+val+'" step="0.01" readonly style="'+bs+';text-align:right;background:#f5f5f3">';
+    return '';
+  }
+  var rowS='display:grid;grid-template-columns:32px 1fr 155px;align-items:stretch;border-bottom:1px solid #e5e5e0';
+
+  return '<div class="modal-box" style="max-width:700px;max-height:90vh;overflow-y:auto;padding:0">'
+    // HEADER
+    +'<div style="background:'+ced.color+';color:#fff;padding:14px 20px;border-radius:12px 12px 0 0">'
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between">'
+    +'<div><div style="font-size:9px;font-weight:700;opacity:.7;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">MSST Consulting SC · Tax Compliance · 6.2 Impuestos Estatales · Cédula de trabajo</div>'
+    +'<div style="font-size:16px;font-weight:800">'+ced.icono+' '+ced.titulo+'</div>'
+    +'<div style="font-size:11px;opacity:.8;margin-top:4px">'+MESES_F[mes-1]+' '+anio+' · '+pH(pEstCliente.nombre)+'</div>'
+    +'</div>'
+    +'<button onclick="document.getElementById(\'pm-est-pro\').remove()" style="background:rgba(255,255,255,.2);border:none;cursor:pointer;font-size:15px;color:#fff;border-radius:6px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;flex-shrink:0">✕</button>'
+    +'</div></div>'
+
+    +'<div style="padding:16px 20px">'
+
+    // SECCIÓN I — MARCO JURÍDICO
+    +'<div style="border:1px solid #e5e5e0;border-radius:10px;margin-bottom:12px;overflow:hidden">'
+    +'<div style="background:#1a1a1a;color:#fff;padding:6px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">'
+    +'I. Marco jurídico y elementos del impuesto</div>'
+    +'<div style="padding:10px 14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +'<div style="background:#f5f5f3;border-radius:7px;padding:9px 11px"><div style="font-size:8px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Fundamento legal</div><div style="font-size:11px;font-weight:600">'+ced.ley+'</div></div>'
+    +'<div style="background:#f5f5f3;border-radius:7px;padding:9px 11px"><div style="font-size:8px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Hecho imponible</div><div style="font-size:11px">'+ced.hecho_imp+'</div></div>'
+    +'<div style="background:#f5f5f3;border-radius:7px;padding:9px 11px"><div style="font-size:8px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Sujeto del impuesto</div><div style="font-size:11px">'+ced.sujeto+'</div></div>'
+    +'<div style="background:#f5f5f3;border-radius:7px;padding:9px 11px"><div style="font-size:8px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Base del impuesto</div><div style="font-size:11px">'+ced.base+'</div></div>'
+    +'</div></div>'
+
+    // SECCIÓN II — DETERMINACIÓN
+    +'<div style="border:1px solid #e5e5e0;border-radius:10px;margin-bottom:12px;overflow:hidden">'
+    +'<div style="background:#1a1a1a;color:#fff;padding:6px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">'
+    +'II. Procedimiento de determinación del impuesto</div>'
+    +'<div style="background:#f5f5f3;padding:4px 14px;font-size:8px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.04em;display:grid;grid-template-columns:32px 1fr 155px">'
+    +'<div></div><div style="padding:3px 8px">Concepto</div><div style="padding:3px 8px;text-align:right">Importe (MXN $)</div></div>'
+    +ced.pasos.map(function(p){
+      var bg=p.highlight?'background:#f0fff4':'';
+      var lc=p.highlight?'color:#0C6B45;font-weight:700':'color:#1a1a1a';
+      return '<div style="'+rowS+';'+bg+'">'
+        +'<div style="padding:8px 0 8px 10px;padding-top:10px">'
+        +'<span style="font-size:8px;font-weight:800;color:'+ced.color+';background:'+ced.color+'18;padding:2px 5px;border-radius:3px">'+p.num+'</span>'
+        +'</div>'
+        +'<div style="padding:7px 10px">'
+        +'<div style="font-size:12px;'+lc+'">'+pH(p.label)+'</div>'
+        +(p.nota?'<div style="font-size:10px;color:#888;margin-top:2px;line-height:1.35">'+pH(p.nota)+'</div>':'')
+        +'</div>'
+        +'<div style="border-left:1px solid #e5e5e0;display:flex;align-items:center">'+inp(p.campo,p.tipo)+'</div>'
+        +'</div>';
+    }).join('')
+    +'</div>'
+
+    // SECCIÓN III — VERIFICACIÓN
+    +'<div style="border:1px solid #e5e5e0;border-radius:10px;margin-bottom:12px;overflow:hidden">'
+    +'<div style="background:#1a1a1a;color:#fff;padding:6px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">'
+    +'III. Verificación del entero al fisco estatal</div>'
+    +'<div style="padding:10px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +ced.verificacion.map(function(vf){
+      return '<div><label style="font-size:9px;font-weight:700;color:#555;margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:.04em">'+pH(vf.label)+'</label>'+verInp(vf.campo,vf.tipo)+'</div>';
+    }).join('')
+    +'</div></div>'
+
+    // ESTADO + FUNDAMENTO
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
+    +'<div><label style="font-size:9px;font-weight:700;color:#555;margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:.04em">Estado / Entidad federativa</label>'
+    +'<select id="pep-estado" style="width:100%;padding:7px 10px;border:1px solid #e0e0db;border-radius:7px;font-size:12px;font-family:inherit">'
+    +'<option value="">— Seleccionar —</option>'
+    +ESTADOS_MX.map(function(s){return '<option value="'+pH(s)+'"'+(String(v('estado'))===s?' selected':'')+'>'+pH(s)+'</option>';}).join('')
+    +'</select></div>'
+    +'<div><label style="font-size:9px;font-weight:700;color:#555;margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:.04em">Fundamento legal específico</label>'
+    +'<input type="text" id="pep-fundamento" value="'+pH(String(v('fundamento')||ced.ley))+'" style="width:100%;padding:7px 10px;border:1px solid #e0e0db;border-radius:7px;font-size:12px;font-family:inherit"></div>'
+    +'</div>'
+
+    // SECCIÓN IV — CONCLUSIÓN
+    +'<div style="border:1px solid #e5e5e0;border-radius:10px;margin-bottom:14px;overflow:hidden">'
+    +'<div style="background:#1a1a1a;color:#fff;padding:6px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">'
+    +'IV. Conclusión y observaciones del revisor CPC</div>'
+    +'<div style="padding:10px 14px">'
+    +'<textarea id="pep-observaciones" rows="3" placeholder="Indicar resultado de la revisión: confirmar que el impuesto fue determinado conforme a la legislación aplicable, documentar diferencias detectadas, fundamento de ajustes y acciones correctivas requeridas." style="width:100%;padding:8px 10px;border:1px solid #e0e0db;border-radius:8px;font-size:12px;font-family:inherit;resize:vertical">'+pH(String(v('observaciones')))+'</textarea>'
+    +'<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:8px 12px;background:#E6F4EE;border:1px solid #C0DD97;border-radius:8px">'
+    +'<span style="font-size:15px">✍️</span>'
+    +'<div><div style="font-size:11px;font-weight:700;color:#0C6B45">MSST Consulting SC — Revisión fiscal</div>'
+    +'<div style="font-size:10px;color:#888">'+pH(pEstCliente.nombre)+' · '+MESES_F[mes-1]+' '+anio+' · '+fechaHoy+'</div>'
+    +'</div></div>'
+    +'</div></div>'
+
+    // BOTONES
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid #e5e5e0;padding-top:14px">'
+    +'<button class="btn btn-sm" onclick="document.getElementById(\'pm-est-pro\').remove()">Cancelar</button>'
+    +'<button class="btn btn-sm" style="background:#f5f5f3;color:#444" onclick="PAGOS.imprimirCedulaEst()" title="Imprimir cédula de trabajo">🖨 Imprimir cédula</button>'
+    +'<button class="btn btn-sm btn-primary" style="background:'+ced.color+';border-color:'+ced.color+'" onclick="PAGOS.guardarCedulaEst('+anio+','+mes+','+idx+',\''+tipoId+'\')">💾 Guardar cédula</button>'
+    +'</div>'
+
+    +'</div></div>';
+}
+
+
 // ===== MODAL ESTATAL LIBRE =====
 function pModalEst(idx){
   const ESTADOS_MX=['Aguascalientes','Baja California','Baja California Sur','Campeche','Chiapas','Chihuahua','Ciudad de México','Coahuila','Colima','Durango','Guanajuato','Guerrero','Hidalgo','Jalisco','Estado de México','Michoacán','Morelos','Nayarit','Nuevo León','Oaxaca','Puebla','Querétaro','Quintana Roo','San Luis Potosí','Sinaloa','Sonora','Tabasco','Tamaulipas','Tlaxcala','Veracruz','Yucatán','Zacatecas'];
@@ -6448,21 +6712,119 @@ return {
   selMesEst: function(anio,mes){ pRenderEstatalPeriodo(anio,mes); },
   abrirEstModalExt: function(anio,mes,idx){
     var pagoMes=pEstPagoCache.find(function(p){return p.anio==anio&&p.mes==mes;});
-    if(!pagoMes){
-      pagoMes={anio:anio,mes:mes,cliente_id:pEstCliente.id,cliente_nombre:pEstCliente.nombre,
-               impuestos_federales:{},impuestos_estatales:[],status:'pendiente'};
-      pEstPagoCache.push(pagoMes);
-    }
+    if(!pagoMes){pagoMes={anio:anio,mes:mes,cliente_id:pEstCliente.id,cliente_nombre:pEstCliente.nombre,impuestos_federales:{},impuestos_estatales:[],status:'pendiente'};pEstPagoCache.push(pagoMes);}
     pPagoActual={anio:anio,mes:mes,data:pagoMes,_sub:'impuestos'};
     pClienteActual=pEstCliente;
-    pModalEst(idx);
-    setTimeout(function(){
-      var modal=document.getElementById('pm-est');
-      if(!modal)return;
-      var btn=modal.querySelector('.btn-primary');
-      if(btn){btn.onclick=function(){PAGOS.guardarEst(idx);setTimeout(function(){pRenderEstatalPeriodo(anio,mes);},200);};}
-    },100);
+    var est=(pagoMes.impuestos_estatales||[])[idx];
+    if(est&&est._fijo&&est._fijo_id){ pModalFijo(idx); }
+    else { pModalEstProfesional(anio,mes,idx); }
   },
+  abrirCedulaEstatal: function(anio,mes,idx,tipoId){
+    document.getElementById('pm-est-pro')?.remove();
+    if(!pEstCliente)return;
+    var MESES_F=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    var pagoMes=pEstPagoCache.find(function(p){return p.anio==anio&&p.mes==mes;});
+    if(!pagoMes){pagoMes={anio:anio,mes:mes,cliente_id:pEstCliente.id,cliente_nombre:pEstCliente.nombre,impuestos_federales:{},impuestos_estatales:[],status:'pendiente'};pEstPagoCache.push(pagoMes);}
+    pPagoActual={anio:anio,mes:mes,data:pagoMes,_sub:'impuestos'};
+    pClienteActual=pEstCliente;
+    var exist=(pagoMes.impuestos_estatales||[])[idx]||null;
+    if(!tipoId&&exist)tipoId=exist.tipo_id;
+    var ced=CEDULAS_ESTATALES[tipoId]||CEDULAS_ESTATALES.otro;
+    var defEst={tipo_id:tipoId||'otro',label:ced.titulo,estado:'',fundamento:ced.ley,
+                total_nomina:0,excluidas:0,ingresos_hospedaje:0,devoluciones:0,
+                total_honorarios:0,total_arrendamiento:0,
+                base_gravable:0,tasa:3,isn_cargo:0,isn_pagar:0,
+                importe_determinado:0,importe_pagado:0,diferencia:0,
+                linea_captura:'',fecha_pago:'',observaciones:''};
+    if(exist)Object.keys(defEst).forEach(function(k){if(exist[k]!==undefined)defEst[k]=exist[k];});
+    var m=document.createElement('div');m.className='modal-overlay';m.id='pm-est-pro';
+    m.innerHTML=pBuiltCedula(anio,mes,idx,tipoId||'otro',defEst,MESES_F);
+    document.body.appendChild(m);
+  },
+
+  recalcCedula: function(){
+    var g=function(id){var e=document.getElementById('pep-'+id);return e?parseFloat(e.value)||0:0;};
+    var s=function(id,val){var e=document.getElementById('pep-'+id);if(e)e.value=val.toFixed(2);};
+    var nom=g('total_nomina');
+    var hon=g('total_honorarios');
+    var arr=g('total_arrendamiento');
+    var hosp=g('ingresos_hospedaje');
+    var exc=g('excluidas');
+    var dev=g('devoluciones');
+    // Base: suma de ingresos (según tipo) menos exclusiones
+    var base=Math.max(0,(nom+hon+arr+hosp)-(exc+dev));
+    s('base_gravable',base);
+    var tasa=g('tasa')||3;
+    var cargo=base*(tasa/100);
+    s('isn_cargo',cargo);
+    s('isn_pagar',cargo);
+    // Diferencia
+    var pagado=g('importe_pagado');
+    var diff=pagado-cargo;
+    s('diferencia',diff);
+    var elD=document.getElementById('pep-diferencia');
+    if(elD){elD.style.color=Math.abs(diff)<1?'#0C6B45':diff<0?'#A32D2D':'#854F0B';}
+  },
+
+  guardarCedulaEst: function(anio,mes,idx,tipoId){
+    var g=function(id){var e=document.getElementById('pep-'+id);return e?e.value:'';};
+    var gn=function(id){return parseFloat(g(id))||0;};
+    var ced=CEDULAS_ESTATALES[tipoId]||CEDULAS_ESTATALES.otro;
+    var est={
+      tipo_id:tipoId||'otro', label:ced.titulo,
+      estado:g('estado'), fundamento:g('fundamento')||ced.ley,
+      total_nomina:gn('total_nomina'), excluidas:gn('excluidas'),
+      total_honorarios:gn('total_honorarios'), total_arrendamiento:gn('total_arrendamiento'),
+      ingresos_hospedaje:gn('ingresos_hospedaje'), devoluciones:gn('devoluciones'),
+      base_gravable:gn('base_gravable'), tasa:gn('tasa'),
+      isn_cargo:gn('isn_cargo'), isn_pagar:gn('isn_pagar'),
+      importe_determinado:gn('isn_pagar'), importe_pagado:gn('importe_pagado'),
+      diferencia:gn('diferencia'), linea_captura:g('linea_captura'),
+      fecha_pago:g('fecha_pago'), observaciones:g('observaciones'),
+    };
+    var pagoMes=pEstPagoCache.find(function(p){return p.anio==anio&&p.mes==mes;});
+    if(!pagoMes){pagoMes={anio:anio,mes:mes,cliente_id:pEstCliente.id,cliente_nombre:pEstCliente.nombre,impuestos_federales:{},impuestos_estatales:[],status:'pendiente'};pEstPagoCache.push(pagoMes);}
+    if(!pagoMes.impuestos_estatales)pagoMes.impuestos_estatales=[];
+    if(idx>=0&&idx<pagoMes.impuestos_estatales.length){pagoMes.impuestos_estatales[idx]=est;}
+    else{pagoMes.impuestos_estatales.push(est);}
+    pPagoActual={anio:anio,mes:mes,data:pagoMes,_sub:'impuestos'};
+    pClienteActual=pEstCliente;
+    // Sync a pEstPagoCache
+    var ci=pEstPagoCache.findIndex(function(p){return p.anio==anio&&p.mes==mes;});
+    if(ci>=0)pEstPagoCache[ci]=pagoMes;
+    // Guardar en Supabase
+    var self=this;
+    pGuardar().then(function(){
+      document.getElementById('pm-est-pro')?.remove();
+      pRenderEstatalPeriodo(anio,mes);
+      pToast('Cédula guardada correctamente','ok');
+    }).catch(function(){
+      document.getElementById('pm-est-pro')?.remove();
+      pRenderEstatalPeriodo(anio,mes);
+      pToast('Cédula guardada (local)','ok');
+    });
+  },
+
+  imprimirCedulaEst: function(){
+    var modal=document.getElementById('pm-est-pro');
+    if(!modal)return;
+    var box=modal.querySelector('.modal-box');
+    if(!box)return;
+    var w=window.open('','_blank');
+    w.document.write('<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
+      +'<title>Cédula Impuesto Estatal — MSST Consulting</title>'
+      +'<style>*{box-sizing:border-box;margin:0;padding:0}'
+      +'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#1a1a1a;padding:16px}'
+      +'input,textarea,select{border:none!important;background:transparent!important;font-family:inherit;color:inherit}'
+      +'input[readonly],textarea[readonly]{background:#f5f5f3!important}'
+      +'@page{size:letter;margin:12mm}'
+      +'@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'
+      +'</style></head><body>'+box.innerHTML+'</body></html>');
+    w.document.close();
+    setTimeout(function(){w.print();},600);
+  },
+
+
   volverCli: function(){pClienteActual=null;pClienteConfig=null;pPagosCache=[];pPagoActual=null;window.tcRenderHome();}, // back to TC home
   setTab: function(t){if(t!=='revision')pPagoActual=null;pTab=t;pRenderModulo();},
   setSub: function(s){if(pPagoActual)pPagoActual._sub=s;pRefreshTab();},
@@ -6547,7 +6909,12 @@ return {
     e.importe_determinado=parseFloat(e.isn_pagar||0);
     e.importe_pagado=parseFloat(e.importe_pagado||0);
     document.getElementById('pm-fijo')?.remove();
-    pRefreshTab();pToast('ISN BC guardado','ok');
+    if(pEstCliente&&pPagoActual){
+      var ix=pEstPagoCache.findIndex(function(p){return p.anio===pPagoActual.anio&&p.mes===pPagoActual.mes;});
+      if(ix>=0)pEstPagoCache[ix]=pPagoActual.data;
+      pRenderEstatalPeriodo(pPagoActual.anio,pPagoActual.mes);
+    } else { pRefreshTab(); }
+    pToast('ISN BC guardado','ok');
   },
   guardarEst: function(idx){
     const sel=document.getElementById('pe-tipo');
