@@ -5299,6 +5299,7 @@ window.TC_SUBMODS = [
   {id:'estatal',  label:'6.2 Impuestos Estatales', icon:'🗺', color:'#0C6B45', bg:'#E6F4EE', badge:'ESTATAL',         desc:'ISN, ISH, cedular y otros impuestos locales',  fundamento:'Leyes de Hacienda Estatales',                activo:true},
   {id:'ss',       label:'6.3 Seguridad Social',    icon:'🏥', color:'#7A3B8F', bg:'#F3EDF8', badge:'IMSS · INFONAVIT',desc:'Cuotas IMSS, aportaciones INFONAVIT y SUA',    fundamento:'LSS · LIV · Acuerdo ACDO.SA3.HCT',          activo:false, proximamente:true},
   {id:'lfpiorpi', label:'6.4 LFPIORPI',            icon:'🔍', color:'#854F0B', bg:'#FDF3E7', badge:'UIF',             desc:'Obligaciones antilavado y avisos a la UIF',    fundamento:'LFPIORPI · Reglas de Carácter General UIF', activo:false, proximamente:true},
+  {id:'config',   label:'6.5 Configuración Fiscal', icon:'⚙️',  color:'#374151', bg:'#F3F4F6', badge:'CONFIG',          desc:'Obligaciones fiscales por contribuyente: federales, estatales y seguridad social', fundamento:'Catálogo interno MSST · cliente_config_pagos', activo:true},
 ];
 
 // Render the Tax Compliance home screen
@@ -5383,8 +5384,9 @@ window.tcRenderResumen = async function() {
 
 window.tcEntrarGlobal = async function(submod) {
   window.tcSubModulo = submod;
-  if(submod==='federal'){PAGOS.init();}
-  else if(submod==='estatal'){PAGOS.renderEstatal();}
+  if(submod==='federal')       { PAGOS.init(); }
+  else if(submod==='estatal')  { PAGOS.renderEstatal(); }
+  else if(submod==='config')   { PAGOS.renderConfig65(); }
 };
 
 window.tcVolverHomeGlobal = function() {
@@ -5500,6 +5502,8 @@ const IMPUESTOS_FEDERALES=[
      {id:'observaciones',label:'Observaciones',tipo:'area'},
    ]},
 ];
+
+const ESTADOS_MX=['Aguascalientes','Baja California','Baja California Sur','Campeche','Chiapas','Chihuahua','Ciudad de México','Coahuila','Colima','Durango','Guanajuato','Guerrero','Hidalgo','Jalisco','Estado de México','Michoacán','Morelos','Nayarit','Nuevo León','Oaxaca','Puebla','Querétaro','Quintana Roo','San Luis Potosí','Sinaloa','Sonora','Tabasco','Tamaulipas','Tlaxcala','Veracruz','Yucatán','Zacatecas'];
 
 const IMPUESTOS_ESTATALES_CAT=[
   {id:'isn',   label:'ISN — Impuesto sobre Nómina',               fundamento:'Ley de Hacienda Estatal — Erogaciones laborales'},
@@ -5811,6 +5815,198 @@ function pRenderEstatalPeriodo(anio,mes){
     +'<button class="btn btn-sm" style="background:#0C6B45;color:#fff;border-color:#0C6B45" onclick="PAGOS.abrirEstModalExt('+anio+','+mes+',-1)">+ Agregar</button>'
     +'</div>'+rows+'</div>';
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// 6.5 CONFIGURACIÓN FISCAL — Funciones de renderizado
+// ═══════════════════════════════════════════════════════════════════
+
+var pCfgCliente = null;      // cliente seleccionado en 6.5
+var pCfgConfig  = null;      // config actual cargada de SB
+
+function pRenderConfig65(){
+  var esPM=function(c){ var t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pm'||t.includes('moral')||!t; };
+  var esPF=function(c){ var t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pf'||t.includes('fisica'); };
+  var listaPM=(clientesCache||[]).filter(esPM).sort(function(a,b){return(a.nombre||'').localeCompare(b.nombre||'');});
+  var listaPF=(clientesCache||[]).filter(esPF).sort(function(a,b){return(a.nombre||'').localeCompare(b.nombre||'');});
+  function rowCli(c){
+    return ['<div data-id="',pH(String(c.id)),'" data-nombre="',pH(c.nombre),
+      '" onclick="PAGOS.selCfg65(this.dataset.id,this.dataset.nombre)"',
+      ' style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #e5e5e0;border-radius:8px;cursor:pointer;margin-bottom:5px;background:#fafafa">',
+      '<div style="width:34px;height:34px;border-radius:8px;background:#F3F4F6;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#374151;flex-shrink:0">',
+      c.nombre.charAt(0).toUpperCase(),'</div>',
+      '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">',pH(c.nombre),'</div>',
+      (c.rfc?'<div style="font-size:10px;color:#888">'+pH(c.rfc)+'</div>':''),
+      '</div></div>'].join('');
+  }
+  pApp().innerHTML=renderTopNav('pp')
+    +'<div style="max-width:860px;margin:0 auto;padding:0 1rem 2rem">'
+    +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:1.25rem;flex-wrap:wrap">'
+    +'<button onclick="tcVolverHomeGlobal()" class="btn btn-sm" style="background:none;border:none;cursor:pointer;font-size:12px;color:#374151;font-weight:600;padding:4px 8px;border-radius:6px;font-family:inherit">⚖️ Tax Compliance</button>'
+    +'<span style="color:#ccc;font-size:12px">›</span>'
+    +'<span style="font-size:12px;font-weight:700;color:#374151;background:#F3F4F6;padding:4px 10px;border-radius:6px">⚙️ 6.5 Configuración Fiscal</span>'
+    +'</div>'
+    +'<div style="font-size:10px;font-weight:700;color:#8FB832;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">Tax Compliance · Módulo 6.5</div>'
+    +'<div style="font-size:22px;font-weight:800;color:#374151;margin-bottom:4px">Configuración Fiscal</div>'
+    +'<div style="font-size:12px;color:#888;margin-bottom:1.25rem">Define las obligaciones fiscales de cada contribuyente: impuestos federales, estatales y seguridad social aplicables.</div>'
+    +'<div style="position:relative;margin-bottom:1rem">'
+    +'<span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:12px;pointer-events:none">🔍</span>'
+    +'<input type="text" id="cfg65-buscar" placeholder="Buscar contribuyente..." oninput="PAGOS.filtrarCfg65(this.value)" style="padding-left:34px">'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+    +'<div>'
+    +'<div style="background:#374151;color:#fff;padding:8px 12px;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:space-between">'
+    +'<span style="font-size:12px;font-weight:700">🏢 Personas Morales</span>'
+    +'<span style="background:rgba(255,255,255,.2);font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px">'+listaPM.length+'</span>'
+    +'</div>'
+    +'<div id="cfg65-lista-pm" style="border:1px solid #e5e5e0;border-top:none;border-radius:0 0 10px 10px;max-height:460px;overflow-y:auto;padding:8px">'+listaPM.map(rowCli).join('')+'</div>'
+    +'</div>'
+    +'<div>'
+    +'<div style="background:#4B5563;color:#fff;padding:8px 12px;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:space-between">'
+    +'<span style="font-size:12px;font-weight:700">👤 Personas Físicas</span>'
+    +'<span style="background:rgba(255,255,255,.2);font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px">'+listaPF.length+'</span>'
+    +'</div>'
+    +'<div id="cfg65-lista-pf" style="border:1px solid #e5e5e0;border-top:none;border-radius:0 0 10px 10px;max-height:460px;overflow-y:auto;padding:8px">'+listaPF.map(rowCli).join('')+'</div>'
+    +'</div>'
+    +'</div>'
+    +'</div>';
+}
+
+function pRenderConfig65Cliente(cfg){
+  // cfg = row from cliente_config_pagos or null
+  var actFed  = (cfg&&cfg.config_impuestos)       || [];
+  var actEstFij=(cfg&&cfg.config_estatales_fijos) || [];
+  var actEst  = (cfg&&cfg.config_estatales_libres)|| [];   // NEW: free-form estatales
+  var lastUpd = cfg&&cfg.updated_at ? new Date(cfg.updated_at).toLocaleDateString('es-MX') : '—';
+
+  // Build IMPUESTOS_FEDERALES checkboxes grouped by clase
+  var clases=[...new Set(IMPUESTOS_FEDERALES.map(function(i){return i.clase;}))];
+  var fedSection=clases.map(function(cl){
+    var items=IMPUESTOS_FEDERALES.filter(function(i){return i.clase===cl;});
+    var clLabel={'isr':'ISR — Impuesto sobre la Renta','iva':'IVA — Impuesto al Valor Agregado','ieps':'IEPS','retencion':'Retenciones','otros':'Otros'}[cl]||cl.toUpperCase();
+    return '<div style="margin-bottom:14px">'
+      +'<div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #e5e5e0">'+clLabel+'</div>'
+      +items.map(function(i){
+        var checked=actFed.includes(i.id)?'checked':'';
+        return '<label style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid #f5f5f3;cursor:pointer">'
+          +'<input type="checkbox" id="c65fed-'+i.id+'" '+checked+' style="width:18px;height:18px;accent-color:#374151;flex-shrink:0;margin-top:2px;cursor:pointer">'
+          +'<div><div style="font-size:12px;font-weight:600">'+pH(i.label)+'</div>'
+          +'<div style="font-size:10px;color:#888;margin-top:1px">'+pH(i.fundamento)+'</div></div>'
+          +'</label>';
+      }).join('')
+      +'</div>';
+  }).join('');
+
+  // ESTATALES FIJOS (ISN BC, etc.)
+  var estFijosSection=ESTATALES_FIJOS_CAT.map(function(e){
+    var checked=actEstFij.includes(e.id)?'checked':'';
+    var isChecked=actEstFij.includes(e.id);
+    return '<div style="border:1.5px solid '+(isChecked?'#0C6B45':'#e5e5e0')+';border-radius:10px;padding:12px 14px;margin-bottom:8px;background:'+(isChecked?'#E6F4EE':'#fafafa')+'">'
+      +'<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">'
+      +'<input type="checkbox" id="c65estf-'+e.id+'" '+checked+' style="width:18px;height:18px;accent-color:#0C6B45;flex-shrink:0;margin-top:2px;cursor:pointer" onchange="PAGOS.toggleCfg65EstFijo(this,\''+e.id+'\')">'
+      +'<div style="flex:1">'
+      +'<div style="font-size:13px;font-weight:700;color:'+(isChecked?'#0C6B45':'#1a1a1a')+'">'+pH(e.label)+' <span style="background:#E6F4EE;color:#0C6B45;font-size:9px;padding:1px 6px;border-radius:4px;font-weight:700">FIJO · '+pH(e.estado)+'</span></div>'
+      +'<div style="font-size:11px;color:#888;margin-top:2px">'+pH(e.fundamento)+'</div>'
+      +'<div style="font-size:10px;color:#aaa;margin-top:2px">Tasa '+e.tasa+'% · '+pH(e.limite)+' · '+pH(e.referencia_pago)+'</div>'
+      +'</div></label></div>';
+  }).join('');
+
+  // ESTATALES LIBRES configurados (ISN genérico, ISH, cedular, otro)
+  var estLibresSection='';
+  if(actEst.length>0){
+    estLibresSection=actEst.map(function(e,i){
+      var ced=CEDULAS_ESTATALES[e.tipo_id]||CEDULAS_ESTATALES.otro;
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid #e5e5e0;border-radius:8px;margin-bottom:6px;background:#fafafa">'
+        +'<div style="width:32px;height:32px;border-radius:8px;background:'+ced.color+';display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">'+ced.icono+'</div>'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:12px;font-weight:600">'+pH(ced.titulo)+'</div>'
+        +'<div style="font-size:10px;color:#888">'+pH(e.estado||'Estado no definido')+(e.tasa?' · Tasa '+e.tasa+'%':'')+'</div>'
+        +'</div>'
+        +'<button onclick="PAGOS.quitarCfg65EstLibre('+i+')" style="background:none;border:none;cursor:pointer;font-size:14px;color:#aaa;padding:4px" title="Quitar">✕</button>'
+        +'</div>';
+    }).join('');
+  }
+
+  pApp().innerHTML=renderTopNav('pp')
+    +'<div style="max-width:760px;margin:0 auto;padding:0 1rem 2rem">'
+
+    // BREADCRUMB
+    +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:1.1rem;flex-wrap:wrap">'
+    +'<button onclick="tcVolverHomeGlobal()" class="btn btn-sm" style="background:none;border:none;cursor:pointer;font-size:12px;color:#374151;font-weight:600;padding:4px 8px;border-radius:6px;font-family:inherit">⚖️ Tax Compliance</button>'
+    +'<span style="color:#ccc;font-size:12px">›</span>'
+    +'<button onclick="PAGOS.renderConfig65()" style="background:none;border:none;cursor:pointer;font-size:12px;color:#374151;font-weight:600;padding:4px 8px;border-radius:6px;font-family:inherit">⚙️ 6.5 Configuración</button>'
+    +'<span style="color:#ccc;font-size:12px">›</span>'
+    +'<span style="font-size:12px;font-weight:700;color:#374151;background:#F3F4F6;padding:4px 10px;border-radius:6px">'+pH(pCfgCliente.nombre)+'</span>'
+    +'</div>'
+
+    // HEADER
+    +'<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:8px">'
+    +'<div>'
+    +'<div style="font-size:10px;font-weight:700;color:#8FB832;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px">6.5 Configuración Fiscal</div>'
+    +'<div style="font-size:20px;font-weight:800;color:#374151">'+pH(pCfgCliente.nombre)+'</div>'
+    +(cfg?'<div style="font-size:11px;color:#aaa;margin-top:2px">Última actualización: '+lastUpd+'</div>':'<div style="font-size:11px;color:#854F0B;margin-top:2px;font-weight:600">⚠ Sin configuración previa — define las obligaciones del contribuyente</div>')
+    +'</div>'
+    +'<button class="btn btn-sm btn-primary" style="background:#374151;border-color:#374151" onclick="PAGOS.guardarCfg65()">💾 Guardar configuración</button>'
+    +'</div>'
+
+    // SECCIÓN 1 — IMPUESTOS FEDERALES
+    +'<div style="border:1px solid #e5e5e0;border-radius:12px;margin-bottom:14px;overflow:hidden">'
+    +'<div style="background:#1B3A6B;color:#fff;padding:9px 16px;display:flex;align-items:center;gap:8px">'
+    +'<span style="font-size:14px">🏛</span>'
+    +'<div><div style="font-size:12px;font-weight:700">6.1 Impuestos Federales — Obligaciones aplicables</div>'
+    +'<div style="font-size:10px;opacity:.75">Selecciona los impuestos federales que aplican a este contribuyente</div></div>'
+    +'</div>'
+    +'<div style="padding:14px 18px">'+fedSection+'</div>'
+    +'</div>'
+
+    // SECCIÓN 2 — IMPUESTOS ESTATALES FIJOS
+    +'<div style="border:1px solid #e5e5e0;border-radius:12px;margin-bottom:14px;overflow:hidden">'
+    +'<div style="background:#0C6B45;color:#fff;padding:9px 16px;display:flex;align-items:center;justify-content:space-between">'
+    +'<div style="display:flex;align-items:center;gap:8px">'
+    +'<span style="font-size:14px">🗺</span>'
+    +'<div><div style="font-size:12px;font-weight:700">6.2 Impuestos Estatales — Obligaciones fijas (por convenio / tasa fija)</div>'
+    +'<div style="font-size:10px;opacity:.75">ISN BC fijo y otros con cédula predefinida — se incluyen automáticamente en cada período</div></div>'
+    +'</div>'
+    +'</div>'
+    +'<div style="padding:14px 18px">'
+    +(estFijosSection||'<div style="text-align:center;padding:1rem;color:#aaa;font-size:12px">Sin obligaciones estatales fijas disponibles.</div>')
+    +'</div>'
+    +'</div>'
+
+    // SECCIÓN 3 — IMPUESTOS ESTATALES LIBRES
+    +'<div style="border:1px solid #e5e5e0;border-radius:12px;margin-bottom:14px;overflow:hidden">'
+    +'<div style="background:#0C4A6E;color:#fff;padding:9px 16px;display:flex;align-items:center;justify-content:space-between">'
+    +'<div style="display:flex;align-items:center;gap:8px">'
+    +'<span style="font-size:14px">🗺</span>'
+    +'<div><div style="font-size:12px;font-weight:700">6.2 Impuestos Estatales — Obligaciones libres (ISH, Cedular, Otro)</div>'
+    +'<div style="font-size:10px;opacity:.75">Impuestos estatales con cálculo propio que aplican regularmente a este contribuyente</div></div>'
+    +'</div>'
+    +'<button onclick="PAGOS.agregarCfg65EstLibre()" style="background:rgba(255,255,255,.2);border:none;cursor:pointer;font-size:11px;font-weight:700;color:#fff;padding:4px 10px;border-radius:6px">+ Agregar</button>'
+    +'</div>'
+    +'<div style="padding:14px 18px">'
+    +'<div id="cfg65-est-libres">'
+    +(estLibresSection||'<div style="text-align:center;padding:1rem;color:#aaa;font-size:12px">Sin obligaciones estatales libres configuradas. Usa "+ Agregar" para añadir.</div>')
+    +'</div>'
+    +'</div>'
+    +'</div>'
+
+    // SECCIÓN 4 — SEGURIDAD SOCIAL (placeholder)
+    +'<div style="border:1px solid #e5e5e0;border-radius:12px;margin-bottom:14px;overflow:hidden;opacity:.6">'
+    +'<div style="background:#7A3B8F;color:#fff;padding:9px 16px;display:flex;align-items:center;gap:8px">'
+    +'<span style="font-size:14px">🏥</span>'
+    +'<div><div style="font-size:12px;font-weight:700">6.3 Seguridad Social — IMSS / INFONAVIT</div>'
+    +'<div style="font-size:10px;opacity:.75">Módulo en desarrollo — próximamente disponible</div></div>'
+    +'</div>'
+    +'<div style="padding:14px 18px;text-align:center;color:#aaa;font-size:12px">Configuración de cuotas IMSS e INFONAVIT disponible próximamente.</div>'
+    +'</div>'
+
+    // FOOTER SAVE
+    +'<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-top:1px solid #e5e5e0;margin-top:4px">'
+    +'<div style="font-size:11px;color:#aaa">Los cambios aplican a nuevos períodos. Los períodos ya guardados conservan sus datos.</div>'
+    +'<button class="btn btn-primary" style="background:#374151;border-color:#374151" onclick="PAGOS.guardarCfg65()">💾 Guardar configuración</button>'
+    +'</div>'
+    +'</div>';
+}
+
 
 function pRenderModulo(){
   const rev=pPagosCache.filter(p=>p.status==='revisado').length;
@@ -6538,7 +6734,7 @@ function pBuiltCedula(anio,mes,idx,tipoId,e,MESES_F){
 
 // ===== MODAL ESTATAL LIBRE =====
 function pModalEst(idx){
-  const ESTADOS_MX=['Aguascalientes','Baja California','Baja California Sur','Campeche','Chiapas','Chihuahua','Ciudad de México','Coahuila','Colima','Durango','Guanajuato','Guerrero','Hidalgo','Jalisco','Estado de México','Michoacán','Morelos','Nayarit','Nuevo León','Oaxaca','Puebla','Querétaro','Quintana Roo','San Luis Potosí','Sinaloa','Sonora','Tabasco','Tamaulipas','Tlaxcala','Veracruz','Yucatán','Zacatecas'];
+  // ESTADOS_MX declarado a nivel de módulo (ver arriba)
   const e=idx>=0?(pPagoActual.data.impuestos_estatales||[])[idx]||{}:{};
   const catOpts=IMPUESTOS_ESTATALES_CAT.map(c=>`<option value="${c.id}"${e.tipo_id===c.id?' selected':''}>${pH(c.label)}</option>`).join('');
   const estOpts=ESTADOS_MX.map(s=>`<option value="${pH(s)}"${e.estado===s?' selected':''}>${pH(s)}</option>`).join('');
@@ -6822,6 +7018,179 @@ return {
       +'</style></head><body>'+box.innerHTML+'</body></html>');
     w.document.close();
     setTimeout(function(){w.print();},600);
+  },
+
+
+  renderConfig65: function(){ pRenderConfig65(); },
+
+  filtrarCfg65: function(q){
+    var esPM=function(c){ var t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pm'||t.includes('moral')||!t; };
+    var esPF=function(c){ var t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pf'||t.includes('fisica'); };
+    var qn=(q||'').toLowerCase();
+    var match=function(c){return !qn||(c.nombre||'').toLowerCase().includes(qn)||(c.rfc||'').toLowerCase().includes(qn);};
+    function rowCli(c){
+      return ['<div data-id="',pH(String(c.id)),'" data-nombre="',pH(c.nombre),
+        '" onclick="PAGOS.selCfg65(this.dataset.id,this.dataset.nombre)"',
+        ' style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #e5e5e0;border-radius:8px;cursor:pointer;margin-bottom:5px;background:#fafafa">',
+        '<div style="width:34px;height:34px;border-radius:8px;background:#F3F4F6;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#374151;flex-shrink:0">',
+        c.nombre.charAt(0).toUpperCase(),'</div>',
+        '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">',pH(c.nombre),'</div>',
+        (c.rfc?'<div style="font-size:10px;color:#888">'+pH(c.rfc)+'</div>':''),
+        '</div></div>'].join('');
+    }
+    var pm=(clientesCache||[]).filter(function(c){return esPM(c)&&match(c);});
+    var pf=(clientesCache||[]).filter(function(c){return esPF(c)&&match(c);});
+    var elPM=document.getElementById('cfg65-lista-pm'); if(elPM) elPM.innerHTML=pm.map(rowCli).join('');
+    var elPF=document.getElementById('cfg65-lista-pf'); if(elPF) elPF.innerHTML=pf.map(rowCli).join('');
+  },
+
+  selCfg65: async function(id,nombre){
+    pCfgCliente={id:id,nombre:nombre};
+    pCfgConfig=null;
+    try{
+      var rows=await pSbGet('cliente_config_pagos','?cliente_id=eq.'+encodeURIComponent(id)+'&limit=1');
+      pCfgConfig=(rows&&rows.length)?rows[0]:null;
+    }catch(e){ pCfgConfig=null; }
+    pRenderConfig65Cliente(pCfgConfig);
+  },
+
+  toggleCfg65EstFijo: function(el,id){
+    // Visual feedback: update border/bg of parent card
+    var card=el.closest('div[style*="border:1.5px"]');
+    if(!card)return;
+    if(el.checked){
+      card.style.borderColor='#0C6B45';
+      card.style.background='#E6F4EE';
+      var lbl=card.querySelector('div[style*="font-weight:700"]');
+      if(lbl)lbl.style.color='#0C6B45';
+    } else {
+      card.style.borderColor='#e5e5e0';
+      card.style.background='#fafafa';
+      var lbl=card.querySelector('div[style*="font-weight:700"]');
+      if(lbl)lbl.style.color='#1a1a1a';
+    }
+  },
+
+  agregarCfg65EstLibre: function(){
+    // Show a type selector modal for adding a free estatal to the config
+    var MESES_F=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    var m=document.createElement('div');m.className='modal-overlay';m.id='pm-cfg65-est';
+    m.innerHTML='<div class="modal-box" style="max-width:520px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
+      +'<div><div style="font-size:15px;font-weight:700;color:#374151">Agregar obligación estatal</div>'
+      +'<div style="font-size:11px;color:#888;margin-top:2px">'+pH(pCfgCliente?pCfgCliente.nombre:'')+'</div></div>'
+      +'<button onclick="document.getElementById(\'pm-cfg65-est\').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button>'
+      +'</div>'
+      +'<div class="sec-label" style="margin-bottom:8px">Tipo de impuesto estatal</div>'
+      +Object.entries(CEDULAS_ESTATALES).map(function(entry){
+        var k=entry[0],c=entry[1];
+        return '<div onclick="PAGOS.confirmarCfg65EstLibre(\''+k+'\')" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1.5px solid #e5e5e0;border-radius:10px;cursor:pointer;margin-bottom:7px;background:#fafafa" onmouseenter="this.style.borderColor=\''+c.color+'\';this.style.background=\'#f9f9f9\'" onmouseleave="this.style.borderColor=\'#e5e5e0\';this.style.background=\'#fafafa\'">'
+          +'<div style="width:38px;height:38px;border-radius:9px;background:'+c.color+';display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">'+c.icono+'</div>'
+          +'<div><div style="font-size:13px;font-weight:700;color:'+c.color+'">'+c.titulo+'</div>'
+          +'<div style="font-size:11px;color:#888;margin-top:2px">'+c.ley+'</div></div>'
+          +'</div>';
+      }).join('')
+      +'</div>';
+    document.body.appendChild(m);
+  },
+
+  confirmarCfg65EstLibre: function(tipoId){
+    document.getElementById('pm-cfg65-est')?.remove();
+    var ced=CEDULAS_ESTATALES[tipoId]||CEDULAS_ESTATALES.otro;
+    // Show mini-form: estado + tasa
+    var m=document.createElement('div');m.className='modal-overlay';m.id='pm-cfg65-det';
+    m.innerHTML='<div class="modal-box" style="max-width:440px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+      +'<div><div style="font-size:15px;font-weight:700;color:'+ced.color+'">'+ced.icono+' '+ced.titulo+'</div>'
+      +'<div style="font-size:11px;color:#888;margin-top:2px">'+ced.ley+'</div></div>'
+      +'<button onclick="document.getElementById(\'pm-cfg65-det\').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button>'
+      +'</div>'
+      +'<div style="margin-bottom:12px">'
+      +'<label style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Estado / Entidad federativa</label>'
+      +'<select id="cfg65det-estado" style="width:100%;padding:8px 10px;border:1px solid #e0e0db;border-radius:8px;font-size:12px;font-family:inherit">'
+      +'<option value="">— Seleccionar —</option>'
+      +ESTADOS_MX.map(function(s){return '<option value="'+pH(s)+'">'+pH(s)+'</option>';}).join('')
+      +'</select></div>'
+      +'<div style="margin-bottom:16px">'
+      +'<label style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Tasa aplicable (%)</label>'
+      +'<input type="number" id="cfg65det-tasa" value="3" step="0.01" style="width:100%;padding:8px 10px;border:1px solid #e0e0db;border-radius:8px;font-size:12px;text-align:right;font-family:inherit">'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+      +'<button class="btn btn-sm" onclick="document.getElementById(\'pm-cfg65-det\').remove()">Cancelar</button>'
+      +'<button class="btn btn-sm btn-primary" style="background:'+ced.color+';border-color:'+ced.color+'" onclick="PAGOS.guardarCfg65EstLibreItem(\''+tipoId+'\')">Agregar</button>'
+      +'</div>'
+      +'</div>';
+    document.body.appendChild(m);
+  },
+
+  guardarCfg65EstLibreItem: function(tipoId){
+    var estado=document.getElementById('cfg65det-estado')?.value||'';
+    var tasa=parseFloat(document.getElementById('cfg65det-tasa')?.value)||0;
+    document.getElementById('pm-cfg65-det')?.remove();
+    if(!pCfgConfig)pCfgConfig={cliente_id:pCfgCliente.id,cliente_nombre:pCfgCliente.nombre,config_impuestos:[],config_estatales_fijos:[],config_estatales_libres:[]};
+    if(!pCfgConfig.config_estatales_libres)pCfgConfig.config_estatales_libres=[];
+    var ced=CEDULAS_ESTATALES[tipoId]||CEDULAS_ESTATALES.otro;
+    pCfgConfig.config_estatales_libres.push({tipo_id:tipoId,label:ced.titulo,estado:estado,tasa:tasa});
+    pRenderConfig65Cliente(pCfgConfig);
+    pToast('Obligación estatal agregada','ok');
+  },
+
+  quitarCfg65EstLibre: function(idx){
+    if(!pCfgConfig||!pCfgConfig.config_estatales_libres)return;
+    pCfgConfig.config_estatales_libres.splice(idx,1);
+    pRenderConfig65Cliente(pCfgConfig);
+  },
+
+  guardarCfg65: async function(){
+    if(!pCfgCliente){pToast('Selecciona un contribuyente','err');return;}
+    // Collect federales
+    var selFed=IMPUESTOS_FEDERALES.filter(function(i){
+      var el=document.getElementById('c65fed-'+i.id);
+      return el&&el.checked;
+    }).map(function(i){return i.id;});
+    // Collect estatales fijos
+    var selEstFij=ESTATALES_FIJOS_CAT.filter(function(e){
+      var el=document.getElementById('c65estf-'+e.id);
+      return el&&el.checked;
+    }).map(function(e){return e.id;});
+    // Collect estatales libres (already in pCfgConfig)
+    var selEstLib=(pCfgConfig&&pCfgConfig.config_estatales_libres)||[];
+
+    var now=new Date().toISOString();
+    var payload={
+      cliente_id:pCfgCliente.id,
+      cliente_nombre:pCfgCliente.nombre,
+      config_impuestos:selFed,
+      config_estatales_fijos:selEstFij,
+      config_estatales_libres:selEstLib,
+      updated_at:now,
+    };
+
+    try{
+      if(pCfgConfig&&pCfgConfig.id){
+        await pSbPatch('cliente_config_pagos','?id=eq.'+pCfgConfig.id,{
+          config_impuestos:selFed,
+          config_estatales_fijos:selEstFij,
+          config_estatales_libres:selEstLib,
+          updated_at:now,
+        });
+        pCfgConfig={...pCfgConfig,...payload};
+      } else {
+        var res=await fetch(SB_URL+'/rest/v1/cliente_config_pagos',{
+          method:'POST',
+          headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json','Prefer':'return=representation,resolution=merge-duplicates'},
+          body:JSON.stringify({...payload,created_at:now}),
+        });
+        var data=await res.json();
+        var row=Array.isArray(data)?data[0]:data;
+        if(row&&row.id){pCfgConfig={...payload,id:row.id};}
+        else{pCfgConfig=payload;}
+      }
+      pToast('Configuración guardada correctamente','ok');
+      pRenderConfig65Cliente(pCfgConfig);
+    }catch(err){
+      pToast('Error al guardar: '+(err.message||''),'err');
+    }
   },
 
 
