@@ -5692,6 +5692,7 @@ function pListaCli(lista,tipo){
 
 var pEstCliente=null;
 var pEstPagoCache=[];
+var pEstClienteCfg=null;  // config fiscal del cliente (cliente_config_pagos)
 
 function pRenderEstatal(){
   var esPM=function(c){ var t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t==='pm'||t.includes('moral')||!t; };
@@ -5777,7 +5778,24 @@ function pRenderEstatalMeses(anio){
 function pRenderEstatalPeriodo(anio,mes){
   if(!pEstCliente){pRenderEstatal();return;}
   var MF=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  var p=pEstPagoCache.find(function(x){return x.anio==anio&&x.mes==mes;})||{impuestos_estatales:[]};
+  var p=pEstPagoCache.find(function(x){return x.anio==anio&&x.mes==mes;});
+  // Si no existe el período, crearlo pre-cargando los estatales configurados en 6.5
+  if(!p){
+    var estatalesInit=[];
+    if(pEstClienteCfg&&pEstClienteCfg.config_estatales_libres){
+      estatalesInit=pEstClienteCfg.config_estatales_libres
+        .filter(function(e){return e.tipo_id!=='isn';})
+        .map(function(e){
+          return {tipo_id:e.tipo_id,label:e.label||e.tipo_id,estado:e.estado||'',
+                  tasa:e.tasa||3,fundamento:e.fundamento||'',
+                  base_gravable:0,isn_cargo:0,isn_pagar:0,
+                  importe_determinado:0,importe_pagado:0,diferencia:0};
+        });
+    }
+    p={anio:anio,mes:mes,cliente_id:pEstCliente.id,cliente_nombre:pEstCliente.nombre,
+       impuestos_federales:{},impuestos_estatales:estatalesInit,status:'pendiente'};
+    pEstPagoCache.push(p);
+  }
   var est=p.impuestos_estatales||[];
   var rows=est.length===0
     ?'<div class="card" style="text-align:center;padding:2rem;color:#888;font-size:13px">Sin impuestos estatales.<br><button class="btn btn-sm" style="margin-top:12px;background:#0C6B45;color:#fff;border-color:#0C6B45" onclick="PAGOS.abrirEstModalExt('+anio+','+mes+',-1)">+ Agregar</button></div>'
@@ -5875,7 +5893,7 @@ function pRenderConfig65Cliente(cfg){
   // cfg = row from cliente_config_pagos or null
   var actFed  = (cfg&&cfg.config_impuestos)       || [];
   var actEstFij=(cfg&&cfg.config_estatales_fijos) || [];
-  var actEst  = (cfg&&cfg.config_estatales_libres)|| [];   // NEW: free-form estatales
+  var actEst  = ((cfg&&cfg.config_estatales_libres)||[]).filter(function(e){return e.tipo_id!=='isn';});  // ISN siempre va por vía fija
   var lastUpd = cfg&&cfg.updated_at ? new Date(cfg.updated_at).toLocaleDateString('es-MX') : '—';
 
   // Build IMPUESTOS_FEDERALES checkboxes grouped by clase
@@ -6473,33 +6491,6 @@ function pModalFijo(idx){
 // ═══════════════════════════════════════════════════════════════════
 
 const CEDULAS_ESTATALES = {
-  isn: {
-    titulo:'ISN — Impuesto sobre Nómina', icono:'👥', color:'#0C6B45',
-    ley:'Ley de Hacienda Estatal · Capítulo de erogaciones laborales',
-    hecho_imp:'Las erogaciones realizadas en dinero o especie por concepto de remuneraciones al trabajo personal subordinado, prestado dentro del Estado.',
-    sujeto:'Las personas físicas y morales que realicen erogaciones por remuneraciones al trabajo personal subordinado en el territorio del Estado.',
-    base:'El monto total de las erogaciones realizadas por concepto de remuneraciones al trabajo personal subordinado, incluyendo sueldos, salarios, gratificaciones y prestaciones.',
-    pasos:[
-      {num:'I',   label:'Total de remuneraciones brutas pagadas', campo:'total_nomina', tipo:'input',
-       nota:'Sueldos, salarios, comisiones, honorarios asimilados, gratificaciones, prima dominical, incentivos y cualquier otra erogación por trabajo personal. Fuente: CFDI de nómina del período (Art. 40 Ley de Hacienda Estatal aplicable).'},
-      {num:'II',  label:'Menos: Erogaciones excluidas de la base', campo:'excluidas', tipo:'input',
-       nota:'Art. 41 Ley de Hacienda Estatal (o equivalente en cada estado): horas extra dobles hasta el límite legal, gratificación anual proporcional a 15 días de SMG, PTU, prima vacacional, prima de antigüedad. En Baja California: Art. 41 LHBC. Verificar el artículo de exclusiones en la ley del estado correspondiente.'},
-      {num:'III', label:'Base gravable del ISN  (I − II)', campo:'base_gravable', tipo:'calc',
-       nota:'Fundamento: artículo de la Ley de Hacienda Estatal que define la base del impuesto.'},
-      {num:'IV',  label:'Tasa del impuesto (%)', campo:'tasa', tipo:'pct',
-       nota:'Verificar tasa vigente conforme a la Ley de Ingresos o Ley de Hacienda del Estado para el ejercicio. Tasas orientativas: BC 3% · CDMX 3% · NL 3% · JAL 2.5% · SLP 3%.'},
-      {num:'V',   label:'ISN determinado  (III × IV ÷ 100)', campo:'isn_cargo', tipo:'calc', highlight:true,
-       nota:'Impuesto a cargo del período conforme al procedimiento de la Ley de Hacienda Estatal.'},
-      {num:'VI',  label:'ISN a pagar', campo:'isn_pagar', tipo:'resultado',
-       nota:'En ausencia de reducciones, compensaciones o saldos a favor, el ISN a pagar es igual al ISN determinado. Fecha límite: generalmente día 17 del mes siguiente.'},
-    ],
-    verificacion:[
-      {campo:'linea_captura', label:'Número de línea de captura / referencia de pago', tipo:'texto'},
-      {campo:'fecha_pago',    label:'Fecha de pago', tipo:'fecha'},
-      {campo:'importe_pagado',label:'Importe efectivamente pagado', tipo:'monto'},
-      {campo:'diferencia',    label:'Diferencia (pagado − determinado)', tipo:'diferencia'},
-    ],
-  },
   ish: {
     titulo:'ISH — Impuesto sobre Hospedaje', icono:'🏨', color:'#1B3A6B',
     ley:'Ley de Hacienda Estatal · Impuesto sobre servicios de hospedaje',
@@ -6901,14 +6892,37 @@ return {
   },
   selCliEst: async function(id,nombre){
     pEstCliente={id:id,nombre:nombre};
-    try{pEstPagoCache=await pSbGet('pago_provisional','?cliente_id=eq.'+encodeURIComponent(id)+'&order=anio.desc,mes.desc')||[];}catch(e){pEstPagoCache=[];}
+    pEstClienteCfg=null;
+    try{
+      // Cargar pagos del período
+      pEstPagoCache=await pSbGet('pago_provisional','?cliente_id=eq.'+encodeURIComponent(id)+'&order=anio.desc,mes.desc')||[];
+      // Cargar configuración fiscal del contribuyente (6.5)
+      var cfgRows=await pSbGet('cliente_config_pagos','?cliente_id=eq.'+encodeURIComponent(id)+'&limit=1');
+      pEstClienteCfg=(cfgRows&&cfgRows.length)?cfgRows[0]:null;
+    }catch(e){pEstPagoCache=[];pEstClienteCfg=null;}
     pRenderEstatalMeses(new Date().getFullYear());
   },
   actualizarMesesEst: function(anio){ pRenderEstatalMeses(anio); },
   selMesEst: function(anio,mes){ pRenderEstatalPeriodo(anio,mes); },
   abrirEstModalExt: function(anio,mes,idx){
     var pagoMes=pEstPagoCache.find(function(p){return p.anio==anio&&p.mes==mes;});
-    if(!pagoMes){pagoMes={anio:anio,mes:mes,cliente_id:pEstCliente.id,cliente_nombre:pEstCliente.nombre,impuestos_federales:{},impuestos_estatales:[],status:'pendiente'};pEstPagoCache.push(pagoMes);}
+    if(!pagoMes){
+      // Período nuevo — pre-cargar estatales libres configurados en 6.5
+      var estatalesInit=[];
+      if(pEstClienteCfg&&pEstClienteCfg.config_estatales_libres){
+        estatalesInit=pEstClienteCfg.config_estatales_libres
+          .filter(function(e){return e.tipo_id!=='isn';})
+          .map(function(e){
+            return {tipo_id:e.tipo_id,label:e.label||e.tipo_id,estado:e.estado||'',
+                    tasa:e.tasa||3,fundamento:e.fundamento||'',
+                    base_gravable:0,isn_cargo:0,isn_pagar:0,
+                    importe_determinado:0,importe_pagado:0,diferencia:0};
+          });
+      }
+      pagoMes={anio:anio,mes:mes,cliente_id:pEstCliente.id,cliente_nombre:pEstCliente.nombre,
+               impuestos_federales:{},impuestos_estatales:estatalesInit,status:'pendiente'};
+      pEstPagoCache.push(pagoMes);
+    }
     pPagoActual={anio:anio,mes:mes,data:pagoMes,_sub:'impuestos'};
     pClienteActual=pEstCliente;
     var est=(pagoMes.impuestos_estatales||[])[idx];
