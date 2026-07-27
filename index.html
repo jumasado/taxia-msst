@@ -5783,7 +5783,8 @@ function pRenderEstatalPeriodo(anio,mes){
   if(!p){
     var estatalesInit=[];
     if(pEstClienteCfg&&pEstClienteCfg.config_estatales_libres){
-      estatalesInit=pEstClienteCfg.config_estatales_libres
+      var libresClean=PAGOS.pMigrarEstLegacy(pEstClienteCfg.config_estatales_libres);
+      estatalesInit=libresClean
         .filter(function(e){return e.tipo_id!=='isn';})
         .map(function(e){
           return {tipo_id:e.tipo_id,label:e.label||e.tipo_id,estado:e.estado||'',
@@ -7149,6 +7150,8 @@ return {
       // Cargar configuración fiscal del contribuyente (6.5)
       var cfgRows=await pSbGet('cliente_config_pagos','?cliente_id=eq.'+encodeURIComponent(id)+'&limit=1');
       pEstClienteCfg=(cfgRows&&cfgRows.length)?cfgRows[0]:null;
+      if(pEstClienteCfg&&pEstClienteCfg.config_estatales_libres)
+        pEstClienteCfg.config_estatales_libres=PAGOS.pMigrarEstLegacy(pEstClienteCfg.config_estatales_libres);
     }catch(e){pEstPagoCache=[];pEstClienteCfg=null;}
     pRenderEstatalMeses(new Date().getFullYear());
   },
@@ -7322,6 +7325,8 @@ return {
     try{
       var rows=await pSbGet('cliente_config_pagos','?cliente_id=eq.'+encodeURIComponent(id)+'&limit=1');
       pCfgConfig=(rows&&rows.length)?rows[0]:null;
+      if(pCfgConfig&&pCfgConfig.config_estatales_libres)
+        pCfgConfig.config_estatales_libres=PAGOS.pMigrarEstLegacy(pCfgConfig.config_estatales_libres);
     }catch(e){ pCfgConfig=null; }
     pRenderConfig65Cliente(pCfgConfig);
   },
@@ -7422,7 +7427,7 @@ return {
     }).map(function(i){return i.id;});
     // Collect estatales fijos
     var selEstFij=[];
-    var selEstLib=(pCfgConfig&&pCfgConfig.config_estatales_libres)||[];
+    var selEstLib=PAGOS.pMigrarEstLegacy((pCfgConfig&&pCfgConfig.config_estatales_libres)||[]);
 
     var now=new Date().toISOString();
     var payload={
@@ -7486,6 +7491,36 @@ return {
     if(!pCfgConfig||!pCfgConfig.config_estatales_libres)return;
     pCfgConfig.config_estatales_libres=pCfgConfig.config_estatales_libres.filter(function(e){return e.id!==impId;});
     pRenderConfig65Cliente(pCfgConfig);
+  },
+  pMigrarEstLegacy: function(libres){
+    var MAP={'ish':'hosp','motel':'motel','alcohol':'alcohol','ami':'ami',
+      'veh_usado':'veh_usado','juego_part':'juego_part','juego_op':'juego_op',
+      'premios':'premios','empeno':'empeno','ert':'ert','petreos':'petreos',
+      'esp_tea':'esp_tea','esp_gen':'esp_gen','esp_otr':'esp_otr',
+      'moto':'moto','aeronave':'aeronave',
+      'isn':null,'isn_bc':null};
+    var resultado=[],migrados=[];
+    (libres||[]).forEach(function(e){
+      var eid=e.id||e.tipo_id;
+      if(IMPUESTOS_BC_CAT.find(function(i){return i.id===eid;})){resultado.push(e);return;}
+      var nid=(eid in MAP)?MAP[eid]:((e.tipo_id in MAP)?MAP[e.tipo_id]:undefined);
+      if(nid===null){migrados.push((e.label||eid)+' (eliminado)');return;}
+      if(nid!==undefined){
+        var bc=IMPUESTOS_BC_CAT.find(function(i){return i.id===nid;});
+        if(bc){
+          migrados.push((e.label||eid)+' → '+bc.codigo);
+          resultado.push({id:bc.id,tipo_id:bc.cedula==='isrtp'?'isrtp':bc.cedula,
+            label:bc.label,codigo:bc.codigo,estado:'Baja California',
+            tasa:bc.tasa,unidad:bc.unidad,fundamento:bc.fundamento});
+          return;
+        }
+      }
+      resultado.push(Object.assign({},e,{_legacy:true}));
+    });
+    var vistos={};
+    resultado=resultado.filter(function(e){if(vistos[e.id])return false;vistos[e.id]=true;return true;});
+    if(migrados.length)console.log('[TaxIA] Migración estatales legacy: '+migrados.join(', '));
+    return resultado;
   },
   volverCli: function(){pClienteActual=null;pClienteConfig=null;pPagosCache=[];pPagoActual=null;window.tcRenderHome();}, // back to TC home
   setTab: function(t){if(t!=='revision')pPagoActual=null;pTab=t;pRenderModulo();},
