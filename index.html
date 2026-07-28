@@ -838,11 +838,161 @@ const AC_IDS={
   'yhernandez@msstconsulting.com':136,
   'baudelo@msstconsulting.com':142
 };
+const MAX_PRIORITARIAS=10;   // antes 5 (Plan del día). Límite duro de tareas prioritarias activas.
 let _acTab='plan';
 let _acStore={};
 let _acOrden='antiguas';
 let _acBusca='';
+let _acSoloNovedad=false;   // filtro: solo tareas con actividad nueva
 const AC_TTL=5*60*1000;
+// --- Comentarios de AC (bajo demanda) y lecturas por usuario ---
+let _acComents={};      // {taskId: {ts, lista:[{id,texto,fecha,autor,autorEmail}]}}
+let _acLecturas=null;   // {taskId: epochSegundos ultimo_visto}  del usuario actual
+let _acComentEnVuelo={};// evita llamadas duplicadas por tarea
+let _acAbierta=null;    // taskId con comentarios desplegados en pantalla
+
+// Carga (una vez por sesión) las marcas de lectura del usuario desde Supabase.
+async function acCargarLecturas(){
+  if(_acLecturas) return _acLecturas;
+  _acLecturas={};
+  try{
+    const r=await sbGet('ac_lecturas','?user_email=eq.'+encodeURIComponent(session.email)+'&select=ac_task_id,ultimo_visto');
+    if(Array.isArray(r)) r.forEach(x=>{ _acLecturas[x.ac_task_id]=Math.floor(new Date(x.ultimo_visto).getTime()/1000); });
+  }catch(e){/* sin lecturas previas: todo cuenta como nuevo */}
+  return _acLecturas;
+}
+
+// ¿La tarea tiene actividad posterior a la última vez que la abrí?
+// Usa updated_on (ya viene en la lista) vs la marca de lectura. No requiere
+// abrir la tarea ni pedir el detalle: por eso el aviso se ve de inmediato.
+function acTieneNovedad(t){
+  if(!t.updated) return false;
+  const visto=(_acLecturas&&_acLecturas[t.id])||0;
+  return t.updated>visto;
+}
+// Cuántos comentarios son posteriores a la lectura (solo si ya tengo el detalle).
+function acNoLeidos(t){
+  if(!t.coment) return 0;
+  const visto=(_acLecturas&&_acLecturas[t.id])||0;
+  const cache=_acComents[t.id];
+  if(!cache) return 0;   // sin detalle aún: el aviso lo da acTieneNovedad, no un número
+  return cache.lista.filter(c=>c.fecha>visto).length;
+}
+
+// Trae los comentarios de UNA tarea vía Edge Function (bajo demanda).
+async function acCargarComentarios(t){
+  const cache=_acComents[t.id];
+  if(cache && (Date.now()-cache.ts)<AC_TTL) return cache.lista;
+  if(_acComentEnVuelo[t.id]) return _acComentEnVuelo[t.id];
+  _acComentEnVuelo[t.id]=(async()=>{
+    try{
+      await ensureFreshToken();
+      const ctrl=new AbortController();
+      const timer=setTimeout(()=>ctrl.abort(),20000);
+      let r;
+      try{
+        r=await fetch(SB_URL+'/functions/v1/ac-tareas',{
+          method:'POST',
+          headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken(),'Content-Type':'application/json'},
+          body:JSON.stringify({task:t.id, project:t.projectId}),
+          signal:ctrl.signal
+        });
+      } finally { clearTimeout(timer); }
+      if(!r.ok) throw new Error('HTTP_'+r.status);
+      const d=await r.json();
+      if(!d.ok) throw new Error(d.error||'ERROR_COMENTARIOS');
+      _acComents[t.id]={ts:Date.now(), lista:d.comentarios||[]};
+      return _acComents[t.id].lista;
+    } finally { delete _acComentEnVuelo[t.id]; }
+  })();
+  return _acComentEnVuelo[t.id];
+}
+
+// Marca la tarea como leída AHORA (guarda la fecha del comentario más reciente).
+async function acMarcarLeida(t){
+  const cache=_acComents[t.id];
+  const masReciente=cache&&cache.lista.length? cache.lista[0].fecha : Math.floor(Date.now()/1000);
+  const isoVisto=new Date(masReciente*1000).toISOString();
+  if(!_acLecturas) _acLecturas={};
+  _acLecturas[t.id]=masReciente;
+  try{
+    await sbUpsert('ac_lecturas',{user_email:session.email, ac_task_id:t.id, ultimo_visto:isoVisto, updated_at:new Date().toISOString()},'user_email,ac_task_id');
+  }catch(e){/* la marca local ya surtió efecto en pantalla */}
+}
+
+// Expandir / colapsar el hilo de comentarios de una tarea.
+async function acToggleComentarios(email, taskId){
+  const t=(_acStore[email]||{tasks:[]}).tasks.find(x=>x.id===taskId);
+  if(!t) return;
+  const cont=document.getElementById('coments-'+taskId);
+  if(!cont) return;
+  const yaAbierta=_acAbierta===taskId;
+  _acAbierta=yaAbierta?null:taskId;
+  if(yaAbierta){ cont.style.display='none'; acPintarLista(email); return; }
+  cont.style.display='block';
+  cont.innerHTML='<div style="padding:10px;color:#888;font-size:12px">Cargando comentarios...</div>';
+  try{
+    await acCargarComentarios(t);
+    // Congelar el corte "nuevo" de ESTA tarea con la lectura previa, una sola
+    // vez: si la reabres en la misma sesión ya no re-marca lo mismo como nuevo.
+    if(!(taskId in _acCorteNuevo)) _acCorteNuevo[taskId]=(_acLecturasPrev&&_acLecturasPrev[taskId])||0;
+    await acMarcarLeida(t);
+    acRenderComentarios(email, taskId);
+  }catch(e){
+    cont.innerHTML='<div style="padding:10px;color:#c0392b;font-size:12px">No se pudieron cargar los comentarios.</div>';
+  }
+}
+
+// Pinta el hilo: nuevos (posteriores a la última lectura previa) primero y resaltados.
+function acRenderComentarios(email, taskId){
+  const t=(_acStore[email]||{tasks:[]}).tasks.find(x=>x.id===taskId);
+  const cont=document.getElementById('coments-'+taskId);
+  if(!t||!cont) return;
+  const cache=_acComents[t.id];
+  if(!cache){ cont.innerHTML=''; return; }
+  const lista=cache.lista;                       // ya viene más reciente primero
+  if(!lista.length){ cont.innerHTML='<div style="padding:8px;color:#999;font-size:12px">Sin comentarios.</div>'; return; }
+  // La marca de "nuevo" usa la lectura ANTERIOR guardada en _acLecturasPrev.
+  const corte=(t.id in _acCorteNuevo)?_acCorteNuevo[t.id]:((_acLecturasPrev&&_acLecturasPrev[t.id])||0);
+  const nuevos=lista.filter(c=>c.fecha>corte);
+  const viejos=lista.filter(c=>c.fecha<=corte);
+  const abiertoViejos=cont.getAttribute('data-viejos')==='1';
+
+  function fila(c,esNuevo){
+    const fecha=new Date(c.fecha*1000).toLocaleString('es-MX',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<div style="padding:8px 10px;border-left:2px solid ${esNuevo?'#3B4BC8':'#e5e5e0'};background:${esNuevo?'#F5F6FE':'#fff'};margin-bottom:6px;border-radius:0 6px 6px 0">
+      <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:3px">
+        <span style="font-size:11px;font-weight:600;color:#3B4BC8">${escH(c.autor)}${esNuevo?' <span style=\"background:#3B4BC8;color:#fff;font-size:9px;padding:0 5px;border-radius:6px;font-weight:700\">NUEVO</span>':''}</span>
+        <span style="font-size:10px;color:#aaa;white-space:nowrap">${fecha}</span>
+      </div>
+      <div style="font-size:12px;color:#444;line-height:1.4;white-space:pre-wrap">${escH(c.texto)}</div>
+    </div>`;
+  }
+
+  let html='';
+  if(nuevos.length){
+    html+=`<div style="font-size:10px;font-weight:700;color:#3B4BC8;text-transform:uppercase;letter-spacing:.3px;margin:4px 0 6px">${nuevos.length} nuevo${nuevos.length===1?'':'s'}</div>`;
+    html+=nuevos.map(c=>fila(c,true)).join('');
+  }
+  if(viejos.length){
+    if(abiertoViejos){
+      html+=nuevos.length?`<div style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.3px;margin:10px 0 6px">Anteriores</div>`:'';
+      html+=viejos.map(c=>fila(c,false)).join('');
+    }else{
+      html+=`<div onclick="acVerViejos('${email}',${taskId})" style="cursor:pointer;text-align:center;font-size:11px;color:#3B4BC8;padding:6px;background:#fafaf8;border-radius:6px">Ver ${viejos.length} comentario${viejos.length===1?'':'s'} anterior${viejos.length===1?'':'es'}</div>`;
+    }
+  }
+  if(!nuevos.length&&!viejos.length) html='<div style="padding:8px;color:#999;font-size:12px">Sin comentarios.</div>';
+  cont.innerHTML=html;
+}
+
+function acVerViejos(email,taskId){
+  const cont=document.getElementById('coments-'+taskId);
+  if(cont){ cont.setAttribute('data-viejos','1'); acRenderComentarios(email,taskId); }
+}
+
+let _acLecturasPrev=null;   // snapshot de lecturas ANTES de abrir (para marcar "nuevo")
+let _acCorteNuevo={};       // corte "nuevo" congelado por tarea al abrirla
 
 async function renderMisPlan(targetEmail,tab){
   const today=todayKey();
@@ -886,7 +1036,7 @@ function acTabsHTML(email){
   const on='border-bottom:2px solid #3B4BC8;color:#3B4BC8;font-weight:600';
   const off='border-bottom:2px solid transparent;color:#888';
   return `<div style="display:flex;gap:22px;border-bottom:1px solid #e5e5e0;margin-bottom:1.25rem">
-    <div onclick="renderMisPlan('${email}','plan')" style="padding:9px 2px;cursor:pointer;font-size:14px;${_acTab==='plan'?on:off}">Plan del día</div>
+    <div onclick="renderMisPlan('${email}','plan')" style="padding:9px 2px;cursor:pointer;font-size:14px;${_acTab==='plan'?on:off}">Tareas prioritarias</div>
     <div onclick="renderMisPlan('${email}','ac')" style="padding:9px 2px;cursor:pointer;font-size:14px;${_acTab==='ac'?on:off}">Active Collab${badge}</div>
   </div>`;
 }
@@ -955,6 +1105,11 @@ async function renderPanelAC(email){
   let tasks;
   try{
     tasks=await cargarAcPendientes(email);
+    // Solo tiene sentido calcular "no leídos" para uno mismo.
+    if(email===session.email){
+      await acCargarLecturas();
+      _acLecturasPrev=Object.assign({}, _acLecturas);  // snapshot antes de abrir nada
+    }else{ _acLecturas={}; _acLecturasPrev={}; }
   }catch(e){
     const m=String(e.message||'');
     let titulo='No se pudo consultar Active Collab.';
@@ -992,6 +1147,10 @@ async function renderPanelAC(email){
         <option value="recientes"${_acOrden==='recientes'?' selected':''}>Más recientes primero</option>
         <option value="proyecto"${_acOrden==='proyecto'?' selected':''}>Por proyecto</option>
       </select>
+      ${email===session.email?`<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#555;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" id="ac-novedad" ${_acSoloNovedad?'checked':''} onchange="acToggleNovedad(this.checked,'${email}')" style="cursor:pointer">
+        Solo con novedades
+      </label>`:''}
     </div>
     <div id="ac-lista"></div>`;
   acPintarLista(email);
@@ -1014,9 +1173,11 @@ function acAviso(titulo,detalle,email){
 
 function acBuscar(v,email){_acBusca=v;acPintarLista(email);}
 function acOrdenar(v,email){_acOrden=v;acPintarLista(email);}
+function acToggleNovedad(v,email){_acSoloNovedad=v;acPintarLista(email);}
 
 async function acRecargar(email){
   _acAll=null; _acStore={};
+  _acComents={}; _acCorteNuevo={}; _acAbierta=null; _acLecturas=null; _acLecturasPrev=null;
   await renderPanelAC(email);
 }
 
@@ -1042,6 +1203,7 @@ function acPintarLista(email){
   let tasks=(_acStore[email]||{tasks:[]}).tasks.slice();
   const q=_acBusca.trim().toLowerCase();
   if(q) tasks=tasks.filter(t=>t.nombre.toLowerCase().includes(q)||t.proyecto.toLowerCase().includes(q));
+  if(_acSoloNovedad && email===session.email) tasks=tasks.filter(t=>acTieneNovedad(t));
   if(_acOrden==='antiguas') tasks.sort((a,b)=>(b.edad==null?-1:b.edad)-(a.edad==null?-1:a.edad));
   else if(_acOrden==='recientes') tasks.sort((a,b)=>(a.edad==null?1e9:a.edad)-(b.edad==null?1e9:b.edad));
   else if(_acOrden==='vencidas') tasks.sort((a,b)=>(a.diasVence==null?1e9:a.diasVence)-(b.diasVence==null?1e9:b.diasVence));
@@ -1070,7 +1232,10 @@ function acPintarLista(email){
     return cab+`<div style="background:#fff;border:1px solid #e5e5e0;border-left:3px solid ${col};padding:12px 14px;margin-bottom:8px">
       <div style="display:flex;gap:12px;align-items:flex-start">
         <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:500;color:#1a1a1a;margin-bottom:5px">${escH(t.nombre)}</div>
+          <div style="font-size:14px;font-weight:500;color:#1a1a1a;margin-bottom:5px;display:flex;align-items:center;gap:7px">
+            ${email===session.email&&acTieneNovedad(t)?'<span title="Actividad nueva desde tu última visita" style="width:8px;height:8px;border-radius:50%;background:#3B4BC8;flex-shrink:0"></span>':''}
+            <span>${escH(t.nombre)}</span>
+          </div>
           <div style="font-size:11px;color:#888;display:flex;gap:10px;flex-wrap:wrap;align-items:center">${meta.join('<span style="color:#e0e0db">·</span>')}</div>
           ${tags?`<div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap">${tags}</div>`:''}
         </div>
@@ -1079,6 +1244,19 @@ function acPintarLista(email){
           <a href="${AC_BASE}${escH(t.url)}" target="_blank" rel="noopener" style="font-size:11px;color:#3B4BC8;text-decoration:none;display:inline-block;margin-top:5px">Abrir en AC →</a>
         </div>
       </div>
+      ${t.coment?`<div style="margin-top:8px">
+        <div onclick="acToggleComentarios('${email}',${t.id})" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#3B4BC8;font-weight:500">
+          <span>💬 Comentarios (${t.coment})</span>
+          ${(()=>{
+            if(email!==session.email) return '';
+            const nl=acNoLeidos(t);
+            if(nl) return `<span style="background:#3B4BC8;color:#fff;font-size:10px;font-weight:700;padding:0 6px;border-radius:8px">${nl} nuevo${nl===1?'':'s'}</span>`;
+            if(acTieneNovedad(t)) return `<span style="background:#EEEDFE;color:#3B4BC8;font-size:10px;font-weight:700;padding:0 6px;border-radius:8px">novedad</span>`;
+            return '';
+          })()}
+        </div>
+        <div id="coments-${t.id}" style="display:none;margin-top:8px"></div>
+      </div>`:''}
     </div>`;
   }).join('');
 }
@@ -1089,7 +1267,7 @@ function buildPlanUI(tareas,today,targetEmail,canEdit,isRemote){
   const concluidas=tareas.filter(t=>t.status==='concluida');
   const eliminadas=tareas.filter(t=>t.status==='eliminada');
   const total=tareas.length;
-  const slots=5;
+  const slots=MAX_PRIORITARIAS;
   const pct=total>0?Math.round(concluidas.length/total*100):0;
   const tEmail=targetEmail||session.email;
   const color=pc(tEmail);
@@ -1151,7 +1329,7 @@ function buildPlanUI(tareas,today,targetEmail,canEdit,isRemote){
     '</div>';
   });
 
-  // Slots vacíos: siempre que haya menos de 5 tareas pendientes activas
+  // Slots vacíos: siempre que haya menos de MAX_PRIORITARIAS tareas pendientes activas
   const slotsLibres=slots-pendientes.length; // standby NO cuenta para el límite
   let newSlotsHTML='';
   if(slotsLibres>0){
@@ -1359,9 +1537,9 @@ async function addTareaRemota(idx,targetEmail){
   const today=todayKey();
   const tareas=await getActiveTareas(targetEmail);
   const pendientes=tareas.filter(t=>t.status==='pendiente');
-  if(pendientes.length>=5){
+  if(pendientes.length>=MAX_PRIORITARIAS){
     const nm=usersCache[targetEmail]?.name||targetEmail;
-    err.textContent=`${nm} ya tiene 5 tareas pendientes activas.`;err.style.display='block';
+    err.textContent=`${nm} ya tiene ${MAX_PRIORITARIAS} tareas prioritarias activas (máximo permitido).`;err.style.display='block';
     setTimeout(()=>err.style.display='none',3000);return;
   }
   const asignadaPor=targetEmail!==session.email?session.email:null;
