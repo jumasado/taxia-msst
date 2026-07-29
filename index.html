@@ -1580,6 +1580,7 @@ async function toggleStandby(id,currentlyStandby,targetEmail){
 }
 
 async function sendPlanNotification(tareas,targetEmail){
+  return; // Desactivado 28-jul: sustituido por el resumen matutino automático (morning-brief v2) 
   const recipients=targetEmail&&targetEmail!==session.email
     ? [...new Set([targetEmail,...getNotifyEmails()])]
     : getNotifyEmails();
