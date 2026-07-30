@@ -8941,8 +8941,10 @@ function docRenderNodo(cod, container, nivel, nodoMap, padreMap, clasifExist, op
   const bg = bgLevels[Math.min(nivel, bgLevels.length-1)];
   const indent = nivel * 20;
 
-  // Rubro actual
+  // Rubro actual (NIF) + campos fiscales
   const rubroActual = clasifExist[cod] || '';
+  const rubroFiscalActual = (window._clasifExist||{})[cod+'_rubro_fiscal'] || (window._clasifChanges||{})[cod+'_rubro_fiscal'] || '';
+  const tipoCuentaActual  = (window._clasifExist||{})[cod+'_tipo_cuenta']  || (window._clasifChanges||{})[cod+'_tipo_cuenta']  || '';
   const catInfo = rubroActual ? DOC_CATS[(DOC_RUBROS.find(r=>r.id===rubroActual)||{cat:'no_aplica'}).cat] : null;
   const badgeColor = catInfo ? `background:${catInfo.bg};color:${catInfo.color}` : 'background:#f5f5f3;color:#999';
   const badgeLabel = rubroActual ? (DOC_RUBROS.find(r=>r.id===rubroActual)||{label:'No incluir'}).label : '— sin clasificar —';
@@ -8974,6 +8976,33 @@ function docRenderNodo(cod, container, nivel, nodoMap, padreMap, clasifExist, op
         style="font-size:10px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;max-width:160px">
         <option value="">— heredar de padre —</option>
         ${optsGrupos.replace(`value="${rubroActual}"`, `value="${rubroActual}" selected`)}
+      </select>
+      <select id="rubro-fiscal-${cod.replace(/[-. ]/g,'_')}" onchange="docActualizarCampoExtra('${cod}','rubro_fiscal',this.value)"
+        title="Rubro fiscal ISR" style="font-size:10px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;max-width:150px;color:#185FA5">
+        <option value="">— Rubro fiscal —</option>
+        <option value="ingresos_acumulables" ${rubroFiscalActual==='ingresos_acumulables'?'selected':''}>Ingresos acumulables</option>
+        <option value="devoluciones" ${rubroFiscalActual==='devoluciones'?'selected':''}>Devoluciones y descuentos</option>
+        <option value="costo_ventas" ${rubroFiscalActual==='costo_ventas'?'selected':''}>Costo de ventas</option>
+        <option value="gasto_deducible" ${rubroFiscalActual==='gasto_deducible'?'selected':''}>Gasto deducible</option>
+        <option value="gasto_no_deducible" ${rubroFiscalActual==='gasto_no_deducible'?'selected':''}>Gasto no deducible</option>
+        <option value="deduccion_contable" ${rubroFiscalActual==='deduccion_contable'?'selected':''}>Deducción contable no fiscal</option>
+        <option value="activo_fijo" ${rubroFiscalActual==='activo_fijo'?'selected':''}>Activo fijo deducible</option>
+        <option value="credito_pesos" ${rubroFiscalActual==='credito_pesos'?'selected':''}>Crédito MXN (Art. 44)</option>
+        <option value="credito_dolares" ${rubroFiscalActual==='credito_dolares'?'selected':''}>Crédito USD (Art. 44)</option>
+        <option value="deuda_pesos" ${rubroFiscalActual==='deuda_pesos'?'selected':''}>Deuda MXN (Art. 44)</option>
+        <option value="deuda_dolares" ${rubroFiscalActual==='deuda_dolares'?'selected':''}>Deuda USD (Art. 44)</option>
+        <option value="no_aplica" ${rubroFiscalActual==='no_aplica'?'selected':''}>No aplica</option>
+      </select>
+      <select id="tipo-cuenta-${cod.replace(/[-. ]/g,'_')}" onchange="docActualizarCampoExtra('${cod}','tipo_cuenta',this.value)"
+        title="Tipo de cuenta" style="font-size:10px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;max-width:110px;color:#633806">
+        <option value="">— Tipo —</option>
+        <option value="activo"   ${tipoCuentaActual==='activo'?'selected':''}>🔵 Activo</option>
+        <option value="pasivo"   ${tipoCuentaActual==='pasivo'?'selected':''}>🔴 Pasivo</option>
+        <option value="capital"  ${tipoCuentaActual==='capital'?'selected':''}>🟣 Capital</option>
+        <option value="ingresos" ${tipoCuentaActual==='ingresos'?'selected':''}>🟢 Ingresos</option>
+        <option value="costo"    ${tipoCuentaActual==='costo'?'selected':''}>🟡 Costo</option>
+        <option value="gastos"   ${tipoCuentaActual==='gastos'?'selected':''}>🟠 Gastos</option>
+        <option value="orden"    ${tipoCuentaActual==='orden'?'selected':''}>⚪ Orden</option>
       </select>
     </div>`;
 
@@ -9008,6 +9037,13 @@ function docToggleNodoHijos(cod, container, nivel, nodoMap, padreMap, clasifExis
     hijosDiv.style.display='none';
     if(expandIcon) expandIcon.textContent='▶';
   }
+}
+
+function docActualizarCampoExtra(cod, campo, valor){
+  window._clasifChanges = window._clasifChanges || {};
+  const key = cod+'_'+campo;
+  if(valor) window._clasifChanges[key] = valor;
+  else delete window._clasifChanges[key];
 }
 
 function docActualizarContadorPend(){
@@ -9130,6 +9166,17 @@ async function docGuardarClasif(){
     else delete clasifFinal[codReal];
   });
 
+  document.querySelectorAll('#clasif-tree select[id^="rubro-fiscal-"]').forEach(sel=>{
+    const rawId=sel.id.replace(/^rubro-fiscal-/,'');
+    const codReal=Object.keys(nodoMap).find(k=>k.replace(/[-. ]/g,'_')===rawId)||(rawId.replace(/_/g,'-'));
+    if(sel.value)(window._clasifChanges=window._clasifChanges||{})[codReal+'_rubro_fiscal']=sel.value;
+  });
+  document.querySelectorAll('#clasif-tree select[id^="tipo-cuenta-"]').forEach(sel=>{
+    const rawId=sel.id.replace(/^tipo-cuenta-/,'');
+    const codReal=Object.keys(nodoMap).find(k=>k.replace(/[-. ]/g,'_')===rawId)||(rawId.replace(/_/g,'-'));
+    if(sel.value)(window._clasifChanges=window._clasifChanges||{})[codReal+'_tipo_cuenta']=sel.value;
+  });
+  const clasifChanges2=window._clasifChanges||{};
   const rows=Object.entries(clasifFinal)
     .filter(([cod,rubro])=>rubro&&rubro!=='')
     .map(([cod,rubro])=>{
@@ -9140,6 +9187,8 @@ async function docGuardarClasif(){
         cuenta_mayor:cod,
         nombre_mayor:nodo?nodo.nom:cod,
         rubro,
+        rubro_fiscal:clasifChanges2[cod+'_rubro_fiscal']||(window._clasifExist||{})[cod+'_rubro_fiscal']||null,
+        tipo_cuenta: clasifChanges2[cod+'_tipo_cuenta'] ||(window._clasifExist||{})[cod+'_tipo_cuenta'] ||null,
         cedulas:'',
         updated_at:nowISO()
       };
@@ -9180,11 +9229,13 @@ async function docGuardarClasif(){
 async function docCargarClasif(){
   try{
     const rows=await sbGet('catalogo_clasificacion',
-      '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=cuenta_mayor,rubro');
+      '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=cuenta_mayor,rubro,rubro_fiscal,tipo_cuenta');
     docClasifCache={};
     (rows||[]).forEach(r=>{
-      docClasifCache[r.cuenta_mayor]=r.rubro; // funciona para mayor ('501') y sub-mayor ('501-0601')
-      if(r.cedulas)docClasifCache[r.cuenta_mayor+'_cedulas']=r.cedulas;
+      docClasifCache[r.cuenta_mayor]=r.rubro;
+      if(r.rubro_fiscal) docClasifCache[r.cuenta_mayor+'_rubro_fiscal']=r.rubro_fiscal;
+      if(r.tipo_cuenta)  docClasifCache[r.cuenta_mayor+'_tipo_cuenta']=r.tipo_cuenta;
+      if(r.cedulas)      docClasifCache[r.cuenta_mayor+'_cedulas']=r.cedulas;
     });
   }catch(e){docClasifCache={};}
 }
