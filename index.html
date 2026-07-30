@@ -9214,10 +9214,17 @@ async function docCargarClasif(){
       '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=cuenta_mayor,rubro,rubro_fiscal,tipo_cuenta');
     docClasifCache={};
     (rows||[]).forEach(r=>{
-      docClasifCache[r.cuenta_mayor]=r.rubro;
-      if(r.rubro_fiscal) docClasifCache[r.cuenta_mayor+'_rubro_fiscal']=r.rubro_fiscal;
-      if(r.tipo_cuenta)  docClasifCache[r.cuenta_mayor+'_tipo_cuenta']=r.tipo_cuenta;
-      if(r.cedulas)      docClasifCache[r.cuenta_mayor+'_cedulas']=r.cedulas;
+      const keys=[r.cuenta_mayor];
+      const cod2=r.cuenta_mayor.replace(/-/g,'');
+      const cod3=r.cuenta_mayor.replace(/^0+/,'').replace(/-0+/g,'-').replace(/-$/,'');
+      if(cod2!==r.cuenta_mayor)keys.push(cod2);
+      if(cod3!==r.cuenta_mayor&&cod3!==cod2)keys.push(cod3);
+      keys.forEach(k=>{
+        docClasifCache[k]=r.rubro;
+        if(r.rubro_fiscal)docClasifCache[k+'_rubro_fiscal']=r.rubro_fiscal;
+        if(r.tipo_cuenta) docClasifCache[k+'_tipo_cuenta']=r.tipo_cuenta;
+        if(r.cedulas)     docClasifCache[k+'_cedulas']=r.cedulas;
+      });
     });
   }catch(e){docClasifCache={};}
 }
@@ -9856,8 +9863,18 @@ async function docReClasificar(){
     let clasifExist={};
     try{
       const rows=await sbGet('catalogo_clasificacion',
-        '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=*');
-      (rows||[]).forEach(row=>{clasifExist[row.cuenta_mayor]=row.rubro;});
+        '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=cuenta_mayor,rubro,rubro_fiscal');
+      (rows||[]).forEach(row=>{
+        const keys=[row.cuenta_mayor];
+        const cod2=row.cuenta_mayor.replace(/-/g,'');
+        const cod3=row.cuenta_mayor.replace(/^0+/,'').replace(/-0+/g,'-').replace(/-$/,'');
+        if(cod2!==row.cuenta_mayor)keys.push(cod2);
+        if(cod3!==row.cuenta_mayor&&cod3!==cod2)keys.push(cod3);
+        keys.forEach(k=>{
+          clasifExist[k]=row.rubro;
+          if(row.rubro_fiscal)clasifExist[k+'_rubro_fiscal']=row.rubro_fiscal;
+        });
+      });
     }catch(e){}
     window._nodoMap=_parsed.nodoMap||{};
     window._padreMap=_parsed.padreMap||{};
