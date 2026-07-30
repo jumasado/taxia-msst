@@ -9194,7 +9194,10 @@ async function docGuardarClasif(){
     if(!res.ok) throw new Error(await res.text());
     // Actualizar cache local
     docClasifCache={};
-    rows.forEach(r=>{docClasifCache[r.cuenta_mayor]=r.rubro;});
+    rows.forEach(r=>{
+      docClasifCache[r.cuenta_mayor]=r.rubro;
+      if(r.rubro_fiscal) docClasifCache[r.cuenta_mayor+'_rubro_fiscal']=r.rubro_fiscal;
+    });
     document.getElementById('doc-clasif-modal')?.remove();
     docToast('Clasificación guardada — '+rows.length+' cuentas','ok');
     // Refrescar la vista para mostrar estado actualizado
