@@ -9208,18 +9208,35 @@ async function docGuardarClasif(){
 }
 
 // Cargar clasificaciones del cliente
+
+// Genera variantes de clave para compatibilidad entre formatos de catálogos
+function _cuentaVariants(cod){
+  const v=new Set([cod]);
+  // Sin guiones: '1000100' → también guardar como está
+  // Con guiones tipo 'NNN-NNNN': quitar parte después del guión → '100-0000' → '100'
+  if(cod.includes('-')){
+    const partes=cod.split('-');
+    v.add(partes[0]); // '100-0000' → '100'
+    v.add(partes.map(p=>parseInt(p)||p).join('-')); // normalizar ceros
+  } else {
+    // Sin guión: '100' → '100-0000', también con ceros adelante '000-0100'
+    v.add(cod+'-0000');
+    // Intentar con padding: '100' → '000-0100' (formato de 3+4 dígitos con ceros)
+    if(/^\d+$/.test(cod)){
+      const padded=cod.padStart(3,'0');
+      v.add('000-0'+padded.padStart(4,'0'));
+      v.add('000-'+padded.padStart(4,'0'));
+    }
+  }
+  return [...v];
+}
 async function docCargarClasif(){
   try{
     const rows=await sbGet('catalogo_clasificacion',
       '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=cuenta_mayor,rubro,rubro_fiscal,tipo_cuenta');
     docClasifCache={};
     (rows||[]).forEach(r=>{
-      const keys=[r.cuenta_mayor];
-      const cod2=r.cuenta_mayor.replace(/-/g,'');
-      const cod3=r.cuenta_mayor.replace(/^0+/,'').replace(/-0+/g,'-').replace(/-$/,'');
-      if(cod2!==r.cuenta_mayor)keys.push(cod2);
-      if(cod3!==r.cuenta_mayor&&cod3!==cod2)keys.push(cod3);
-      keys.forEach(k=>{
+      _cuentaVariants(r.cuenta_mayor).forEach(k=>{
         docClasifCache[k]=r.rubro;
         if(r.rubro_fiscal)docClasifCache[k+'_rubro_fiscal']=r.rubro_fiscal;
         if(r.tipo_cuenta) docClasifCache[k+'_tipo_cuenta']=r.tipo_cuenta;
@@ -9865,12 +9882,7 @@ async function docReClasificar(){
       const rows=await sbGet('catalogo_clasificacion',
         '?cliente_id=eq.'+encodeURIComponent(String(docClienteActual.id))+'&select=cuenta_mayor,rubro,rubro_fiscal');
       (rows||[]).forEach(row=>{
-        const keys=[row.cuenta_mayor];
-        const cod2=row.cuenta_mayor.replace(/-/g,'');
-        const cod3=row.cuenta_mayor.replace(/^0+/,'').replace(/-0+/g,'-').replace(/-$/,'');
-        if(cod2!==row.cuenta_mayor)keys.push(cod2);
-        if(cod3!==row.cuenta_mayor&&cod3!==cod2)keys.push(cod3);
-        keys.forEach(k=>{
+        _cuentaVariants(row.cuenta_mayor).forEach(k=>{
           clasifExist[k]=row.rubro;
           if(row.rubro_fiscal)clasifExist[k+'_rubro_fiscal']=row.rubro_fiscal;
         });
