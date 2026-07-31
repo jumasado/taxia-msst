@@ -8948,6 +8948,13 @@ function docRenderNodo(cod, container, nivel, nodoMap, padreMap, clasifExist, op
   // Rubro actual (NIF) + componente inflacionario (solo activo/pasivo)
   const rubroActual = clasifExist[cod] || '';
   const rubroFiscalActual = (window._clasifExist||{})[cod+'_rubro_fiscal'] || (window._clasifChanges||{})[cod+'_rubro_fiscal'] || '';
+  // Rubro efectivo: propio o heredado de ancestro (para determinar si aplica comp. inflacionario)
+  const _rubroEfectivo=(function(c){
+    let r=clasifExist[c];if(r)return r;
+    let p=padreMap[c];
+    while(p){r=clasifExist[p];if(r)return r;p=padreMap[p];}
+    return '';
+  })(cod);
   const catInfo = rubroActual ? DOC_CATS[(DOC_RUBROS.find(r=>r.id===rubroActual)||{cat:'no_aplica'}).cat] : null;
   const badgeColor = catInfo ? `background:${catInfo.bg};color:${catInfo.color}` : 'background:#f5f5f3;color:#999';
   const badgeLabel = rubroActual ? (DOC_RUBROS.find(r=>r.id===rubroActual)||{label:'No incluir'}).label : '— sin clasificar —';
@@ -8982,7 +8989,7 @@ function docRenderNodo(cod, container, nivel, nodoMap, padreMap, clasifExist, op
           ${optsGrupos.replace(`value="${rubroActual}"`, `value="${rubroActual}" selected`)}
         </select>
         ${(()=>{
-          const _cat=(DOC_RUBROS.find(r=>r.id===rubroActual)||{cat:''}).cat;
+          const _cat=(DOC_RUBROS.find(r=>r.id===_rubroEfectivo)||{cat:''}).cat;
           const esAP=_cat==='activo'||_cat==='pasivo';
           if(!esAP) return '<div style="width:163px"></div>';
           return `<select id="rubro-fiscal-${cod.replace(/[-. ]/g,'_')}" onchange="docActualizarCampoExtra('${cod}','rubro_fiscal',this.value)"
