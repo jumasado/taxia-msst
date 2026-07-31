@@ -8888,7 +8888,11 @@ function docMostrarClasifDialog(cuentas, clasifExist, subcuentaMap, nodoMap, pad
       💡 <strong>Herencia en cascada:</strong> Si clasificas una cuenta padre, todas sus dependientes heredan ese rubro — a menos que una dependiente tenga su propio rubro asignado (anula al padre). Doble clic = expandir/colapsar nivel.
     </div>
     <div style="display:grid;grid-template-columns:1fr auto;padding:6px 12px;background:#f5f5f3;border-radius:6px;margin-bottom:6px;font-size:11px;font-weight:700;color:#888;flex-shrink:0">
-      <div>Cuenta / Nombre</div><div>Rubro contable (NIF)</div>
+      <div>Cuenta / Nombre</div>
+      <div style="display:flex;gap:6px">
+        <div style="width:170px;text-align:center">Rubro contable (NIF)</div>
+        <div style="width:163px;text-align:center;color:#185FA5">Comp. inflacionario</div>
+      </div>
     </div>
     <div id="clasif-tree" style="overflow-y:auto;flex:1;min-height:0;border:1px solid #e5e5e0;border-radius:8px"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-shrink:0">
@@ -8971,24 +8975,27 @@ function docRenderNodo(cod, container, nivel, nodoMap, padreMap, clasifExist, op
     <span style="${nombreStyle}">${escH(nombre)}</span>
     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;min-width:280px">
       <span id="badge-${cod.replace(/[-. ]/g,'_')}" style="font-size:9px;padding:1px 6px;border-radius:10px;white-space:nowrap;${badgeColor}">${escH(badgeLabel)}</span>
-      <select id="select-${cod.replace(/[-. ]/g,'_')}" onchange="docActualizarBadge('${cod}')"
-        style="font-size:10px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;max-width:160px">
-        <option value="">— heredar de padre —</option>
-        ${optsGrupos.replace(`value="${rubroActual}"`, `value="${rubroActual}" selected`)}
-      </select>
-      ${(()=>{
-        const _cat=(DOC_RUBROS.find(r=>r.id===rubroActual)||{cat:''}).cat;
-        if(_cat!=='activo'&&_cat!=='pasivo') return '';
-        return `<select id="rubro-fiscal-${cod.replace(/[-. ]/g,'_')}" onchange="docActualizarCampoExtra('${cod}','rubro_fiscal',this.value)"
-          title="Componente inflacionario Art. 44 LISR"
-          style="font-size:10px;padding:2px 4px;border:1px solid #3B4BC8;border-radius:4px;max-width:155px;color:#185FA5;background:#f0f4ff">
-          <option value="">— Comp. inflacionario —</option>
-          <option value="credito_pesos"   ${rubroFiscalActual==='credito_pesos'?'selected':''}>Crédito MXN (Art. 44)</option>
-          <option value="credito_dolares" ${rubroFiscalActual==='credito_dolares'?'selected':''}>Crédito USD (Art. 44)</option>
-          <option value="deuda_pesos"     ${rubroFiscalActual==='deuda_pesos'?'selected':''}>Deuda MXN (Art. 44)</option>
-          <option value="deuda_dolares"   ${rubroFiscalActual==='deuda_dolares'?'selected':''}>Deuda USD (Art. 44)</option>
-        </select>`;
-      })()}
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+        <select id="select-${cod.replace(/[-. ]/g,'_')}" onchange="docActualizarBadge('${cod}')"
+          style="font-size:10px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;width:170px;background:#fff">
+          <option value="">— heredar de padre —</option>
+          ${optsGrupos.replace(`value="${rubroActual}"`, `value="${rubroActual}" selected`)}
+        </select>
+        ${(()=>{
+          const _cat=(DOC_RUBROS.find(r=>r.id===rubroActual)||{cat:''}).cat;
+          const esAP=_cat==='activo'||_cat==='pasivo';
+          if(!esAP) return '<div style="width:163px"></div>';
+          return `<select id="rubro-fiscal-${cod.replace(/[-. ]/g,'_')}" onchange="docActualizarCampoExtra('${cod}','rubro_fiscal',this.value)"
+            title="Componente inflacionario Art. 44 LISR"
+            style="font-size:10px;padding:2px 6px;border:1px solid #3B4BC8;border-radius:4px;width:163px;color:#185FA5;background:#f0f4ff">
+            <option value="">— Art. 44 LISR —</option>
+            <option value="credito_pesos"   ${rubroFiscalActual==='credito_pesos'?'selected':''}>Crédito MXN</option>
+            <option value="credito_dolares" ${rubroFiscalActual==='credito_dolares'?'selected':''}>Crédito USD</option>
+            <option value="deuda_pesos"     ${rubroFiscalActual==='deuda_pesos'?'selected':''}>Deuda MXN</option>
+            <option value="deuda_dolares"   ${rubroFiscalActual==='deuda_dolares'?'selected':''}>Deuda USD</option>
+          </select>`;
+        })()}
+      </div>
     </div>`;
 
   if(tieneHijos){
