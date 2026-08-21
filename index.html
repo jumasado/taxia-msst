@@ -1649,7 +1649,7 @@ async function renderDashboard(date){
   const inicioMesActual=anioActual+'-'+String(mesActual).padStart(2,'0')+'-01';
   const ejercicioAnterior=anioActual-1;
 
-  const [allTareas, allDev, cfgPagos, ppMes, docsGen, proyecciones, decAnual, sesionesMes, accesosTodos]=await Promise.all([
+  const [allTareas, allDev, cfgPagos, ppMes, docsGen, proyecciones, decAnual, sesionesMes, accesosTodos, cierres]=await Promise.all([
     sbGet('tareas',`?email=in.(${visible.map(e=>`"${e}"`).join(',')})&select=*&order=created_at.asc`),
     sbGet('devoluciones_iva','?select=*&order=created_at.desc'),
     sbGet('cliente_config_pagos','?select=cliente_id,config_impuestos'),
@@ -1658,7 +1658,8 @@ async function renderDashboard(date){
     sbGet('pf_proyecciones',`?ejercicio=eq.${anioActual}&select=cliente_id`),
     sbGet('da_declaraciones',`?ejercicio=eq.${ejercicioAnterior}&select=cliente_id,status`),
     sbGet('sesiones',`?login_at=gte.${inicioMesActual}&select=email,login_at,logout_at,duracion_min`),
-    sbGet('cliente_usuarios','?select=cliente_id,user_email')
+    sbGet('cliente_usuarios','?select=cliente_id,user_email'),
+    sbGet('pf_cierres',`?ejercicio=eq.${anioActual}&select=cliente_id,utilidad_fiscal,isr_a_cargo,saldo_favor`)
   ]);
 
   document.getElementById('dl').style.display='none';
@@ -1674,25 +1675,38 @@ async function renderDashboard(date){
   // el cliente. Clientes sin ningún asignado se muestran (no son "exclusivos del Director").
   // Nota: este filtro es SOLO para el Dashboard — no toca clientesCache global ni el acceso
   // real en Módulos 3-8, que siguen dando al manager acceso total como hasta hoy.
+  const nameToEmail={};
+  Object.keys(usersCache).forEach(em=>{ nameToEmail[usersCache[em].name]=em; });
+  const accesoManualPorCliente={};
+  (accesosTodos||[]).forEach(a=>{
+    const k=String(a.cliente_id);
+    if(!accesoManualPorCliente[k])accesoManualPorCliente[k]=new Set();
+    accesoManualPorCliente[k].add(a.user_email);
+  });
+  const asignadosDeCliente=c=>{
+    const asignados=new Set(accesoManualPorCliente[String(c.id)]||[]);
+    const encargadoEmail=c.responsable?nameToEmail[c.responsable]:null;
+    if(encargadoEmail)asignados.add(encargadoEmail);
+    return asignados;
+  };
+
   let clientesRol=clientesCache||[];
   if(esMgr){
-    const nameToEmail={};
-    Object.keys(usersCache).forEach(em=>{ nameToEmail[usersCache[em].name]=em; });
     const equipoEmails=new Set(visible); // visible = todo el equipo salvo el admin
-    const accesoManualPorCliente={};
-    (accesosTodos||[]).forEach(a=>{
-      const k=String(a.cliente_id);
-      if(!accesoManualPorCliente[k])accesoManualPorCliente[k]=new Set();
-      accesoManualPorCliente[k].add(a.user_email);
-    });
     clientesRol=clientesRol.filter(c=>{
-      const asignados=new Set(accesoManualPorCliente[String(c.id)]||[]);
-      const encargadoEmail=c.responsable?nameToEmail[c.responsable]:null;
-      if(encargadoEmail)asignados.add(encargadoEmail);
+      const asignados=asignadosDeCliente(c);
       if(asignados.size===0)return true; // sin asignar — visible
       return [...asignados].some(em=>equipoEmails.has(em)); // visible si él o algún consultor está asignado
     });
   }
+
+  // ===== NUEVO — desglose individual para los paneles de grupo (23-ago-2026) =====
+  // Regla de la Dirección: el nivel "grupo" de cada panel siempre es TODA la firma
+  // (los 38 clientes), igual para los 3 roles. El nivel "individual" respeta el mismo
+  // alcance que ya usa "Productividad del equipo" (variable "visible"): admin ve a
+  // cada persona del equipo, manager ve la suya y la de sus consultores, cada
+  // consultor ve solo la propia. Mismo patrón ya probado en el correo morning-brief.
+  const clientesPorPersona=email=>(clientesCache||[]).filter(c=>asignadosDeCliente(c).has(email));
 
   // ===== Equipo (resumen, sin detalle de tareas — el detalle vive en Módulo 2) =====
   const byEmail={};
@@ -1868,12 +1882,91 @@ async function renderDashboard(date){
     {k:vencidas.length?'#dc2626':'#5a8a1a',l:'Tareas vencidas del equipo',v:vencidas.length,f:vencidas.length?'la más antigua: '+vencidas[0].dias+' días':'sin atrasos'}
   ];
 
+  // ===== Panel A — Cartera por tipo de persona (grupo + individual) =====
+  const composicionTipo=lista=>({pm:lista.filter(c=>!esPFTipo(c)).length,pf:lista.filter(esPFTipo).length});
+  const carteraGrupo=composicionTipo(clientesCache||[]);
+  const carteraPorPersona=visible.map(em=>({email:em,nombre:(usersCache[em]||{}).name||em,...composicionTipo(clientesPorPersona(em))}));
+
+  // ===== Panel B — Devoluciones IVA por estatus (grupo + individual) =====
+  const DEV_ESTATUS_LABEL={devuelta:'Devuelta',negada:'Negada',requisitos_pendientes:'Requisitos pendientes',
+    solicitud_preparada:'Solicitud preparada',presentada_sat:'Presentada ante SAT',en_revision_sat:'En revisión SAT',
+    requerimiento_sat:'Requerimiento SAT',informacion_entregada:'Información entregada',autorizada_no_depositada:'Autorizada, no depositada'};
+  const devPorEstatus=lista=>{
+    const out={};
+    lista.forEach(d=>{ const k=d.status||'sin_estatus'; out[k]=(out[k]||0)+1; });
+    return out;
+  };
+  const devGrupo=devPorEstatus(devTodas);
+  const devPorPersona=visible.map(em=>{
+    const nombre=(usersCache[em]||{}).name||em;
+    const propias=devTodas.filter(d=>d.responsable===nombre);
+    return {email:em,nombre,total:propias.length,porEstatus:devPorEstatus(propias)};
+  });
+
+  // ===== Panel C — Cobertura de impuestos configurados (grupo + individual) =====
+  const IMPUESTOS_DASH=[{id:'iva',label:'IVA'},{id:'isr_pm',label:'ISR PM'},{id:'isr_pf',label:'ISR PF'},
+    {id:'ret_sueldos',label:'Ret. sueldos'},{id:'ieps',label:'IEPS'},{id:'ret_honorarios',label:'Ret. honorarios'},
+    {id:'isn_bc',label:'ISN Baja California'}];
+  const coberturaDe=lista=>IMPUESTOS_DASH.map(imp=>({
+    label:imp.label,
+    count:lista.filter(c=>(cfgByCliente[String(c.id)]||[]).includes(imp.id)).length
+  }));
+  const coberturaGrupo=coberturaDe(clientesCache||[]).sort((a,b)=>b.count-a.count);
+  const coberturaPorPersona=visible.map(em=>({email:em,nombre:(usersCache[em]||{}).name||em,cobertura:coberturaDe(clientesPorPersona(em))}));
+
+  // ===== Panel D — Resultado fiscal proyectado, ejercicio actual (grupo + individual) =====
+  const cierresValidos=(cierres||[]);
+  const resultadoDe=idsSet=>{
+    const rows=idsSet?cierresValidos.filter(r=>idsSet.has(String(r.cliente_id))):cierresValidos;
+    const utilidadTotal=rows.reduce((s,r)=>s+(parseFloat(r.utilidad_fiscal)||0),0);
+    const conCargo=rows.filter(r=>(parseFloat(r.isr_a_cargo)||0)>0);
+    const conSaldoFavor=rows.filter(r=>(parseFloat(r.saldo_favor)||0)>0);
+    return {
+      clientes:rows.length,
+      utilidadTotal,
+      isrCargoTotal:conCargo.reduce((s,r)=>s+(parseFloat(r.isr_a_cargo)||0),0),
+      isrCargoN:conCargo.length,
+      saldoFavorTotal:conSaldoFavor.reduce((s,r)=>s+(parseFloat(r.saldo_favor)||0),0),
+      saldoFavorN:conSaldoFavor.length
+    };
+  };
+  const fiscalGrupo=resultadoDe(null);
+  const fiscalPorPersona=visible.map(em=>{
+    const ids=new Set(clientesPorPersona(em).map(c=>String(c.id)));
+    return {email:em,nombre:(usersCache[em]||{}).name||em,...resultadoDe(ids)};
+  });
+
+
   dc.innerHTML=renderDashboardHTML({
     today,esDir,esMgr,esJr,MATRIZ:matrizVisible,alertas,proximos,kpis,
     devActivas,devVisibles,montoCartera,visible,byEmail,totalDone,totalStandby,totalAll,
     concluidasMes,concluidasMesAnt,varMes,horasEquipo,diasActivos,sesionesN:sesionesValidas.length,
-    sinConfigurar,vencidas
+    sinConfigurar,vencidas,
+    carteraGrupo,carteraPorPersona,devGrupo,devPorPersona,DEV_ESTATUS_LABEL,
+    coberturaGrupo,coberturaPorPersona,fiscalGrupo,fiscalPorPersona
   });
+  buildPanelesGrupoCharts(carteraGrupo,devGrupo,DEV_ESTATUS_LABEL,coberturaGrupo);
+}
+
+function buildPanelesGrupoCharts(carteraGrupo,devGrupo,DEV_ESTATUS_LABEL,coberturaGrupo){
+  const c1=document.getElementById('dg-cartera');
+  if(c1) new Chart(c1,{type:'doughnut',data:{labels:['PM','PF'],datasets:[{data:[carteraGrupo.pm,carteraGrupo.pf],backgroundColor:['#3B4BC8','#8DC63F'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{display:false}}}});
+
+  const c2=document.getElementById('dg-dev');
+  const devEntries=Object.entries(devGrupo||{}).filter(([,v])=>v>0);
+  if(c2&&devEntries.length){
+    const DEV_COLORS={devuelta:'#5a8a1a',negada:'#791F1F',requisitos_pendientes:'#EF9F27',solicitud_preparada:'#378ADD',
+      presentada_sat:'#3B4BC8',en_revision_sat:'#BA7517',requerimiento_sat:'#dc2626',informacion_entregada:'#0f4c81',autorizada_no_depositada:'#633806'};
+    new Chart(c2,{type:'pie',data:{labels:devEntries.map(([k])=>DEV_ESTATUS_LABEL[k]||k),
+      datasets:[{data:devEntries.map(([,v])=>v),backgroundColor:devEntries.map(([k])=>DEV_COLORS[k]||'#888'),borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:9,font:{size:10}}}}}});
+  }
+
+  const c3=document.getElementById('dg-cobertura');
+  if(c3&&coberturaGrupo.length){
+    new Chart(c3,{type:'bar',data:{labels:coberturaGrupo.map(x=>x.label),datasets:[{data:coberturaGrupo.map(x=>x.count),backgroundColor:'#0C447C',borderRadius:4}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'#f0f0ec'}},y:{grid:{display:false}}}}});
+  }
 }
 
 function fmtMXNCompact(n){
@@ -1890,6 +1983,55 @@ function renderDashboardHTML(d){
       <div class="metric-val" style="color:${k.k};${String(k.v).length>4?'font-size:19px':''}">${k.v}</div>
       <div style="font-size:11px;color:#888;margin-top:4px">${k.f}</div>
     </div>`).join('');
+
+  // ===== Filas "por integrante" — mismo alcance de "visible" en cada panel =====
+  const porIntegranteRow=(nombre,contenido)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f5f5f3;font-size:11.5px">
+    <span style="font-weight:600;color:#666;min-width:90px">${escH(nombre)}</span><span style="color:#888">${contenido}</span></div>`;
+
+  const carteraIndivHTML=d.carteraPorPersona.map(p=>porIntegranteRow(p.nombre,`${p.pm} PM · ${p.pf} PF (${p.pm+p.pf} total)`)).join('');
+  const devIndivHTML=d.devPorPersona.map(p=>porIntegranteRow(p.nombre,`${p.total} solicitud${p.total===1?'':'es'} activa${p.total===1?'':'s'}`)).join('');
+  const coberturaIndivHTML=d.coberturaPorPersona.map(p=>{
+    const conAlgo=p.cobertura.filter(c=>c.count>0).length;
+    return porIntegranteRow(p.nombre,`${conAlgo} de ${p.cobertura.length} impuestos con al menos un cliente`);
+  }).join('');
+  const fiscalIndivHTML=d.fiscalPorPersona.map(p=>porIntegranteRow(p.nombre,
+    `${fmtMXNCompact(p.utilidadTotal)} utilidad · ${p.isrCargoN?fmtMXNCompact(p.isrCargoTotal)+' a cargo':'sin ISR a cargo'}`)).join('');
+
+  const panelesNuevosHTML=`
+  <div class="card">
+    <div class="sec-label" style="margin-bottom:10px">Panorama del despacho — cartera completa</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div>
+        <div style="font-size:10.5px;color:#999;font-weight:700;text-transform:uppercase;margin-bottom:6px">Cartera por tipo de persona</div>
+        <div style="position:relative;height:130px"><canvas id="dg-cartera"></canvas></div>
+        <div style="display:flex;gap:12px;margin-top:6px;font-size:10.5px;color:#666;justify-content:center">
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#3B4BC8;margin-right:3px"></span>PM ${d.carteraGrupo.pm}</span>
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#8DC63F;margin-right:3px"></span>PF ${d.carteraGrupo.pf}</span>
+        </div>
+        <div style="margin-top:8px">${carteraIndivHTML}</div>
+      </div>
+      <div>
+        <div style="font-size:10.5px;color:#999;font-weight:700;text-transform:uppercase;margin-bottom:6px">Devoluciones IVA por estatus</div>
+        <div style="position:relative;height:130px"><canvas id="dg-dev"></canvas></div>
+        <div style="margin-top:8px">${devIndivHTML}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:10.5px;color:#999;font-weight:700;text-transform:uppercase;margin-bottom:6px">Cobertura de impuestos configurados — cartera completa</div>
+      <div style="position:relative;height:220px"><canvas id="dg-cobertura"></canvas></div>
+      <div style="margin-top:8px">${coberturaIndivHTML}</div>
+    </div>
+    <div>
+      <div style="font-size:10.5px;color:#999;font-weight:700;text-transform:uppercase;margin-bottom:8px">Resultado fiscal proyectado — ejercicio actual (${d.fiscalGrupo.clientes} clientes con cierre cargado)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:8px">
+        <div style="background:#f5f5f3;border-radius:8px;padding:9px 11px"><div style="font-size:9.5px;color:#999;font-weight:700;text-transform:uppercase">Utilidad fiscal total</div><div style="font-size:17px;font-weight:700;margin-top:3px">${fmtMXNCompact(d.fiscalGrupo.utilidadTotal)}</div></div>
+        <div style="background:#fef2f2;border-radius:8px;padding:9px 11px"><div style="font-size:9.5px;color:#991B1B;font-weight:700;text-transform:uppercase">ISR a cargo (${d.fiscalGrupo.isrCargoN})</div><div style="font-size:17px;font-weight:700;margin-top:3px;color:#dc2626">${fmtMXNCompact(d.fiscalGrupo.isrCargoTotal)}</div></div>
+        <div style="background:#f0f7d4;border-radius:8px;padding:9px 11px"><div style="font-size:9.5px;color:#27500A;font-weight:700;text-transform:uppercase">Saldo a favor (${d.fiscalGrupo.saldoFavorN})</div><div style="font-size:17px;font-weight:700;margin-top:3px;color:#5a8a1a">${fmtMXNCompact(d.fiscalGrupo.saldoFavorTotal)}</div></div>
+      </div>
+      <div>${fiscalIndivHTML}</div>
+      <div style="font-size:10px;color:#ccc;margin-top:8px">Solo clientes con cierre de Proyección Anual cargado en el ejercicio.</div>
+    </div>
+  </div>`;
 
   const vencidasRows=d.vencidas.length?d.vencidas.slice(0,10).map(v=>{
     const bg=v.dias>30?'#fef2f2':v.dias>14?'#FAEEDA':'#FEF3C7';
@@ -2061,6 +2203,8 @@ function renderDashboardHTML(d){
   ${riskHTML}
 
   <div class="metric-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">${kpiHTML}</div>
+
+  ${panelesNuevosHTML}
 
   ${matrizHTML}
 
