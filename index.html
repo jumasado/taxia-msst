@@ -800,7 +800,7 @@ async function doLogin(){
              expires_at:Date.now()+((authData.expires_in||3600)*1000)};
     // Datos de negocio (rol, módulos, nombre) siguen viviendo en public.users — se leen
     // con el token ya autenticado, nunca se piden columnas sensibles (pass/reset_code/reset_exp).
-    const data=await sbGet('users',`?email=eq.${encodeURIComponent(em)}&select=email,name,role,modulos,av,initials`);
+    const data=await sbGet('users',`?email=eq.${encodeURIComponent(em)}&select=email,name,role,modulos,av,initials,ac_user_id`);
     if(!data||!data.length){
       session=null;
       errEl.textContent='Tu cuenta de acceso existe, pero no tienes un perfil en el sistema. Contacta al administrador.';
@@ -808,7 +808,7 @@ async function doLogin(){
     }
     clearLoginIntentos(em);
     session={...session,...data[0]};
-    const [allU]=await Promise.all([sbGet('users','?select=email,name,role,modulos,av,initials'),loadCaches()]);
+    const [allU]=await Promise.all([sbGet('users','?select=email,name,role,modulos,av,initials,ac_user_id'),loadCaches()]);
     allU.forEach(u=>{usersCache[u.email]=u;});
     // Cargar accesos del usuario una sola vez al login
     if(session.role!=='admin'){
@@ -832,12 +832,8 @@ async function doLogin(){
    ámbito local y no son visibles desde estas funciones.
    No se usa AC_PROYECTOS_POR_USUARIO: /api/v1/users/{id}/tasks basta. */
 const AC_BASE='https://app.msstconsulting.com';
-const AC_IDS={
-  'msantana@msstconsulting.com':2,
-  'asmith@msstconsulting.com':3,
-  'yhernandez@msstconsulting.com':136,
-  'baudelo@msstconsulting.com':142
-};
+// ac_user_id se lee de usersCache (columna en tabla users — migrado 23-ago-2026)
+function getAcId(email){ return (usersCache[email]||{}).ac_user_id||null; }
 const MAX_PRIORITARIAS=10;   // antes 5 (Plan del día). Límite duro de tareas prioritarias activas.
 let _acTab='plan';
 let _acStore={};
@@ -1070,7 +1066,7 @@ async function acCargarTodo(forzar){
 }
 
 async function cargarAcPendientes(email,forzar){
-  if(!AC_IDS[email]) throw new Error('SIN_ID');
+  if(!getAcId(email)) throw new Error('SIN_ID');
   const c=_acStore[email];
   if(!forzar && c && (Date.now()-c.ts)<AC_TTL) return c.tasks;
   const todo=await acCargarTodo(forzar);
@@ -1080,7 +1076,7 @@ async function cargarAcPendientes(email,forzar){
 }
 
 function acPrecargarConteo(email){
-  if(_acStore[email]||!AC_IDS[email]) return;
+  if(_acStore[email]||!getAcId(email)) return;
   cargarAcPendientes(email).then(ts=>{
     const b=document.getElementById('ac-badge');
     if(b){
@@ -1097,8 +1093,8 @@ function acPrecargarConteo(email){
 async function renderPanelAC(email){
   const pf=document.getElementById('pf');
   const nombre=escH((usersCache[email]||{}).name||email);
-  if(!AC_IDS[email]){
-    pf.innerHTML=acAviso('Esta persona no tiene cuenta ligada en Active Collab.','Agrega su correo y su id de usuario de AC en la constante AC_IDS para que aparezcan sus tareas.');
+  if(!getAcId(email)){
+    pf.innerHTML=acAviso('Esta persona no tiene cuenta ligada en Active Collab.','Agrega su correo y su id de usuario de Active Collab (campo ac_user_id en la tabla users de Supabase).');
     return;
   }
   pf.innerHTML='<div class="loading"><span class="spinner"></span>Consultando Active Collab...</div>';
@@ -1734,7 +1730,7 @@ async function renderDashboard(date){
   let vencidasAC=[];
   try{
     const acTodo=await acCargarTodo();
-    visible.filter(em=>AC_IDS[em]).forEach(em=>{
+    visible.filter(em=>getAcId(em)).forEach(em=>{
       const u=usersCache[em]||{};
       const tareasAc=(acTodo.usuarios[em]&&acTodo.usuarios[em].tareas)||[];
       tareasAc.filter(t=>t.diasVence!=null&&t.diasVence<0).forEach(t=>{
@@ -3189,7 +3185,7 @@ async function deleteGrupo(id,nombre){
 async function renderAdmin(){
   if(session.role!=='admin'){renderDashboard(todayKey());return;}
   app.innerHTML=renderTopNav('admin')+`<div class="loading" id="al"><span class="spinner"></span>Cargando...</div><div id="ac"></div>`;
-  const users=await sbGet('users','?select=email,name,role,modulos,av,initials&order=role.asc');
+  const users=await sbGet('users','?select=email,name,role,modulos,av,initials,ac_user_id&order=role.asc');
   (users||[]).forEach(u=>{usersCache[u.email]=u;});
   document.getElementById('al').style.display='none';
   const AVM={admin:'av-m',manager:'av-a',assistant:'av-y'};
@@ -5508,7 +5504,7 @@ function renderPortada(){
 async function renderPermisos(){
   if(session.role!=='admin'){renderPortada();return;}
   app.innerHTML=renderTopNav('permisos')+`<div class="loading" id="perm-load"><span class="spinner"></span>Cargando usuarios...</div><div id="perm-content"></div>`;
-  const users=await sbGet('users','?select=email,name,role,modulos,av,initials&order=role.asc');
+  const users=await sbGet('users','?select=email,name,role,modulos,av,initials,ac_user_id&order=role.asc');
   (users||[]).forEach(u=>{usersCache[u.email]=u;});
   document.getElementById('perm-load').style.display='none';
   const nonAdmin=(users||[]).filter(u=>u.role!=='admin');
