@@ -3027,6 +3027,13 @@ async function renderClientes(){
         '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Tipo</div>'+
           '<select id="cf-tipo" style="width:100%"><option value="">Selecciona...</option><option value="Persona Física">Persona Física</option><option value="Persona Moral">Persona Moral</option></select>'+
         '</div>'+
+        '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Régimen fiscal (personas morales)</div>'+
+          '<select id="cf-regimen" style="width:100%">'+
+            '<option value="general">General (Título II LISR)</option>'+
+            '<option value="resico_pm">RESICO Personas Morales (Título VII Cap. XII LISR)</option>'+
+            '<option value="no_lucrativo">Personas Morales con Fines No Lucrativos (Título III LISR)</option>'+
+          '</select>'+
+        '</div>'+
         '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Grupo</div>'+
           '<select id="cf-grupo" style="width:100%">'+grupoOpts+'</select>'+
         '</div>'+
@@ -3074,7 +3081,7 @@ function renderClientesTabla(){
     return '<tr>'+
       '<td style="font-weight:500">'+escH(c.nombre)+'</td>'+
       '<td style="color:#888">'+escH(c.rfc||'—')+'</td>'+
-      '<td>'+escH(c.tipo||'—')+'</td>'+
+      '<td>'+escH(c.tipo||'—')+(c.regimen_fiscal==='resico_pm'?' <span style="font-size:9px;color:#5a8a1a;font-weight:700">RESICO</span>':c.regimen_fiscal==='no_lucrativo'?' <span style="font-size:9px;color:#888;font-weight:700">NO LUCR.</span>':'')+'</td>'+
       '<td>'+grupoCell+'</td>'+
       '<td>'+escH(c.responsable||'—')+'</td>'+
       '<td style="white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap">'+(session.role==="admin"?'<button class="btn btn-sm" style="background:#EEEDFE;color:#3B4BC8;border-color:#c5d0ff" onclick="cliAccesos(\''+c.id+'\',\''+escH(c.nombre)+'\')" title="Accesos">👥</button>':'')+ editBtn+' '+delBtn+'</td>'+
@@ -3085,6 +3092,7 @@ function editCliente(id){
   const c=clientesCache.find(x=>x.id===id);if(!c)return;
   document.getElementById('cf-nombre').value=c.nombre||'';document.getElementById('cf-rfc').value=c.rfc||'';
   document.getElementById('cf-tipo').value=c.tipo||'';document.getElementById('cf-grupo').value=c.grupo_id||'';
+  document.getElementById('cf-regimen').value=c.regimen_fiscal||'general';
   document.getElementById('cf-resp').value=c.responsable||'';document.getElementById('cf-notas').value=c.notas||'';
   document.getElementById('cf-upload-name').value=c.upload_contact_name||'';
   document.getElementById('cf-upload-email').value=c.upload_contact_email||'';
@@ -3098,6 +3106,7 @@ async function saveCliente(){
   const nombre=document.getElementById('cf-nombre').value.trim();
   const rfc=document.getElementById('cf-rfc').value.trim().toUpperCase();
   const tipo=document.getElementById('cf-tipo').value;
+  const regimen_fiscal=document.getElementById('cf-regimen').value||'general';
   const grupo_id=document.getElementById('cf-grupo').value||null;
   const responsable=document.getElementById('cf-resp').value;
   const notas=document.getElementById('cf-notas').value.trim();
@@ -3115,13 +3124,14 @@ async function saveCliente(){
   const notifInvalido=notification_cc_emails.find(e=>!reEmail.test(e));
   if(notifInvalido){err.textContent='El correo interno "'+notifInvalido+'" no tiene un formato válido.';err.style.display='block';return;}
   const btn=document.getElementById('cf-btn');btn.innerHTML='<span class="spinner"></span> Guardando...';btn.disabled=true;
-  if(editing)await sbPatch('clientes',`?id=eq.${editing}`,{nombre,rfc,tipo,grupo_id,responsable,notas,upload_contact_name,upload_contact_email,notification_cc_emails});
-  else await sbPost('clientes',{nombre,rfc,tipo,grupo_id,responsable,notas,upload_contact_name,upload_contact_email,notification_cc_emails});
+  if(editing)await sbPatch('clientes',`?id=eq.${editing}`,{nombre,rfc,tipo,regimen_fiscal,grupo_id,responsable,notas,upload_contact_name,upload_contact_email,notification_cc_emails});
+  else await sbPost('clientes',{nombre,rfc,tipo,regimen_fiscal,grupo_id,responsable,notas,upload_contact_name,upload_contact_email,notification_cc_emails});
   await loadCaches(true); // force=true para refrescar aunque el caché sea reciente
   btn.innerHTML=editing?'Actualizar cliente':'Guardar cliente';btn.disabled=false;
   document.getElementById('cf-editing').value='';
   ['cf-nombre','cf-rfc','cf-notas','cf-upload-name','cf-upload-email','cf-notif-cc'].forEach(i=>{document.getElementById(i).value='';});
   ['cf-tipo','cf-grupo','cf-resp'].forEach(i=>{document.getElementById(i).value='';});
+  document.getElementById('cf-regimen').value='general';
   const ok=document.getElementById('cf-ok');ok.style.display='block';
   setTimeout(()=>ok.style.display='none',2000);
   renderClientesTabla();renderGrupoTabs();
@@ -3507,7 +3517,7 @@ async function renderNuevaDevolucion(id){
   const periodoAnio=editing&&editing.periodo?editing.periodo.split(' ')[1]:'';
   const mesOpts='<option value="">Mes...</option>'+MESES.map(m=>'<option value="'+m+'"'+(periodoMes===m?' selected':'')+'>'+m+'</option>').join('');
   const anioOpts='<option value="">Año...</option>'+[2020,2021,2022,2023,2024,2025,2026,2027].map(y=>'<option value="'+y+'"'+(periodoAnio===String(y)?' selected':'')+'>'+y+'</option>').join('');
-  const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+'</option>').join('');
+  const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'" data-regimen="'+(c.regimen_fiscal||'general')+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+'</option>').join('');
   const statusOpts=Object.entries(DEV_STATUS).map(([k,v])=>'<option value="'+k+'"'+(editing&&editing.status===k?' selected':k==='requisitos_pendientes'&&!editing?' selected':'')+'>'+v.label+'</option>').join('');
   const correos=editing&&editing.correos_cliente?(editing.correos_cliente||[]).join(', '):'';
 
@@ -4090,6 +4100,24 @@ async function renderNuevaProyeccion(id){
         <select id="pf-ejercicio" style="width:100%">${anioOpts}</select></div>
       <div><div style="font-size:12px;color:#888;margin-bottom:4px">Tasa ISR (%)</div>
         <input id="pf-tasa" type="number" value="${editing?.tasa_isr||30}" min="0" max="100" step="0.01"></div>
+      <div><div style="font-size:12px;color:#888;margin-bottom:4px">Régimen fiscal</div>
+        <select id="pf-regimen" style="width:100%" onchange="pfToggleResicoExtra()">
+          <option value="general"${(editing?.regimen_fiscal||'general')==='general'?' selected':''}>General (Título II LISR)</option>
+          <option value="resico_pm"${editing?.regimen_fiscal==='resico_pm'?' selected':''}>RESICO Personas Morales (Título VII Cap. XII)</option>
+          <option value="no_lucrativo"${editing?.regimen_fiscal==='no_lucrativo'?' selected':''}>No lucrativo (Título III)</option>
+        </select>
+        <div style="font-size:10px;color:#aaa;margin-top:3px">Se autocompleta con el régimen del cliente al seleccionarlo. Editable por si este ejercicio difiere.</div>
+      </div>
+    </div>
+    <div id="pf-resico-extra" style="display:none;margin-bottom:12px">
+      <div class="sec-label" style="margin-bottom:8px">Insumos RESICO Personas Morales — Arts. 208-211 LISR</div>
+      <div class="grid2">
+        <div><div style="font-size:12px;color:#888;margin-bottom:4px">PTU pagada en el ejercicio</div>
+          <input id="pf-ptu" type="number" placeholder="0.00" step="0.01" value="${editing?.ptu_pagada_ejercicio||0}"></div>
+        <div><div style="font-size:12px;color:#888;margin-bottom:4px">Pérdida fiscal pendiente de amortizar</div>
+          <input id="pf-perdida" type="number" placeholder="0.00" step="0.01" value="${editing?.perdida_fiscal_pendiente||0}"></div>
+      </div>
+      <div style="font-size:10px;color:#aaa;margin-top:4px">Determinación anual RESICO PM: Utilidad fiscal = Ingresos cobrados − Deducciones pagadas − PTU pagada − Pérdida fiscal pendiente. ISR = Utilidad fiscal × tasa (30%). No aplica CU ni conciliación Art. 9.</div>
     </div>
     <div style="margin-bottom:12px"><div style="font-size:12px;color:#888;margin-bottom:4px">Notas internas</div>
       <input id="pf-notas" type="text" placeholder="Notas sobre esta proyección" value="${escH(editing?.notas||'')}"></div>
@@ -4097,6 +4125,14 @@ async function renderNuevaProyeccion(id){
     <div class="err-msg" id="pf-err"></div>
     <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="saveProyeccion()">${editing?'Actualizar':'Crear proyección'}</button>
   </div>`;
+  pfToggleResicoExtra();
+}
+
+function pfToggleResicoExtra(){
+  const sel=document.getElementById('pf-regimen');
+  const box=document.getElementById('pf-resico-extra');
+  if(!sel||!box)return;
+  box.style.display=sel.value==='resico_pm'?'block':'none';
 }
 
 function pfSetCliente(sel){
@@ -4104,6 +4140,12 @@ function pfSetCliente(sel){
   const nombre=opt?.dataset?.nombre||opt?.text||'';
   const el=document.getElementById('pf-cli-nombre');
   if(el) el.value=nombre;
+  const editing=document.getElementById('pf-editing')?.value;
+  const regimenSel=document.getElementById('pf-regimen');
+  if(!editing && regimenSel && opt?.dataset?.regimen){
+    regimenSel.value=opt.dataset.regimen;
+    pfToggleResicoExtra();
+  }
 }
 
 async function saveProyeccion(){
@@ -4112,11 +4154,14 @@ async function saveProyeccion(){
   const cliente_nombre=document.getElementById('pf-cli-nombre').value||(cliSel.selectedIndex>0?cliSel.options[cliSel.selectedIndex]?.dataset?.nombre||cliSel.options[cliSel.selectedIndex]?.text||'':'');
   const ejercicio=parseInt(document.getElementById('pf-ejercicio').value);
   const tasa_isr=parseFloat(document.getElementById('pf-tasa').value)||30;
+  const regimen_fiscal=document.getElementById('pf-regimen').value||'general';
+  const ptu_pagada_ejercicio=parseFloat(document.getElementById('pf-ptu').value)||0;
+  const perdida_fiscal_pendiente=parseFloat(document.getElementById('pf-perdida').value)||0;
   const notas=document.getElementById('pf-notas').value.trim()||null;
   const editing=document.getElementById('pf-editing').value;
   const err=document.getElementById('pf-err');err.style.display='none';
   if(!cliente_nombre||!ejercicio){err.textContent='Cliente y ejercicio son obligatorios.';err.style.display='block';return;}
-  const payload={cliente_id,cliente_nombre,ejercicio,tasa_isr,notas,updated_at:nowISO()};
+  const payload={cliente_id,cliente_nombre,ejercicio,tasa_isr,regimen_fiscal,ptu_pagada_ejercicio,perdida_fiscal_pendiente,notas,updated_at:nowISO()};
   let newId=editing;
   if(editing){
     await sbPatch('pf_proyecciones','?id=eq.'+editing,payload);
@@ -4137,7 +4182,7 @@ async function renderDetalleProyeccion(id){
   app.innerHTML=renderTopNav('proyeccion')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
     <button class="btn btn-sm" onclick="renderProyeccion()">← Proyecciones</button>
-    <div style="font-size:15px;font-weight:600;flex:1">${escH(proy.cliente_nombre)} — ${proy.ejercicio}</div>
+    <div style="font-size:15px;font-weight:600;flex:1">${escH(proy.cliente_nombre)} — ${proy.ejercicio} <span style="font-size:10px;font-weight:700;color:${proy.regimen_fiscal==='resico_pm'?'#5a8a1a':proy.regimen_fiscal==='no_lucrativo'?'#888':'#3B4BC8'};background:${proy.regimen_fiscal==='resico_pm'?'#EAF3DE':proy.regimen_fiscal==='no_lucrativo'?'#f5f5f3':'#EEEDFE'};padding:2px 8px;border-radius:999px;vertical-align:middle;margin-left:6px">${proy.regimen_fiscal==='resico_pm'?'RESICO PM':proy.regimen_fiscal==='no_lucrativo'?'NO LUCRATIVO':'GENERAL · T.II'}</span></div>
     <button class="btn btn-sm btn-purple" onclick="renderNuevaProyeccion('${id}')">✏️ Editar</button>
     <button class="btn btn-sm btn-purple" onclick="reporteProyeccionPDF('${id}')">⎙ Reporte PDF</button>
     <button class="btn btn-sm" style="background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" onclick="guardarEscenarioProyeccion('${id}')">💾 Guardar escenario</button>
@@ -4188,13 +4233,29 @@ async function renderDetalleProyeccion(id){
   const totalOtrosGas=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_gastos)||0),0);
   const utilidadContable=totalIngresos-totalCosto-totalGastosOp+totalOtrosIng-totalOtrosGas;
 
+  // Régimen fiscal de la proyección (snapshot tomado del cliente al crearla) —
+  // determina qué motor de cálculo aplica. 'general' = comportamiento histórico sin cambios.
+  const esResico=proy.regimen_fiscal==='resico_pm';
+  const esNoLucrativo=proy.regimen_fiscal==='no_lucrativo';
+  const ptuPagada=parseFloat(proy.ptu_pagada_ejercicio)||0;
+  const perdidaPendiente=parseFloat(proy.perdida_fiscal_pendiente)||0;
+  const REGIMEN_LABELS={general:'General · Título II',resico_pm:'RESICO Personas Morales',no_lucrativo:'No lucrativo · Título III'};
+  const regimenLabel=REGIMEN_LABELS[proy.regimen_fiscal]||REGIMEN_LABELS.general;
+
   const ajustesData=ajustes||[];
   const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
-  const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
+  // General (Título II): utilidad contable ± conciliación Art. 9 LISR (ajustesData).
+  // RESICO PM (Título VII Cap. XII, Arts. 208-211): utilidad de flujo (pf_meses ya captura
+  // cobrado/pagado para estas proyecciones) menos PTU pagada y pérdida fiscal pendiente —
+  // sin conciliación Art. 9, sin CU.
+  const utilidadFiscal=esResico?(utilidadContable-ptuPagada-perdidaPendiente):(utilidadContable+totalSumas-totalRestas);
   const totalPP=proyectados.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
   const cuPct=totalIngresos>0?(utilidadFiscal/totalIngresos*100).toFixed(2):'0.00';
-  const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
+  // Personas Morales con Fines No Lucrativos (Título III): en el caso general no son
+  // contribuyentes del ISR sobre su remanente — no se proyecta ISR hasta tener un caso
+  // real que precise si hay remanente distribuible (Art. 79-89 LISR).
+  const isrEstimado=(esNoLucrativo||utilidadFiscal<=0)?0:utilidadFiscal*(proy.tasa_isr/100);
   const isrACargo=Math.max(0,isrEstimado-totalPP);
   const saldoFavor=Math.max(0,totalPP-isrEstimado);
 
@@ -4221,13 +4282,93 @@ async function renderDetalleProyeccion(id){
     '<td><button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="editarAjuste(\''+a.id+'\',\''+id+'\')">✏️</button></td>'+
   '</tr>').join('');
 
+  // ---- Bloques que dependen del régimen fiscal ----
+  const cuKpiHtml = esResico
+    ? '<div class="metric" style="border-left:3px solid #888"><div class="metric-label">Coeficiente de utilidad</div><div class="metric-val" style="font-size:13px;color:#888">No aplica</div><div style="font-size:10px;color:#888">RESICO PM — base de flujo</div></div>'
+    : ('<div class="metric" style="border-left:3px solid #3B4BC8"><div class="metric-label">Coeficiente de utilidad</div><div class="metric-val" style="font-size:13px;color:#3B4BC8">'+cuPct+'%</div><div style="font-size:10px;color:#888">Art. 14 LISR</div></div>');
+
+  const cuFilaHtml = esResico
+    ? ('<tr style="background:#EAF3DE">'+
+        '<td colspan="6" style="padding:10px 8px">'+
+          '<div style="font-size:12px;font-weight:700;color:#5a8a1a;margin-bottom:4px">RESICO Personas Morales — sin Coeficiente de Utilidad</div>'+
+          '<div style="font-size:11px;color:#555;line-height:1.6">Bajo el Título VII Cap. XII LISR, los pagos provisionales y la determinación anual se calculan directamente sobre el flujo del periodo a la tasa del '+proy.tasa_isr+'% — no se utiliza CU (Art. 14 LISR aplica solo a Título II).</div>'+
+        '</td>'+
+        '<td style="text-align:right;font-size:11px;color:#888;vertical-align:middle" colspan="2">'+fmtMXN(totalPP)+'<br><span style="font-size:9px">PP acumulado (flujo)</span></td>'+
+        '<td></td></tr>')
+    : ('<tr style="background:#EEEDFE">'+
+        '<td colspan="6" style="padding:10px 8px">'+
+          '<div style="font-size:12px;font-weight:700;color:#3B4BC8;margin-bottom:4px">Coeficiente de Utilidad (CU) — Art. 14 LISR</div>'+
+          '<div style="font-size:11px;color:#555;line-height:1.6">'+
+            '<b>Procedimiento:</b><br>'+
+            '1. Utilidad fiscal estimada: '+fmtMXN(utilidadFiscal)+'<br>'+
+            '2. Ingresos nominales proyectados: '+fmtMXN(totalIngresos)+'<br>'+
+            '3. CU = Utilidad fiscal ÷ Ingresos nominales = '+fmtMXN(utilidadFiscal)+' ÷ '+fmtMXN(totalIngresos)+' = <b>'+cuPct+'%</b><br>'+
+            '<span style="font-size:10px;color:#888">Aplicable para determinación de pagos provisionales del ejercicio siguiente (Art. 14 LISR)</span>'+
+          '</div>'+
+        '</td>'+
+        '<td style="text-align:right;font-size:16px;font-weight:700;color:#3B4BC8;vertical-align:middle">'+cuPct+'%</td>'+
+        '<td style="text-align:right;font-size:11px;color:#888;vertical-align:middle">'+fmtMXN(totalPP)+'<br><span style="font-size:9px">PP acumulado</span></td>'+
+        '<td></td></tr>');
+
+  const conciliacionCardHtml = esNoLucrativo ? (
+    '<div class="card" style="margin-bottom:1rem">'+
+      '<div class="sec-label" style="margin-bottom:10px">Determinación — Personas Morales con Fines No Lucrativos (Título III LISR)</div>'+
+      '<div style="font-size:12px;color:#555;line-height:1.7">'+
+        'Este régimen, en el caso general, no es contribuyente del ISR sobre su remanente — la obligación recae en sus integrantes o se limita al remanente distribuible cuando aplica (Arts. 79-89 LISR). '+
+        'El motor de proyección de ISR de este módulo está deshabilitado para este régimen hasta contar con un caso real que precise el tratamiento aplicable. '+
+        'Las cifras de ingresos y egresos capturadas arriba siguen disponibles como referencia operativa.'+
+      '</div>'+
+    '</div>'
+  ) : esResico ? (
+    '<div class="card" style="margin-bottom:1rem">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+        '<div class="sec-label">Determinación de utilidad fiscal — base de flujo (RESICO PM)</div>'+
+      '</div>'+
+      '<div class="table-wrap"><table class="data-table">'+
+        '<tbody>'+
+          '<tr style="background:#f5f5f3"><td style="font-weight:700;font-size:12px">Ingresos efectivamente cobrados − Deducciones efectivamente pagadas</td><td style="text-align:right;font-weight:700;font-size:12px">'+fmtMXN(utilidadContable)+'</td></tr>'+
+          '<tr><td style="font-size:12px;color:#dc2626">− PTU pagada en el ejercicio</td><td style="text-align:right;font-size:12px;color:#dc2626">('+fmtMXN(ptuPagada)+')</td></tr>'+
+          '<tr><td style="font-size:12px;color:#dc2626">− Pérdida fiscal pendiente de amortizar</td><td style="text-align:right;font-size:12px;color:#dc2626">('+fmtMXN(perdidaPendiente)+')</td></tr>'+
+          '<tr style="background:#EAF3DE"><td style="font-weight:700;font-size:13px;color:#5a8a1a">= Utilidad fiscal del ejercicio</td><td style="text-align:right;font-weight:700;font-size:13px;color:'+(utilidadFiscal>=0?'#5a8a1a':'#dc2626')+'">'+fmtMXN(utilidadFiscal)+'</td></tr>'+
+          '<tr style="background:'+(isrEstimado>0?'#fef2f2':'#f0f7d4')+'"><td style="font-weight:700;font-size:13px;color:'+(isrEstimado>0?'#dc2626':'#5a8a1a')+'">ISR estimado ('+proy.tasa_isr+'% — Art. 9 LISR)</td><td style="text-align:right;font-weight:700;font-size:13px;color:'+(isrEstimado>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isrEstimado)+'</td></tr>'+
+          '<tr style="background:#f5f5f3"><td style="font-size:12px;color:#888">− Pagos provisionales realizados (flujo, sin CU)</td><td style="text-align:right;font-size:12px;color:#888;font-weight:600">('+fmtMXN(totalPP)+')</td></tr>'+
+          '<tr style="background:'+(isrACargo>0?'#fef2f2':saldoFavor>0?'#f0f7d4':'#f5f5f3')+'"><td style="font-weight:700;font-size:13px;color:'+(isrACargo>0?'#dc2626':'#5a8a1a')+'">'+(isrACargo>0?'ISR a cargo del ejercicio':'Saldo a favor')+'</td><td style="text-align:right;font-weight:700;font-size:13px;color:'+(isrACargo>0?'#dc2626':'#5a8a1a')+'">'+(isrACargo>0?fmtMXN(isrACargo):fmtMXN(saldoFavor))+'</td></tr>'+
+        '</tbody>'+
+      '</table></div>'+
+      '<div style="font-size:10px;color:#aaa;margin-top:8px">RESICO Personas Morales (Título VII Cap. XII LISR) no utiliza conciliación contable-fiscal Art. 9 ni CU — la base es el flujo de efectivo capturado mes a mes arriba.</div>'+
+    '</div>'
+  ) : (
+    '<div class="card" style="margin-bottom:1rem">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+        '<div class="sec-label">Conciliación contable-fiscal</div>'+
+        '<button class="btn btn-sm" style="font-size:11px;background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" id="btn-add-suma" data-proy="'+id+'">+ Ingreso acumulable</button>'+
+        '<button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:4px" id="btn-add-resta" data-proy="'+id+'">+ Deducción</button>'+
+      '</div>'+
+      '<div class="table-wrap"><table class="data-table">'+
+        '<thead><tr><th>Concepto</th><th>Tipo</th><th style="text-align:right">Importe</th><th>Ref. Legal</th><th>Notas / Identificación</th><th></th></tr></thead>'+
+        '<tbody>'+ajusteRows+'</tbody>'+
+        '<tfoot>'+
+          '<tr style="background:#f5f5f3"><td colspan="2" style="font-weight:700;font-size:12px">Utilidad contable base</td><td style="text-align:right;font-weight:700;font-size:12px">'+fmtMXN(utilidadContable)+'</td><td colspan="2"></td></tr>'+
+          '<tr><td colspan="2" style="font-size:12px;color:#5a8a1a">+ Ajustes acumulables</td><td style="text-align:right;font-size:12px;color:#5a8a1a">'+fmtMXN(totalSumas)+'</td><td colspan="2"></td></tr>'+
+          '<tr><td colspan="2" style="font-size:12px;color:#dc2626">- Ajustes deducibles</td><td style="text-align:right;font-size:12px;color:#dc2626">('+fmtMXN(totalRestas)+')</td><td colspan="2"></td></tr>'+
+          '<tr style="background:#EEEDFE"><td colspan="2" style="font-weight:700;font-size:13px;color:#3B4BC8">= Utilidad fiscal estimada</td><td style="text-align:right;font-weight:700;font-size:13px;color:'+(utilidadFiscal>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidadFiscal)+'</td><td colspan="2"></td></tr>'+
+          '<tr style="background:'+(isrEstimado>0?'#fef2f2':'#f0f7d4')+'"><td colspan="2" style="font-weight:700;font-size:13px;color:'+(isrEstimado>0?'#dc2626':'#5a8a1a')+'">ISR estimado ('+proy.tasa_isr+'%)</td><td style="text-align:right;font-weight:700;font-size:13px;color:'+(isrEstimado>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isrEstimado)+'</td><td colspan="2"></td></tr>'+
+          '<tr style="background:#f5f5f3"><td colspan="2" style="font-size:12px;color:#888">- Pagos provisionales realizados</td>'+
+          '<td style="text-align:right;font-size:12px;color:#888;font-weight:600">('+fmtMXN(totalPP)+')</td><td colspan="2"></td></tr>'+
+          '<tr style="background:'+(isrACargo>0?'#fef2f2':saldoFavor>0?'#f0f7d4':'#f5f5f3')+'"><td colspan="2" style="font-weight:700;font-size:13px;color:'+(isrACargo>0?'#dc2626':'#5a8a1a')+'">'+(isrACargo>0?'ISR a cargo del ejercicio':'Saldo a favor')+'</td>'+
+          '<td style="text-align:right;font-weight:700;font-size:13px;color:'+(isrACargo>0?'#dc2626':'#5a8a1a')+'">'+(isrACargo>0?fmtMXN(isrACargo):fmtMXN(saldoFavor))+'</td><td colspan="2"></td></tr>'+
+        '</tfoot>'+
+      '</table></div>'+
+    '</div>'
+  );
+
   document.getElementById('pf-det-body').innerHTML=
   '<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:1rem">'+
     '<div class="metric" style="border-left:3px solid #3B4BC8"><div class="metric-label">Ingresos proyectados</div><div class="metric-val" style="font-size:13px;color:#3B4BC8">'+fmtMXN(totalIngresos)+'</div><div style="font-size:10px;color:#888">'+nMeses+' meses reales</div></div>'+
     '<div class="metric" style="border-left:3px solid #EF9F27"><div class="metric-label">Utilidad contable</div><div class="metric-val" style="font-size:13px;color:'+(utilidadContable>=0?'#EF9F27':'#dc2626')+'">'+fmtMXN(utilidadContable)+'</div></div>'+
     '<div class="metric" style="border-left:3px solid #8DC63F"><div class="metric-label">Utilidad fiscal estimada</div><div class="metric-val" style="font-size:13px;color:'+(utilidadFiscal>=0?'#8DC63F':'#dc2626')+'">'+fmtMXN(utilidadFiscal)+'</div></div>'+
     '<div class="metric" style="border-left:3px solid '+(isrACargo>0?'#dc2626':saldoFavor>0?'#8DC63F':'#888')+'"><div class="metric-label">'+(isrACargo>0?'ISR a cargo':saldoFavor>0?'Saldo a favor':'Sin ISR')+'</div><div class="metric-val" style="font-size:13px;color:'+(isrACargo>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isrACargo>0?isrACargo:saldoFavor)+'</div><div style="font-size:10px;color:#888">PP: '+fmtMXN(totalPP)+'</div></div>'+
-    '<div class="metric" style="border-left:3px solid #3B4BC8"><div class="metric-label">Coeficiente de utilidad</div><div class="metric-val" style="font-size:13px;color:#3B4BC8">'+cuPct+'%</div><div style="font-size:10px;color:#888">Art. 14 LISR</div></div>'+
+    cuKpiHtml+
   '</div>'+
   '<div class="card" style="margin-bottom:1rem">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
@@ -4245,44 +4386,10 @@ async function renderDetalleProyeccion(id){
       '<td style="text-align:right;font-size:12px">'+fmtMXN(totalOtrosGas)+'</td>'+
       '<td style="text-align:right;font-size:12px;color:'+(utilidadContable>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidadContable)+'</td>'+'<td style="text-align:right;font-size:12px;color:#888">'+fmtMXN(totalPP)+'</td><td></td></tr>'+
 
-      '<tr style="background:#EEEDFE">'+
-      '<td colspan="6" style="padding:10px 8px">'+
-        '<div style="font-size:12px;font-weight:700;color:#3B4BC8;margin-bottom:4px">Coeficiente de Utilidad (CU) — Art. 14 LISR</div>'+
-        '<div style="font-size:11px;color:#555;line-height:1.6">'+
-          '<b>Procedimiento:</b><br>'+
-          '1. Utilidad fiscal estimada: '+fmtMXN(utilidadFiscal)+'<br>'+
-          '2. Ingresos nominales proyectados: '+fmtMXN(totalIngresos)+'<br>'+
-          '3. CU = Utilidad fiscal ÷ Ingresos nominales = '+fmtMXN(utilidadFiscal)+' ÷ '+fmtMXN(totalIngresos)+' = <b>'+cuPct+'%</b><br>'+
-          '<span style="font-size:10px;color:#888">Aplicable para determinación de pagos provisionales del ejercicio siguiente (Art. 14 LISR)</span>'+
-        '</div>'+
-      '</td>'+
-      '<td style="text-align:right;font-size:16px;font-weight:700;color:#3B4BC8;vertical-align:middle">'+cuPct+'%</td>'+
-      '<td style="text-align:right;font-size:11px;color:#888;vertical-align:middle">'+fmtMXN(totalPP)+'<br><span style="font-size:9px">PP acumulado</span></td>'+
-      '<td></td></tr>'+
+      cuFilaHtml+
       '</tbody></table></div>'+
   '</div>'+
-  '<div class="card" style="margin-bottom:1rem">'+
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
-      '<div class="sec-label">Conciliación contable-fiscal</div>'+
-      '<button class="btn btn-sm" style="font-size:11px;background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" id="btn-add-suma" data-proy="'+id+'">+ Ingreso acumulable</button>'+
-      '<button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:4px" id="btn-add-resta" data-proy="'+id+'">+ Deducción</button>'+
-    '</div>'+
-    '<div class="table-wrap"><table class="data-table">'+
-      '<thead><tr><th>Concepto</th><th>Tipo</th><th style="text-align:right">Importe</th><th>Ref. Legal</th><th>Notas / Identificación</th><th></th></tr></thead>'+
-      '<tbody>'+ajusteRows+'</tbody>'+
-      '<tfoot>'+
-        '<tr style="background:#f5f5f3"><td colspan="2" style="font-weight:700;font-size:12px">Utilidad contable base</td><td style="text-align:right;font-weight:700;font-size:12px">'+fmtMXN(utilidadContable)+'</td><td colspan="2"></td></tr>'+
-        '<tr><td colspan="2" style="font-size:12px;color:#5a8a1a">+ Ajustes acumulables</td><td style="text-align:right;font-size:12px;color:#5a8a1a">'+fmtMXN(totalSumas)+'</td><td colspan="2"></td></tr>'+
-        '<tr><td colspan="2" style="font-size:12px;color:#dc2626">- Ajustes deducibles</td><td style="text-align:right;font-size:12px;color:#dc2626">('+fmtMXN(totalRestas)+')</td><td colspan="2"></td></tr>'+
-        '<tr style="background:#EEEDFE"><td colspan="2" style="font-weight:700;font-size:13px;color:#3B4BC8">= Utilidad fiscal estimada</td><td style="text-align:right;font-weight:700;font-size:13px;color:'+(utilidadFiscal>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidadFiscal)+'</td><td colspan="2"></td></tr>'+
-        '<tr style="background:'+(isrEstimado>0?'#fef2f2':'#f0f7d4')+'"><td colspan="2" style="font-weight:700;font-size:13px;color:'+(isrEstimado>0?'#dc2626':'#5a8a1a')+'">ISR estimado ('+proy.tasa_isr+'%)</td><td style="text-align:right;font-weight:700;font-size:13px;color:'+(isrEstimado>0?'#dc2626':'#5a8a1a')+'">'+fmtMXN(isrEstimado)+'</td><td colspan="2"></td></tr>'+
-        '<tr style="background:#f5f5f3"><td colspan="2" style="font-size:12px;color:#888">- Pagos provisionales realizados</td>'+
-        '<td style="text-align:right;font-size:12px;color:#888;font-weight:600">('+fmtMXN(totalPP)+')</td><td colspan="2"></td></tr>'+
-        '<tr style="background:'+(isrACargo>0?'#fef2f2':saldoFavor>0?'#f0f7d4':'#f5f5f3')+'"><td colspan="2" style="font-weight:700;font-size:13px;color:'+(isrACargo>0?'#dc2626':'#5a8a1a')+'">'+(isrACargo>0?'ISR a cargo del ejercicio':'Saldo a favor')+'</td>'+
-        '<td style="text-align:right;font-weight:700;font-size:13px;color:'+(isrACargo>0?'#dc2626':'#5a8a1a')+'">'+(isrACargo>0?fmtMXN(isrACargo):fmtMXN(saldoFavor))+'</td><td colspan="2"></td></tr>'+
-      '</tfoot>'+
-    '</table></div>'+
-  '</div>';
+  conciliacionCardHtml;
   // Event listeners para botones de ajuste (evita problemas de escapado de comillas)
   setTimeout(()=>{
     const btnSuma=document.getElementById('btn-add-suma');
@@ -4678,10 +4785,11 @@ async function msImportarMod4(mes){
   msg.style.color='#3B4BC8';
   msg.innerHTML='⏳ Buscando balanza en Módulo 4...';
   try{
-    // Obtener proyección para saber cliente y ejercicio
-    const proy=(await sbGet('pf_proyecciones','?id=eq.'+encodeURIComponent(proyId)+'&select=cliente_id,ejercicio'))||[];
+    // Obtener proyección para saber cliente, ejercicio y régimen fiscal
+    const proy=(await sbGet('pf_proyecciones','?id=eq.'+encodeURIComponent(proyId)+'&select=cliente_id,ejercicio,regimen_fiscal'))||[];
     if(!proy.length) throw new Error('Proyección no encontrada');
-    const {cliente_id,ejercicio}=proy[0];
+    const {cliente_id,ejercicio,regimen_fiscal}=proy[0];
+    const esResicoImport=regimen_fiscal==='resico_pm';
     // Buscar balanza del mes en client_documents
     const docs=await sbGet('client_documents',
       '?cliente_id=eq.'+encodeURIComponent(String(cliente_id))+
@@ -4694,21 +4802,53 @@ async function msImportarMod4(mes){
     // Mapear cifras NIF → campos del ER
     const c=doc.cifras;
     const det=c.detalle||{};
-    // Ingresos = resultado_acreedor (total ingresos de la balanza)
-    const ingresos=c.resultado_acreedor||det.ing_ventas||0;
+    // Ingresos = resultado_acreedor (total ingresos de la balanza) — devengado
+    let ingresos=c.resultado_acreedor||det.ing_ventas||0;
     // Costo de ventas
-    const costoVentas=det.gasto_costo||0;
+    let costoVentas=det.gasto_costo||0;
     // Gastos financieros
     const gastosFinancieros=det.gasto_financiero||0;
     // PTU/ISR = resultado deudor específico
     const isr=det.gasto_isr||0;
     const ptu=det.gasto_ptu||0;
     // Gastos de operación = resultado_deudor - costo_ventas - gastos_financieros - isr - ptu
-    const gastosOp=Math.max(0,(c.resultado_deudor||0)-costoVentas-gastosFinancieros-isr-ptu);
+    let gastosOp=Math.max(0,(c.resultado_deudor||0)-costoVentas-gastosFinancieros-isr-ptu);
     // Activo fijo bruto = suma de todos los activo_fijo_* en detalle
     const activoFijo=Object.entries(det).filter(([k])=>k.startsWith('activo_fijo')).reduce((s,[,v])=>s+v,0);
     // Depreciación acumulada
     const depreciacion=det.activo_depreciacion||0;
+
+    // ---- RESICO Personas Morales (Título VII Cap. XII LISR): ajustar de devengado a
+    // flujo de efectivo usando la variación de cuentas por cobrar/pagar entre el mes
+    // actual y el mes anterior (aproximación indirecta — la balanza NIF no registra
+    // cobros/pagos reales). Requiere la balanza del mes inmediato anterior cargada. ----
+    let notaFlujo='';
+    if(esResicoImport){
+      let mesAnt=mes-1,ejAnt=ejercicio;
+      if(mesAnt<1){mesAnt=12;ejAnt=ejercicio-1;}
+      const docsAnt=await sbGet('client_documents',
+        '?cliente_id=eq.'+encodeURIComponent(String(cliente_id))+
+        '&tipo=eq.balanza&mes=eq.'+mesAnt+
+        '&ejercicio=eq.'+ejAnt+
+        '&select=cifras');
+      if(!docsAnt||!docsAnt.length||!docsAnt[0].cifras||!Object.keys(docsAnt[0].cifras).length){
+        throw new Error('Este cliente tributa en RESICO Personas Morales — la importación en base de flujo requiere también la balanza de '+MESES_NOMBRES[mesAnt-1]+' '+ejAnt+' (mes inmediato anterior) para calcular la variación de cuentas por cobrar/pagar. Cárgala en Módulo 4 primero.');
+      }
+      const detAnt=docsAnt[0].cifras.detalle||{};
+      const cxcActual=(det.activo_clientes||0)+(det.activo_doc_cobrar||0);
+      const cxcAnterior=(detAnt.activo_clientes||0)+(detAnt.activo_doc_cobrar||0);
+      const cxpActual=(det.pasivo_proveedores||0)+(det.pasivo_acreedores||0);
+      const cxpAnterior=(detAnt.pasivo_proveedores||0)+(detAnt.pasivo_acreedores||0);
+      const deltaCxC=cxcActual-cxcAnterior;
+      const deltaCxP=cxpActual-cxpAnterior;
+      const ingresosDevengado=ingresos;
+      const deduccionesDevengado=costoVentas+gastosOp+gastosFinancieros;
+      ingresos=ingresosDevengado-deltaCxC; // cobrado = facturado - incremento en CxC
+      const deduccionesPagadas=Math.max(0,deduccionesDevengado-deltaCxP); // pagado = devengado - incremento en CxP
+      gastosOp=Math.max(0,deduccionesPagadas-costoVentas-gastosFinancieros); // el ajuste se absorbe en gastos de operación
+      notaFlujo='<br><span style="font-size:11px;color:#5a8a1a">RESICO PM — ajustado a base de flujo: Δ CxC '+fmtMXN(deltaCxC)+', Δ CxP '+fmtMXN(deltaCxP)+' (vs. '+MESES_NOMBRES[mesAnt-1]+' '+ejAnt+'). Revisa contra estado de cuenta si el cliente tiene movimientos atípicos.</span>';
+    }
+
     // Mostrar panel y rellenar campos
     document.getElementById('panel-cifras').style.display='block';
     document.getElementById('ms-save-row').style.display='flex';
@@ -4724,7 +4864,7 @@ async function msImportarMod4(mes){
     msg.style.background='#EAF3DE';
     msg.style.color='#3B6D11';
     msg.innerHTML='✅ <strong>Cifras importadas del Módulo 4</strong> — '+doc.nombre_archivo+
-      '<br><span style="font-size:11px;color:#555">Revisa y ajusta si es necesario antes de guardar.</span>';
+      '<br><span style="font-size:11px;color:#555">Revisa y ajusta si es necesario antes de guardar.</span>'+notaFlujo;
   }catch(e){
     msg.style.background='#FCEBEB';
     msg.style.color='#A32D2D';
@@ -4786,11 +4926,19 @@ async function reporteProyeccionPDF(id){
   const totalOtrosIng=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
   const totalOtrosGas=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_gastos)||0),0);
   const utilidadContable=totalIngresos-totalCosto-totalGastosOp+totalOtrosIng-totalOtrosGas;
+  const esResico=proy.regimen_fiscal==='resico_pm';
+  const esNoLucrativo=proy.regimen_fiscal==='no_lucrativo';
+  const ptuPagada=parseFloat(proy.ptu_pagada_ejercicio)||0;
+  const perdidaPendiente=parseFloat(proy.perdida_fiscal_pendiente)||0;
+  const REGIMEN_LABELS_PDF={general:'Régimen General · Título II LISR',resico_pm:'RESICO Personas Morales · Título VII Cap. XII LISR',no_lucrativo:'Personas Morales con Fines No Lucrativos · Título III LISR'};
+  const regimenLabelPDF=REGIMEN_LABELS_PDF[proy.regimen_fiscal]||REGIMEN_LABELS_PDF.general;
   const ajustesData=ajustes||[];
   const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
-  const utilidadFiscal=utilidadContable+totalSumas-totalRestas;
-  const isrEstimado=utilidadFiscal>0?utilidadFiscal*(proy.tasa_isr/100):0;
+  // General: utilidad contable ± conciliación Art. 9 LISR. RESICO PM: utilidad de flujo
+  // menos PTU pagada y pérdida fiscal pendiente (Arts. 208-211 LISR), sin conciliación ni CU.
+  const utilidadFiscal=esResico?(utilidadContable-ptuPagada-perdidaPendiente):(utilidadContable+totalSumas-totalRestas);
+  const isrEstimado=(esNoLucrativo||utilidadFiscal<=0)?0:utilidadFiscal*(proy.tasa_isr/100);
   const totalPP2=proyectados.reduce((s,m)=>s+(parseFloat(m.pago_provisional)||0),0);
   const isrACargoP=Math.max(0,isrEstimado-totalPP2);
   const saldoFavorP=Math.max(0,totalPP2-isrEstimado);
@@ -4877,14 +5025,20 @@ async function reporteProyeccionPDF(id){
   notasRazones.push('Margen neto contable: '+margenNeto.toFixed(2)+'% — '+(margenNeto<0?'Pérdida neta. Medidas correctivas inmediatas.':margenNeto<5?'Muy reducido. Alta sensibilidad ante variaciones.':margenNeto<15?'Aceptable.':'Sólido.'));
 
   const notasFiscales=[];
-  if(utilidadFiscal<0) notasFiscales.push('Pérdida fiscal estimada de '+fmtMXN(Math.abs(utilidadFiscal))+'. Evaluar aplicación conforme Art. 57 LISR.');
-  if(utilidadFiscal>0&&utilidadFiscal>utilidadContable) notasFiscales.push('Utilidad fiscal ('+fmtMXN(utilidadFiscal)+') mayor a contable ('+fmtMXN(utilidadContable)+'). Diferencia temporal de '+fmtMXN(difFiscalContable)+'.');
-  if(utilidadFiscal>0&&utilidadFiscal<utilidadContable) notasFiscales.push('Ajustes fiscales reducen base gravable en '+fmtMXN(Math.abs(difFiscalContable))+'. Gestión fiscal eficiente.');
-  if(isrEstimado>0){
-    notasFiscales.push('ISR estimado: '+fmtMXN(isrEstimado)+' ('+proy.tasa_isr+'%). PP acumulados: '+fmtMXN(totalPP2)+'. '+(isrACargoP>0?'ISR a cargo: '+fmtMXN(isrACargoP)+'. Evaluar incrementar PP restantes.':'Saldo a favor: '+fmtMXN(saldoFavorP)+'.'));
-    if(totalPP2>0) notasFiscales.push('Cobertura PP: '+relacionPP.toFixed(1)+'% del ISR estimado.'+(relacionPP<70?' Cobertura baja. Revisar CU aplicado.':relacionPP>100?' PP superan ISR estimado; saldo a favor esperado.':' Adecuada.'));
+  if(esNoLucrativo){
+    notasFiscales.push('Personas Morales con Fines No Lucrativos (Título III LISR): en el caso general no son contribuyentes del ISR sobre su remanente. Proyección de ISR no aplicable hasta precisar tratamiento de remanente distribuible (Arts. 79-89 LISR).');
+  } else {
+    if(utilidadFiscal<0) notasFiscales.push((esResico?'Pérdida fiscal del ejercicio de ':'Pérdida fiscal estimada de ')+fmtMXN(Math.abs(utilidadFiscal))+'. '+(esResico?'Queda pendiente de amortizar en ejercicios siguientes conforme Art. 57 LISR.':'Evaluar aplicación conforme Art. 57 LISR.'));
+    if(!esResico&&utilidadFiscal>0&&utilidadFiscal>utilidadContable) notasFiscales.push('Utilidad fiscal ('+fmtMXN(utilidadFiscal)+') mayor a contable ('+fmtMXN(utilidadContable)+'). Diferencia temporal de '+fmtMXN(difFiscalContable)+'.');
+    if(!esResico&&utilidadFiscal>0&&utilidadFiscal<utilidadContable) notasFiscales.push('Ajustes fiscales reducen base gravable en '+fmtMXN(Math.abs(difFiscalContable))+'. Gestión fiscal eficiente.');
+    if(esResico&&utilidadFiscal>0) notasFiscales.push('Utilidad fiscal de flujo: '+fmtMXN(utilidadFiscal)+' (ingresos cobrados − deducciones pagadas − PTU pagada − pérdida fiscal pendiente).');
+    if(isrEstimado>0){
+      notasFiscales.push('ISR estimado: '+fmtMXN(isrEstimado)+' ('+proy.tasa_isr+'%). PP acumulados: '+fmtMXN(totalPP2)+'. '+(isrACargoP>0?'ISR a cargo: '+fmtMXN(isrACargoP)+'. Evaluar incrementar PP restantes.':'Saldo a favor: '+fmtMXN(saldoFavorP)+'.'));
+      if(totalPP2>0) notasFiscales.push('Cobertura PP: '+relacionPP.toFixed(1)+'% del ISR estimado.'+(relacionPP<70?(esResico?' Cobertura baja. Revisar PP mensuales sobre flujo.':' Cobertura baja. Revisar CU aplicado.'):relacionPP>100?' PP superan ISR estimado; saldo a favor esperado.':' Adecuada.'));
+    }
+    if(esResico) notasFiscales.push('RESICO Personas Morales (Título VII Cap. XII LISR): determinación sobre base de flujo de efectivo, sin Coeficiente de Utilidad ni conciliación Art. 9 LISR.');
+    else notasFiscales.push('CU determinado: '+cuPDF.toFixed(2)+'%. Aplicable para pagos provisionales '+( proy.ejercicio+1)+' conforme Art. 14 LISR.');
   }
-  notasFiscales.push('CU determinado: '+cuPDF.toFixed(2)+'%. Aplicable para pagos provisionales '+( proy.ejercicio+1)+' conforme Art. 14 LISR.');
   notasFiscales.push('Cifras estimadas sujetas a revisión definitiva al cierre del ejercicio '+proy.ejercicio+'. MSST Consulting SC.');
 
   const notasHTML=seccionNotas('I. Bases y alcance','#888',notasBase)+seccionNotas('II. Razones financieras','#3B4BC8',notasRazones)+seccionNotas('III. Consideraciones fiscales','#8DC63F',notasFiscales);
@@ -4916,6 +5070,45 @@ async function reporteProyeccionPDF(id){
       '<td style="padding:6px 8px;font-size:11px;text-align:right;font-weight:700;color:#3B4BC8">'+cuPDF.toFixed(2)+'%</td></tr>'+
       '</tbody></table></div>';
   })();
+
+  // ---- Sección "Conciliación / Determinación fiscal" según régimen ----
+  const conciliacionSectionPDF = esNoLucrativo ? (
+    '<div class="section"><div class="section-title">Determinación — Título III LISR (No Lucrativo)</div>'+
+    '<div style="font-size:11px;color:#555;line-height:1.7;padding:4px 2px">Este régimen, en el caso general, no es contribuyente del ISR sobre su remanente — la obligación recae en sus integrantes o se limita al remanente distribuible cuando aplica (Arts. 79-89 LISR). El motor de proyección de ISR está deshabilitado para este régimen hasta contar con un caso real que precise el tratamiento aplicable.</div></div>'
+  ) : esResico ? (
+    '<div class="section"><div class="section-title">Determinación de utilidad fiscal — Base de flujo · RESICO PM (Arts. 208-211 LISR)</div>'+
+    '<table><thead><tr><th>Concepto</th><th class="right">Importe</th></tr></thead><tbody>'+
+      '<tr><td style="font-weight:700">Ingresos cobrados − Deducciones pagadas (flujo del ejercicio)</td><td class="right" style="font-weight:700">'+fmtMXN(utilidadContable)+'</td></tr>'+
+      '<tr><td style="color:#dc2626">− PTU pagada en el ejercicio</td><td class="right" style="color:#dc2626">('+fmtMXN(ptuPagada)+')</td></tr>'+
+      '<tr><td style="color:#dc2626">− Pérdida fiscal pendiente de amortizar</td><td class="right" style="color:#dc2626">('+fmtMXN(perdidaPendiente)+')</td></tr>'+
+    '</tbody><tfoot>'+
+      '<tr class="fiscal-row"><td>= Utilidad fiscal del ejercicio</td><td class="right" style="color:'+(utilidadFiscal>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidadFiscal)+'</td></tr>'+
+      '<tr class="'+(isrEstimado>0?'isr-row':'isr-row favor')+'"><td>ISR estimado ('+proy.tasa_isr+'% — Art. 9 LISR)</td><td class="right">'+fmtMXN(isrEstimado)+'</td></tr>'+
+      '<tr style="background:#f5f5f3"><td style="color:#888;font-size:10px">− Pagos provisionales realizados + proyectados (flujo, sin CU)</td><td class="right" style="color:#888;font-weight:600">('+fmtMXN(totalPP2)+')</td></tr>'+
+      '<tr style="background:'+(isrACargoP>0?'#fef2f2':'#f0f7d4')+'"><td style="font-weight:700;font-size:13px;color:'+(isrACargoP>0?'#dc2626':'#5a8a1a')+'">'+(isrACargoP>0?'ISR a cargo del ejercicio':'Saldo a favor del contribuyente')+'</td><td class="right" style="font-weight:700;font-size:13px;color:'+(isrACargoP>0?'#dc2626':'#5a8a1a')+'">'+(isrACargoP>0?fmtMXN(isrACargoP):fmtMXN(saldoFavorP))+'</td></tr>'+
+    '</tfoot></table>'+
+    '<div style="font-size:9px;color:#bbb;margin-top:6px">RESICO Personas Morales no utiliza Coeficiente de Utilidad (Art. 14 LISR aplica solo a Título II) ni conciliación contable-fiscal Art. 9 — la base es el flujo de efectivo capturado mes a mes.</div></div>'
+  ) : (
+    '<div class="section">'+
+    '<div class="section-title">Conciliación contable-fiscal — Art. 9 LISR</div>'+
+    '<table>'+
+      '<thead><tr><th>Concepto</th><th>Tipo</th><th class="right">Importe</th><th>Ref. Legal</th><th>Notas / Identificación</th></tr></thead>'+
+      '<tbody>'+
+        '<tr style="background:#f8f9ff"><td style="font-weight:700">Utilidad contable base</td><td>—</td><td style="text-align:right;font-weight:700">'+fmtMXN(utilidadContable)+'</td><td>—</td><td>—</td></tr>'+
+        concilRows+
+        '<tr style="background:#e8f5e9"><td style="color:#5a8a1a">+ Total ajustes acumulables</td><td></td><td style="text-align:right;color:#5a8a1a;font-weight:700">'+fmtMXN(totalSumas)+'</td><td></td><td></td></tr>'+
+        '<tr style="background:#fef2f2"><td style="color:#dc2626">- Total ajustes deducibles</td><td></td><td style="text-align:right;color:#dc2626;font-weight:700">('+fmtMXN(totalRestas)+')</td><td></td><td></td></tr>'+
+      '</tbody>'+
+      '<tfoot>'+
+        '<tr class="fiscal-row"><td colspan="2">= Utilidad fiscal estimada al cierre</td><td style="text-align:right;color:'+(utilidadFiscal>=0?'#3B4BC8':'#dc2626')+'">'+fmtMXN(utilidadFiscal)+'</td><td></td><td></td></tr>'+
+        '<tr class="'+(isrEstimado>0?'isr-row':'isr-row favor')+'"><td colspan="2">ISR estimado ('+proy.tasa_isr+'%)</td><td style="text-align:right">'+fmtMXN(isrEstimado)+'</td><td></td><td></td></tr>'+
+        '<tr style="background:#f5f5f3"><td colspan="2" style="color:#888;font-size:10px">- Pagos provisionales realizados + proyectados</td><td style="text-align:right;color:#888;font-weight:600">('+fmtMXN(totalPP2)+')</td><td></td><td></td></tr>'+
+        '<tr style="background:'+(isrACargoP>0?'#fef2f2':'#f0f7d4')+'"><td colspan="2" style="font-weight:700;font-size:13px;color:'+(isrACargoP>0?'#dc2626':'#5a8a1a')+'">'+(isrACargoP>0?'ISR a cargo del ejercicio':'Saldo a favor del contribuyente')+'</td><td style="text-align:right;font-weight:700;font-size:13px;color:'+(isrACargoP>0?'#dc2626':'#5a8a1a')+'">'+(isrACargoP>0?fmtMXN(isrACargoP):fmtMXN(saldoFavorP))+'</td><td></td><td></td></tr>'+
+        '<tr style="background:#f0f4ff"><td colspan="4" style="font-size:10px;color:#3B4BC8;padding:8px"><strong>CU = '+fmtMXN(utilidadFiscal)+' ÷ '+fmtMXN(totalIngresos)+' = '+cuPDF.toFixed(2)+'%</strong> · Aplicable ejercicio '+(proy.ejercicio+1)+' (Art. 14 LISR)</td><td></td></tr>'+
+      '</tfoot>'+
+    '</table>'+
+    '</div>'
+  );
 
   const win=window.open('','_blank');
   win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
@@ -4962,6 +5155,7 @@ tr:last-child td{border-bottom:none}
     <div style="font-size:16px;font-weight:700;margin-bottom:4px">Proyección de Resultado Fiscal</div>
     <div style="font-size:11px;color:#888">Ejercicio ${proy.ejercicio} · ${escH(proy.cliente_nombre)}</div>
     <div style="font-size:11px;color:#888;margin-top:3px">Tasa ISR: ${proy.tasa_isr}% · ${hoy}</div>
+    <div style="font-size:10px;font-weight:700;color:${esResico?'#5a8a1a':esNoLucrativo?'#888':'#3B4BC8'};margin-top:3px">${regimenLabelPDF}</div>
     <div style="font-size:11px;color:#EF9F27;font-weight:600;margin-top:3px">INFORMACIÓN CONFIDENCIAL Y PRIVILEGIADA</div>
   </div>
 </div>
@@ -5005,7 +5199,7 @@ tr:last-child td{border-bottom:none}
   </div>
   <div class="kpi"><div class="kpi-label">Coeficiente de utilidad</div>
     <div style="font-size:9px;font-weight:600;color:#888;margin-bottom:2px">PROYECTADO ANUAL</div>
-    <div class="kpi-val">${cuPDF.toFixed(2)}%</div><div class="kpi-sub">Art. 14 LISR · Para ${proy.ejercicio+1}</div>
+    <div class="kpi-val">${esResico?'No aplica':cuPDF.toFixed(2)+'%'}</div><div class="kpi-sub">${esResico?'RESICO PM — base de flujo':'Art. 14 LISR · Para '+(proy.ejercicio+1)}</div>
     <div style="margin-top:6px;padding-top:6px;border-top:1px solid #e5e5e0">
       <div style="font-size:9px;font-weight:600;color:#888;margin-bottom:2px">MESES CON DATOS</div>
       <div style="font-size:13px;font-weight:700;color:#555">${nMeses}/12</div>
@@ -5046,25 +5240,7 @@ tr:last-child td{border-bottom:none}
   </table>
 </div>
 
-<div class="section">
-  <div class="section-title">Conciliación contable-fiscal — Art. 9 LISR</div>
-  <table>
-    <thead><tr><th>Concepto</th><th>Tipo</th><th class="right">Importe</th><th>Ref. Legal</th><th>Notas / Identificación</th></tr></thead>
-    <tbody>
-      <tr style="background:#f8f9ff"><td style="font-weight:700">Utilidad contable base</td><td>—</td><td style="text-align:right;font-weight:700">${fmtMXN(utilidadContable)}</td><td>—</td><td>—</td></tr>
-      ${concilRows}
-      <tr style="background:#e8f5e9"><td style="color:#5a8a1a">+ Total ajustes acumulables</td><td></td><td style="text-align:right;color:#5a8a1a;font-weight:700">${fmtMXN(totalSumas)}</td><td></td><td></td></tr>
-      <tr style="background:#fef2f2"><td style="color:#dc2626">- Total ajustes deducibles</td><td></td><td style="text-align:right;color:#dc2626;font-weight:700">(${fmtMXN(totalRestas)})</td><td></td><td></td></tr>
-    </tbody>
-    <tfoot>
-      <tr class="fiscal-row"><td colspan="2">= Utilidad fiscal estimada al cierre</td><td style="text-align:right;color:${utilidadFiscal>=0?'#3B4BC8':'#dc2626'}">${fmtMXN(utilidadFiscal)}</td><td></td><td></td></tr>
-      <tr class="${isrEstimado>0?'isr-row':'isr-row favor'}"><td colspan="2">ISR estimado (${proy.tasa_isr}%)</td><td style="text-align:right">${fmtMXN(isrEstimado)}</td><td></td><td></td></tr>
-      <tr style="background:#f5f5f3"><td colspan="2" style="color:#888;font-size:10px">- Pagos provisionales realizados + proyectados</td><td style="text-align:right;color:#888;font-weight:600">(${fmtMXN(totalPP2)})</td><td></td><td></td></tr>
-      <tr style="background:${isrACargoP>0?'#fef2f2':'#f0f7d4'}"><td colspan="2" style="font-weight:700;font-size:13px;color:${isrACargoP>0?'#dc2626':'#5a8a1a'}">${isrACargoP>0?'ISR a cargo del ejercicio':'Saldo a favor del contribuyente'}</td><td style="text-align:right;font-weight:700;font-size:13px;color:${isrACargoP>0?'#dc2626':'#5a8a1a'}">${isrACargoP>0?fmtMXN(isrACargoP):fmtMXN(saldoFavorP)}</td><td></td><td></td></tr>
-      <tr style="background:#f0f4ff"><td colspan="4" style="font-size:10px;color:#3B4BC8;padding:8px"><strong>CU = ${fmtMXN(utilidadFiscal)} ÷ ${fmtMXN(totalIngresos)} = ${cuPDF.toFixed(2)}%</strong> · Aplicable ejercicio ${proy.ejercicio+1} (Art. 14 LISR)</td><td></td></tr>
-    </tfoot>
-  </table>
-</div>
+${conciliacionSectionPDF}
 
 <div class="section">
   <div class="section-title">Notas, observaciones y recomendaciones</div>
