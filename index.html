@@ -4241,6 +4241,13 @@ async function renderDetalleProyeccion(id){
   const perdidaPendiente=parseFloat(proy.perdida_fiscal_pendiente)||0;
   const REGIMEN_LABELS={general:'General · Título II',resico_pm:'RESICO Personas Morales',no_lucrativo:'No lucrativo · Título III'};
   const regimenLabel=REGIMEN_LABELS[proy.regimen_fiscal]||REGIMEN_LABELS.general;
+  // Encabezados de la tabla mensual: en RESICO PM las cifras son de flujo (cobrado/pagado),
+  // no devengado — se relabelan para que quede inequívoco al revisar el mes a mes.
+  const colIng=esResico?'Ing. cobrados':'Ingresos';
+  const colCv=esResico?'Costo pagado':'Costo venta';
+  const colGo=esResico?'Gastos pagados':'Gastos op.';
+  const colOi=esResico?'Otros ing. cob.':'Otros ing.';
+  const colOg=esResico?'Otros gas. pag.':'Otros gas.';
 
   const ajustesData=ajustes||[];
   const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
@@ -4372,11 +4379,11 @@ async function renderDetalleProyeccion(id){
   '</div>'+
   '<div class="card" style="margin-bottom:1rem">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
-      '<div class="sec-label">Estado de Resultados mensual</div>'+
+      '<div class="sec-label">Estado de Resultados mensual'+(esResico?' (base de flujo — RESICO PM)':'')+'</div>'+
       '<div style="font-size:10px;color:#888;background:#f5fff5;padding:2px 8px;border-radius:4px">Verde claro = proyectado por promedio</div>'+
     '</div>'+
     '<div class="table-wrap"><table class="data-table">'+
-      '<thead><tr><th>Mes</th><th style="text-align:right">Ingresos</th><th style="text-align:right">Costo venta</th><th style="text-align:right">Gastos op.</th><th style="text-align:right">Otros ing.</th><th style="text-align:right">Otros gas.</th><th style="text-align:right">Util. neta</th><th style="text-align:right">Pago prov.</th><th></th></tr></thead>'+
+      '<thead><tr><th>Mes</th><th style="text-align:right">'+colIng+'</th><th style="text-align:right">'+colCv+'</th><th style="text-align:right">'+colGo+'</th><th style="text-align:right">'+colOi+'</th><th style="text-align:right">'+colOg+'</th><th style="text-align:right">Util. neta</th><th style="text-align:right">Pago prov.</th><th></th></tr></thead>'+
       '<tbody>'+mesRows+
       '<tr style="background:#f5f5f3;font-weight:700"><td style="font-size:12px">TOTAL ANUAL</td>'+
       '<td style="text-align:right;font-size:12px">'+fmtMXN(totalIngresos)+'</td>'+
@@ -4705,11 +4712,22 @@ async function guardarMes(){
 
 function abrirCapturaMes(proyId,mes,mesId){
   document.getElementById('modal-mes')?.remove();
+  // Régimen de la proyección — determina si la captura pide cifras de flujo (RESICO PM)
+  // o devengado (general / no lucrativo, sin cambios respecto al comportamiento histórico).
+  const proyCM=pfCache.find(p=>p.id===proyId);
+  const esResicoCM=proyCM?.regimen_fiscal==='resico_pm';
+  const labIng=esResicoCM?'Ingresos cobrados':'Ingresos';
+  const labCv=esResicoCM?'Costo pagado':'Costo de ventas';
+  const labGo=esResicoCM?'Gastos pagados':'Gastos de operación';
+  const labOi=esResicoCM?'Otros ingresos cobrados':'Otros ingresos';
+  const labOg=esResicoCM?'Otros gastos pagados':'Otros gastos';
+  const avisoResicoCM=esResicoCM?'<div style="font-size:11px;color:#5a8a1a;background:#EAF3DE;padding:8px 10px;border-radius:6px;margin-bottom:12px"><strong>RESICO PM</strong> — captura lo efectivamente cobrado y pagado en el mes, no lo facturado/devengado.</div>':'';
   const overlay=document.createElement('div');
   overlay.className='modal-overlay';
   overlay.id='modal-mes';
   const html='<div class="modal-box" style="max-width:560px;max-height:90vh;overflow-y:auto">'+
     '<div class="modal-title">'+MESES_NOMBRES[mes-1]+' — Captura de datos</div>'+
+    avisoResicoCM+
 
     // OPCIONES: Importar del Módulo 4 o Captura Manual
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #e5e5e0">'+
@@ -4724,11 +4742,11 @@ function abrirCapturaMes(proyId,mes,mesId){
 
     '<div id="panel-cifras" style="display:none">'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'+
-        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Ingresos</div><input id="ms-ing" type="number" placeholder="0.00"></div>'+
-        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Costo de ventas</div><input id="ms-cv" type="number" placeholder="0.00"></div>'+
-        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Gastos de operación</div><input id="ms-go" type="number" placeholder="0.00"></div>'+
-        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Otros ingresos</div><input id="ms-oi" type="number" placeholder="0.00"></div>'+
-        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Otros gastos</div><input id="ms-og" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">'+labIng+'</div><input id="ms-ing" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">'+labCv+'</div><input id="ms-cv" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">'+labGo+'</div><input id="ms-go" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">'+labOi+'</div><input id="ms-oi" type="number" placeholder="0.00"></div>'+
+        '<div><div style="font-size:11px;color:#888;margin-bottom:3px">'+labOg+'</div><input id="ms-og" type="number" placeholder="0.00"></div>'+
         '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Activo fijo bruto</div><input id="ms-afb" type="number" placeholder="0.00"></div>'+
         '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Depreciación acumulada</div><input id="ms-dac" type="number" placeholder="0.00"></div>'+
         '<div><div style="font-size:11px;color:#888;margin-bottom:3px">Pago provisional ISR</div><input id="ms-pp" type="number" placeholder="0.00"></div>'+
@@ -4932,6 +4950,12 @@ async function reporteProyeccionPDF(id){
   const perdidaPendiente=parseFloat(proy.perdida_fiscal_pendiente)||0;
   const REGIMEN_LABELS_PDF={general:'Régimen General · Título II LISR',resico_pm:'RESICO Personas Morales · Título VII Cap. XII LISR',no_lucrativo:'Personas Morales con Fines No Lucrativos · Título III LISR'};
   const regimenLabelPDF=REGIMEN_LABELS_PDF[proy.regimen_fiscal]||REGIMEN_LABELS_PDF.general;
+  // Encabezados de la tabla mensual del PDF: RESICO PM reporta flujo (cobrado/pagado).
+  const colIngPDF=esResico?'Ing. cobrados':'Ingresos';
+  const colCvPDF=esResico?'Costo pagado':'Costo venta';
+  const colGoPDF=esResico?'Gastos pagados':'Gastos op.';
+  const colOiPDF=esResico?'Otros ing. cob.':'Otros ing.';
+  const colOgPDF=esResico?'Otros gas. pag.':'Otros gas.';
   const ajustesData=ajustes||[];
   const totalSumas=ajustesData.filter(a=>a.tipo==='suma').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
   const totalRestas=ajustesData.filter(a=>a.tipo==='resta').reduce((s,a)=>s+(parseFloat(a.importe)||0),0);
@@ -5231,9 +5255,9 @@ tr:last-child td{border-bottom:none}
 </div>
 
 <div class="section">
-  <div class="section-title">Estado de Resultados proyectado — Ejercicio ${proy.ejercicio}</div>
+  <div class="section-title">Estado de Resultados proyectado — Ejercicio ${proy.ejercicio}${esResico?' (base de flujo — RESICO PM)':''}</div>
   <table>
-    <thead><tr><th>Mes</th><th class="right">Ingresos</th><th class="right">Costo venta</th><th class="right">Gastos op.</th><th class="right">Otros ing.</th><th class="right">Otros gas.</th><th class="right">Util. neta</th><th class="right">Pago prov.</th></tr></thead>
+    <thead><tr><th>Mes</th><th class="right">${colIngPDF}</th><th class="right">${colCvPDF}</th><th class="right">${colGoPDF}</th><th class="right">${colOiPDF}</th><th class="right">${colOgPDF}</th><th class="right">Util. neta</th><th class="right">Pago prov.</th></tr></thead>
     <tbody>${mesRowsHTML}
     <tr class="total-row"><td>TOTAL ANUAL</td><td style="text-align:right">${fmtMXN(totalIngresos)}</td><td style="text-align:right">${fmtMXN(totalCosto)}</td><td style="text-align:right">${fmtMXN(totalGastosOp)}</td><td style="text-align:right">${fmtMXN(totalOtrosIng)}</td><td style="text-align:right">${fmtMXN(totalOtrosGas)}</td><td style="text-align:right;color:${utilidadContable>=0?'#3B4BC8':'#dc2626'}">${fmtMXN(utilidadContable)}</td><td style="text-align:right;color:#888">${fmtMXN(totalPP2)}</td></tr>
     </tbody>
