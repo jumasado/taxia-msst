@@ -4836,35 +4836,63 @@ async function msImportarMod4(mes){
     // Depreciación acumulada
     const depreciacion=det.activo_depreciacion||0;
 
-    // ---- RESICO Personas Morales (Título VII Cap. XII LISR): ajustar de devengado a
-    // flujo de efectivo usando la variación de cuentas por cobrar/pagar entre el mes
-    // actual y el mes anterior (aproximación indirecta — la balanza NIF no registra
-    // cobros/pagos reales). Requiere la balanza del mes inmediato anterior cargada. ----
+    // ---- RESICO Personas Morales (Título VII Cap. XII LISR): base de flujo de efectivo.
+    // Fuente preferente: cuentas de control de flujo que el propio cliente lleva en su
+    // contabilidad ('ing_cobrado_resico' / 'gasto_pagado_resico' en la balanza, clasificadas
+    // en Módulo 4). Si el cliente no las tiene tageadas ese mes, se usa como respaldo la
+    // aproximación indirecta por variación de cuentas por cobrar/pagar (CxC/CxP) contra el
+    // mes inmediato anterior — la balanza NIF por sí sola no registra cobros/pagos reales. ----
     let notaFlujo='';
     if(esResicoImport){
-      let mesAnt=mes-1,ejAnt=ejercicio;
-      if(mesAnt<1){mesAnt=12;ejAnt=ejercicio-1;}
-      const docsAnt=await sbGet('client_documents',
-        '?cliente_id=eq.'+encodeURIComponent(String(cliente_id))+
-        '&tipo=eq.balanza&mes=eq.'+mesAnt+
-        '&ejercicio=eq.'+ejAnt+
-        '&select=cifras');
-      if(!docsAnt||!docsAnt.length||!docsAnt[0].cifras||!Object.keys(docsAnt[0].cifras).length){
-        throw new Error('Este cliente tributa en RESICO Personas Morales — la importación en base de flujo requiere también la balanza de '+MESES_NOMBRES[mesAnt-1]+' '+ejAnt+' (mes inmediato anterior) para calcular la variación de cuentas por cobrar/pagar. Cárgala en Módulo 4 primero.');
+      const tieneIngDirecto=det.ing_cobrado_resico!=null;
+      const tieneGastoDirecto=det.gasto_pagado_resico!=null;
+      const notas=[];
+
+      if(tieneIngDirecto){
+        ingresos=det.ing_cobrado_resico;
+        notas.push('Ingresos: cuenta directa "Ingresos efectivamente cobrados" ('+fmtMXN(ingresos)+').');
       }
-      const detAnt=docsAnt[0].cifras.detalle||{};
-      const cxcActual=(det.activo_clientes||0)+(det.activo_doc_cobrar||0);
-      const cxcAnterior=(detAnt.activo_clientes||0)+(detAnt.activo_doc_cobrar||0);
-      const cxpActual=(det.pasivo_proveedores||0)+(det.pasivo_acreedores||0);
-      const cxpAnterior=(detAnt.pasivo_proveedores||0)+(detAnt.pasivo_acreedores||0);
-      const deltaCxC=cxcActual-cxcAnterior;
-      const deltaCxP=cxpActual-cxpAnterior;
-      const ingresosDevengado=ingresos;
-      const deduccionesDevengado=costoVentas+gastosOp+gastosFinancieros;
-      ingresos=ingresosDevengado-deltaCxC; // cobrado = facturado - incremento en CxC
-      const deduccionesPagadas=Math.max(0,deduccionesDevengado-deltaCxP); // pagado = devengado - incremento en CxP
-      gastosOp=Math.max(0,deduccionesPagadas-costoVentas-gastosFinancieros); // el ajuste se absorbe en gastos de operación
-      notaFlujo='<br><span style="font-size:11px;color:#5a8a1a">RESICO PM — ajustado a base de flujo: Δ CxC '+fmtMXN(deltaCxC)+', Δ CxP '+fmtMXN(deltaCxP)+' (vs. '+MESES_NOMBRES[mesAnt-1]+' '+ejAnt+'). Revisa contra estado de cuenta si el cliente tiene movimientos atípicos.</span>';
+      if(tieneGastoDirecto){
+        const deduccionesPagadas=det.gasto_pagado_resico;
+        gastosOp=Math.max(0,deduccionesPagadas-costoVentas-gastosFinancieros);
+        notas.push('Deducciones: cuenta directa "Deducciones efectivamente pagadas" ('+fmtMXN(deduccionesPagadas)+').');
+      }
+
+      if(!tieneIngDirecto||!tieneGastoDirecto){
+        // Respaldo: aproximación por variación de CxC/CxP — requiere la balanza del mes anterior
+        let mesAnt=mes-1,ejAnt=ejercicio;
+        if(mesAnt<1){mesAnt=12;ejAnt=ejercicio-1;}
+        const docsAnt=await sbGet('client_documents',
+          '?cliente_id=eq.'+encodeURIComponent(String(cliente_id))+
+          '&tipo=eq.balanza&mes=eq.'+mesAnt+
+          '&ejercicio=eq.'+ejAnt+
+          '&select=cifras');
+        if(!docsAnt||!docsAnt.length||!docsAnt[0].cifras||!Object.keys(docsAnt[0].cifras).length){
+          throw new Error('Este cliente tributa en RESICO Personas Morales y no tiene cuenta directa de '+
+            (!tieneIngDirecto&&!tieneGastoDirecto?'ingresos cobrados / gastos pagados':(!tieneIngDirecto?'ingresos cobrados':'gastos pagados'))+
+            ' clasificada este mes — la aproximación de respaldo requiere también la balanza de '+MESES_NOMBRES[mesAnt-1]+' '+ejAnt+' (mes inmediato anterior) para calcular la variación de cuentas por cobrar/pagar. Cárgala en Módulo 4, o clasifica la cuenta de control de flujo correspondiente.');
+        }
+        const detAnt=docsAnt[0].cifras.detalle||{};
+        if(!tieneIngDirecto){
+          const cxcActual=(det.activo_clientes||0)+(det.activo_doc_cobrar||0);
+          const cxcAnterior=(detAnt.activo_clientes||0)+(detAnt.activo_doc_cobrar||0);
+          const deltaCxC=cxcActual-cxcAnterior;
+          const ingresosDevengado=ingresos;
+          ingresos=ingresosDevengado-deltaCxC; // cobrado = facturado - incremento en CxC
+          notas.push('Ingresos: aproximación por Δ CxC '+fmtMXN(deltaCxC)+' (vs. '+MESES_NOMBRES[mesAnt-1]+' '+ejAnt+') — sin cuenta directa clasificada.');
+        }
+        if(!tieneGastoDirecto){
+          const cxpActual=(det.pasivo_proveedores||0)+(det.pasivo_acreedores||0);
+          const cxpAnterior=(detAnt.pasivo_proveedores||0)+(detAnt.pasivo_acreedores||0);
+          const deltaCxP=cxpActual-cxpAnterior;
+          const deduccionesDevengado=costoVentas+gastosOp+gastosFinancieros;
+          const deduccionesPagadas=Math.max(0,deduccionesDevengado-deltaCxP); // pagado = devengado - incremento en CxP
+          gastosOp=Math.max(0,deduccionesPagadas-costoVentas-gastosFinancieros);
+          notas.push('Deducciones: aproximación por Δ CxP '+fmtMXN(deltaCxP)+' (vs. '+MESES_NOMBRES[mesAnt-1]+' '+ejAnt+') — sin cuenta directa clasificada.');
+        }
+      }
+
+      notaFlujo='<br><span style="font-size:11px;color:#5a8a1a">RESICO PM — base de flujo. '+notas.join(' ')+' Revisa contra estado de cuenta si el cliente tiene movimientos atípicos.</span>';
     }
 
     // Mostrar panel y rellenar campos
@@ -8958,6 +8986,7 @@ const DOC_RUBROS=[
   {id:'ing_cambiario',         cat:'resultado_acreedor',label:'Diferencia en cambio favorable'},
   {id:'ing_otros',             cat:'resultado_acreedor',label:'Otros ingresos'},
   {id:'ing_extraordinarios',   cat:'resultado_acreedor',label:'Ingresos extraordinarios / no recurrentes'},
+  {id:'ing_cobrado_resico',    cat:'resultado_acreedor',label:'Ingresos efectivamente cobrados (RESICO PM — cuenta de control de flujo)'},
   // ===== RESULTADOS DEUDORAS — Gastos/Costos (NIF B-3, C-6) =====
   {id:'gasto_costo',           cat:'resultado_deudor',  label:'Costo de ventas / Costo de lo vendido'},
   {id:'gasto_venta',           cat:'resultado_deudor',  label:'Gastos de venta y comercialización'},
@@ -8975,6 +9004,12 @@ const DOC_RUBROS=[
   {id:'gasto_regalias',        cat:'resultado_deudor',  label:'Regalías, asistencia técnica y honorarios'},
   {id:'gasto_arrendamiento',   cat:'resultado_deudor',  label:'Arrendamiento de activos pagado'},
   {id:'gasto_deterioro',       cat:'resultado_deudor',  label:'Pérdidas por deterioro de activos (NIF C-15)'},
+  {id:'gasto_pagado_resico',   cat:'resultado_deudor',  label:'Deducciones efectivamente pagadas (RESICO PM — cuenta de control de flujo)'},
+  // Nota: 'ing_cobrado_resico' y 'gasto_pagado_resico' son cuentas de control de flujo
+  // que algunos clientes RESICO PM llevan por separado en su propia contabilidad (aparte
+  // de sus cuentas devengado). Se excluyen a propósito de ER_LINEAS/Estado de Resultados
+  // NIF B-3 más abajo (ese reporte es devengado puro) — las usa exclusivamente el import
+  // de Módulo 7 (msImportarMod4) para la determinación RESICO en base de flujo.
   // ===== NO INCLUIR =====
   {id:'no_aplica',             cat:'no_aplica',         label:'No incluir en extracción'},
 ];
