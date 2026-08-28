@@ -3012,7 +3012,7 @@ async function renderClientes(){
     <input class="search-input" id="cli-search" placeholder="Buscar cliente..." oninput="filterClientes()">
     <div class="tab-bar" id="grupo-tabs"></div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Cliente</th><th>RFC</th><th>Tipo</th><th>Grupo</th><th>Responsable</th><th></th></tr></thead>
+      <thead><tr><th>Cliente</th><th>RFC</th><th>Tipo</th><th>Grupo</th><th>Responsable</th><th>Contacto externo</th><th></th></tr></thead>
       <tbody id="cli-tbody"></tbody>
     </table></div>
   </div>`;
@@ -3072,7 +3072,7 @@ function renderClientesTabla(){
   if(activeGrupoFilter==='none')list=list.filter(c=>!c.grupo_id);
   else if(activeGrupoFilter!=='all')list=list.filter(c=>c.grupo_id===activeGrupoFilter);
   if(q)list=list.filter(c=>(c.nombre+c.rfc+c.notas).toLowerCase().includes(q));
-  if(!list.length){tbody.innerHTML=`<tr><td colspan="6" style="color:#bbb;text-align:center;padding:1rem">Sin resultados</td></tr>`;return;}
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="7" style="color:#bbb;text-align:center;padding:1rem">Sin resultados</td></tr>`;return;}
   const canEdit=session.role==='admin'||session.role==='manager';
   tbody.innerHTML=list.map(c=>{
     const grupoCell=c.grupos?'<span class="badge badge-group">'+escH(c.grupos.nombre)+'</span>':'—';
@@ -3084,6 +3084,7 @@ function renderClientesTabla(){
       '<td>'+escH(c.tipo||'—')+(c.regimen_fiscal==='resico_pm'?' <span style="font-size:9px;color:#5a8a1a;font-weight:700">RESICO</span>':c.regimen_fiscal==='no_lucrativo'?' <span style="font-size:9px;color:#888;font-weight:700">NO LUCR.</span>':'')+'</td>'+
       '<td>'+grupoCell+'</td>'+
       '<td>'+escH(c.responsable||'—')+'</td>'+
+      '<td style="font-size:12px">'+(c.upload_contact_email?'<a href="mailto:'+escH(c.upload_contact_email)+'" style="color:#3B4BC8;text-decoration:none" title="'+escH(c.upload_contact_name||'')+'">'+escH(c.upload_contact_email)+'</a>':'<span style="color:#bbb">—</span>')+'</td>'+
       '<td style="white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap">'+(session.role==="admin"?'<button class="btn btn-sm" style="background:#EEEDFE;color:#3B4BC8;border-color:#c5d0ff" onclick="cliAccesos(\''+c.id+'\',\''+escH(c.nombre)+'\')" title="Accesos">👥</button>':'')+ editBtn+' '+delBtn+'</td>'+
     '</tr>';
   }).join('');
