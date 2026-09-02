@@ -1268,7 +1268,7 @@ function buildPlanUI(tareas,today,targetEmail,canEdit,isRemote){
   const tEmail=targetEmail||session.email;
   const color=pc(tEmail);
   const tUser=usersCache[tEmail]||session;
-  const clientOpts='<option value="">Sin cliente</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-name="'+escH(c.nombre)+'">'+escH(c.nombre)+(c.grupos?' ('+escH(c.grupos.nombre)+')':'')+' </option>').join('');
+  const clientOpts='<option value="">Sin cliente</option>'+clientesCache.filter(c=>!c.estatus||c.estatus==='activo').map(c=>'<option value="'+c.id+'" data-name="'+escH(c.nombre)+'">'+escH(c.nombre)+(c.grupos?' ('+escH(c.grupos.nombre)+')':'')+' </option>').join('');
 
   let tareasHTML='';
   tareas.forEach((t,i)=>{
@@ -1686,7 +1686,7 @@ async function renderDashboard(date){
     return asignados;
   };
 
-  let clientesRol=clientesCache||[];
+  let clientesRol=(clientesCache||[]).filter(c=>!c.estatus||c.estatus==='activo');
   if(esMgr){
     const equipoEmails=new Set(visible); // visible = todo el equipo salvo el admin
     clientesRol=clientesRol.filter(c=>{
@@ -3012,7 +3012,7 @@ async function renderClientes(){
     <input class="search-input" id="cli-search" placeholder="Buscar cliente..." oninput="filterClientes()">
     <div class="tab-bar" id="grupo-tabs"></div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Cliente</th><th>RFC</th><th>Tipo</th><th>Grupo</th><th>Responsable</th><th>Contacto externo</th><th></th></tr></thead>
+      <thead><tr><th>Cliente</th><th>RFC</th><th>Tipo</th><th>Grupo</th><th>Responsable</th><th>Contacto externo</th><th>Estatus</th><th></th></tr></thead>
       <tbody id="cli-tbody"></tbody>
     </table></div>
   </div>`;
@@ -3041,6 +3041,13 @@ async function renderClientes(){
           '<select id="cf-resp" style="width:100%">'+respOpts+'</select>'+
         '</div>'+
         '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Notas</div><input id="cf-notas" type="text" placeholder="Notas opcionales"></div>'+
+        '<div><div style="font-size:12px;color:#888;margin-bottom:4px">Estatus</div>'+
+          '<select id="cf-estatus" style="width:100%">'+
+            '<option value="activo">Activo</option>'+
+            '<option value="standby">Standby (pausa temporal)</option>'+
+            '<option value="baja">Baja (cierre de relación)</option>'+
+          '</select>'+
+        '</div>'+
       '</div>'+
       '<div class="sec-label" style="margin-top:4px">Contacto para intercambio de documentos</div>'+
       '<div class="grid2" style="margin-bottom:10px">'+
@@ -3072,7 +3079,7 @@ function renderClientesTabla(){
   if(activeGrupoFilter==='none')list=list.filter(c=>!c.grupo_id);
   else if(activeGrupoFilter!=='all')list=list.filter(c=>c.grupo_id===activeGrupoFilter);
   if(q)list=list.filter(c=>(c.nombre+c.rfc+c.notas).toLowerCase().includes(q));
-  if(!list.length){tbody.innerHTML=`<tr><td colspan="7" style="color:#bbb;text-align:center;padding:1rem">Sin resultados</td></tr>`;return;}
+  if(!list.length){tbody.innerHTML=`<tr><td colspan="8" style="color:#bbb;text-align:center;padding:1rem">Sin resultados</td></tr>`;return;}
   const canEdit=session.role==='admin'||session.role==='manager';
   tbody.innerHTML=list.map(c=>{
     const grupoCell=c.grupos?'<span class="badge badge-group">'+escH(c.grupos.nombre)+'</span>':'—';
@@ -3085,6 +3092,7 @@ function renderClientesTabla(){
       '<td>'+grupoCell+'</td>'+
       '<td>'+escH(c.responsable||'—')+'</td>'+
       '<td style="font-size:12px">'+(c.upload_contact_email?'<a href="mailto:'+escH(c.upload_contact_email)+'" style="color:#3B4BC8;text-decoration:none" title="'+escH(c.upload_contact_name||'')+'">'+escH(c.upload_contact_email)+'</a>':'<span style="color:#bbb">—</span>')+'</td>'+
+      '<td>'+(c.estatus==='baja'?'<span style="background:#fde8e8;color:#b42318;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px">Baja</span>':c.estatus==='standby'?'<span style="background:#fef3c7;color:#92400e;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px">Standby</span>':'<span style="background:#EAF3DE;color:#3B6D11;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px">Activo</span>')+'</td>'+
       '<td style="white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap">'+(session.role==="admin"?'<button class="btn btn-sm" style="background:#EEEDFE;color:#3B4BC8;border-color:#c5d0ff" onclick="cliAccesos(\''+c.id+'\',\''+escH(c.nombre)+'\')" title="Accesos">👥</button>':'')+ editBtn+' '+delBtn+'</td>'+
     '</tr>';
   }).join('');
@@ -3098,6 +3106,7 @@ function editCliente(id){
   document.getElementById('cf-upload-name').value=c.upload_contact_name||'';
   document.getElementById('cf-upload-email').value=c.upload_contact_email||'';
   document.getElementById('cf-notif-cc').value=Array.isArray(c.notification_cc_emails)?c.notification_cc_emails.join(', '):(c.notification_cc_emails||'');
+  document.getElementById('cf-estatus').value=c.estatus||'activo';
   document.getElementById('cf-editing').value=id;
   document.getElementById('cli-form-label').textContent='Editar cliente';
   document.getElementById('cf-btn').textContent='Actualizar cliente';
@@ -3115,6 +3124,7 @@ async function saveCliente(){
   const upload_contact_email=document.getElementById('cf-upload-email').value.trim();
   const notifRaw=document.getElementById('cf-notif-cc').value;
   const notification_cc_emails=notifRaw.split(',').map(s=>s.trim()).filter(Boolean);
+  const estatus=document.getElementById('cf-estatus').value||'activo';
   const editing=document.getElementById('cf-editing').value;
   const err=document.getElementById('cf-err');err.style.display='none';
   if(!nombre){err.textContent='El nombre es obligatorio.';err.style.display='block';return;}
@@ -3125,14 +3135,15 @@ async function saveCliente(){
   const notifInvalido=notification_cc_emails.find(e=>!reEmail.test(e));
   if(notifInvalido){err.textContent='El correo interno "'+notifInvalido+'" no tiene un formato válido.';err.style.display='block';return;}
   const btn=document.getElementById('cf-btn');btn.innerHTML='<span class="spinner"></span> Guardando...';btn.disabled=true;
-  if(editing)await sbPatch('clientes',`?id=eq.${editing}`,{nombre,rfc,tipo,regimen_fiscal,grupo_id,responsable,notas,upload_contact_name,upload_contact_email,notification_cc_emails});
-  else await sbPost('clientes',{nombre,rfc,tipo,regimen_fiscal,grupo_id,responsable,notas,upload_contact_name,upload_contact_email,notification_cc_emails});
+  if(editing)await sbPatch('clientes',`?id=eq.${editing}`,{nombre,rfc,tipo,regimen_fiscal,grupo_id,responsable,notas,upload_contact_name,upload_contact_email,notification_cc_emails,estatus});
+  else await sbPost('clientes',{nombre,rfc,tipo,regimen_fiscal,grupo_id,responsable,notas,upload_contact_name,upload_contact_email,notification_cc_emails,estatus});
   await loadCaches(true); // force=true para refrescar aunque el caché sea reciente
   btn.innerHTML=editing?'Actualizar cliente':'Guardar cliente';btn.disabled=false;
   document.getElementById('cf-editing').value='';
   ['cf-nombre','cf-rfc','cf-notas','cf-upload-name','cf-upload-email','cf-notif-cc'].forEach(i=>{document.getElementById(i).value='';});
   ['cf-tipo','cf-grupo','cf-resp'].forEach(i=>{document.getElementById(i).value='';});
   document.getElementById('cf-regimen').value='general';
+  document.getElementById('cf-estatus').value='activo';
   const ok=document.getElementById('cf-ok');ok.style.display='block';
   setTimeout(()=>ok.style.display='none',2000);
   renderClientesTabla();renderGrupoTabs();
@@ -3518,7 +3529,7 @@ async function renderNuevaDevolucion(id){
   const periodoAnio=editing&&editing.periodo?editing.periodo.split(' ')[1]:'';
   const mesOpts='<option value="">Mes...</option>'+MESES.map(m=>'<option value="'+m+'"'+(periodoMes===m?' selected':'')+'>'+m+'</option>').join('');
   const anioOpts='<option value="">Año...</option>'+[2020,2021,2022,2023,2024,2025,2026,2027].map(y=>'<option value="'+y+'"'+(periodoAnio===String(y)?' selected':'')+'>'+y+'</option>').join('');
-  const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'" data-regimen="'+(c.regimen_fiscal||'general')+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+'</option>').join('');
+  const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.filter(c=>!c.estatus||c.estatus==='activo'||(editing&&editing.cliente_id===c.id)).map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'" data-regimen="'+(c.regimen_fiscal||'general')+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+(c.estatus&&c.estatus!=='activo'?' ('+(c.estatus==='baja'?'Baja':'Standby')+')':'')+'</option>').join('');
   const statusOpts=Object.entries(DEV_STATUS).map(([k,v])=>'<option value="'+k+'"'+(editing&&editing.status===k?' selected':k==='requisitos_pendientes'&&!editing?' selected':'')+'>'+v.label+'</option>').join('');
   const correos=editing&&editing.correos_cliente?(editing.correos_cliente||[]).join(', '):'';
 
@@ -4082,7 +4093,7 @@ function renderPFList(){
 
 async function renderNuevaProyeccion(id){
   const editing=id?pfCache.find(p=>p.id===id):null;
-  const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+'</option>').join('');
+  const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.filter(c=>!c.estatus||c.estatus==='activo'||(editing&&editing.cliente_id===c.id)).map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+(c.estatus&&c.estatus!=='activo'?' ('+(c.estatus==='baja'?'Baja':'Standby')+')':'')+'</option>').join('');
   const anioActual=new Date().getFullYear();
   const anioOpts=[anioActual-1,anioActual,anioActual+1].map(y=>'<option value="'+y+'"'+(editing?editing.ejercicio===y?' selected':'':y===anioActual?' selected':'')+'>'+y+'</option>').join('');
   app.innerHTML=renderTopNav('proyeccion')+`
@@ -5363,7 +5374,7 @@ function renderCierresList(){
 
 async function renderNuevoCierre(id){
   const editing=id?cierresCache.find(c=>c.id===id):null;
-  const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+'</option>').join('');
+  const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.filter(c=>!c.estatus||c.estatus==='activo'||(editing&&editing.cliente_id===c.id)).map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+(c.estatus&&c.estatus!=='activo'?' ('+(c.estatus==='baja'?'Baja':'Standby')+')':'')+'</option>').join('');
   const anioActual=new Date().getFullYear();
   const anios=[anioActual-4,anioActual-3,anioActual-2,anioActual-1,anioActual];
   const anioOpts=anios.map(y=>'<option value="'+y+'"'+(editing?editing.ejercicio===y?' selected':'':y===anioActual-1?' selected':'')+'>'+y+'</option>').join('');
@@ -7666,8 +7677,8 @@ return {
     var esPF=function(c){ var t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); return t==='pf'||t.includes('fisica'); };
     var qn=(q||'').toLowerCase();
     var match=function(c){ return !qn||(c.nombre||'').toLowerCase().includes(qn)||(c.rfc||'').toLowerCase().includes(qn); };
-    var pm=(clientesCache||[]).filter(function(c){ return c.activo!==false&&esPM(c)&&match(c); });
-    var pf=(clientesCache||[]).filter(function(c){ return c.activo!==false&&esPF(c)&&match(c); });
+    var pm=(clientesCache||[]).filter(function(c){ return (!c.estatus||c.estatus==='activo')&&esPM(c)&&match(c); });
+    var pf=(clientesCache||[]).filter(function(c){ return (!c.estatus||c.estatus==='activo')&&esPF(c)&&match(c); });
     var elPM=document.getElementById('p-lista-pm'); if(elPM) elPM.innerHTML=pListaCli(pm,'pm');
     var elPF=document.getElementById('p-lista-pf'); if(elPF) elPF.innerHTML=pListaCli(pf,'pf');
   },
@@ -8432,8 +8443,8 @@ let docTipoPers='pm'; // 'pm' | 'pf'
 function renderDocLista(){
   const esPM=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t.includes('moral')||!t; };
   const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t.includes('fisica'); };
-  const listaPM=clientesCache.filter(c=>c.activo!==false&&esPM(c)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
-  const listaPF=clientesCache.filter(c=>c.activo!==false&&esPF(c)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
+  const listaPM=clientesCache.filter(c=>(!c.estatus||c.estatus==='activo')&&esPM(c)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
+  const listaPF=clientesCache.filter(c=>(!c.estatus||c.estatus==='activo')&&esPF(c)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
   const lista=docTipoPers==='pm'?listaPM:listaPF;
   app.innerHTML=renderTopNav('doc')+
   '<div style="max-width:700px;margin:0 auto">'+
@@ -8471,7 +8482,7 @@ function docRenderLista(lista){
 function docFiltrar(q){
   const esPM=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t.includes('moral')||!t; };
   const esPF=(c)=>{ const t=(c.tipo||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return t.includes('fisica'); };
-  const base=clientesCache.filter(c=>c.activo!==false&&(docTipoPers==='pm'?esPM(c):esPF(c)));
+  const base=clientesCache.filter(c=>(!c.estatus||c.estatus==='activo')&&(docTipoPers==='pm'?esPM(c):esPF(c)));
   const lista=base.filter(c=>!q||(c.nombre||'').toLowerCase().includes(q.toLowerCase()));
   const el=document.getElementById('doc-lista');if(el)el.innerHTML=docRenderLista(lista);
 }
