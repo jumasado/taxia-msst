@@ -3407,54 +3407,49 @@ async function saveUser(){
 
 /* ===== DEVOLUCIONES IVA ===== */
 const DEV_STATUS={
-  requisitos_pendientes:{label:'Requisitos pendientes',color:'#92400E',bg:'#FEF3C7'},
-  solicitud_preparada:{label:'Solicitud preparada',color:'#0C447C',bg:'#E6F1FB'},
-  presentada_sat:{label:'Presentada ante SAT',color:'#3B4BC8',bg:'#EEEDFE'},
-  en_revision_sat:{label:'En revisión SAT',color:'#633806',bg:'#FAEEDA'},
-  requerimiento_sat:{label:'Requerimiento SAT',color:'#dc2626',bg:'#fef2f2'},
-  informacion_entregada:{label:'Información entregada a SAT',color:'#5a8a1a',bg:'#f0f7d4'},
-  autorizada_no_depositada:{label:'Autorizada — No depositada',color:'#0C5E1E',bg:'#D1FAE5'},
-  devuelta:{label:'Devuelta / Concluida',color:'#5a8a1a',bg:'#f0f7d4'},
-  negada:{label:'Negada / Rechazada',color:'#dc2626',bg:'#fef2f2'}
+  saldo_no_trabajado:      {label:'1. Saldo no trabajado',              color:'#854F0B', bg:'#FEF3C7'},
+  integrando_tramite:      {label:'2. Integrando trámite',              color:'#92400E', bg:'#FFF7ED'},
+  presentada_sat:          {label:'3. Presentada ante el SAT',          color:'#3B4BC8', bg:'#EEEDFE'},
+  requerida_sat:           {label:'4. Requerida por el SAT',            color:'#dc2626', bg:'#fef2f2'},
+  requerimiento_atendido:  {label:'5. Requerimiento atendido',          color:'#633806', bg:'#FAEEDA'},
+  autorizada_no_depositada:{label:'6. Autorizada — No depositada',      color:'#0C5E1E', bg:'#D1FAE5'},
+  depositada_concluida:    {label:'7. Depositada / Concluida',          color:'#5a8a1a', bg:'#f0f7d4'},
+  negada:                  {label:'8. Negada / Rechazada / Desistida',  color:'#A32D2D', bg:'#FCEBEB'}
 };
 
 // FASE: lenguaje del cliente agrupado desde el estatus técnico interno
 const DEV_FASE={
-  requisitos_pendientes:{
-    fase:'Preparando tu expediente',icon:'📋',color:'#92400E',bg:'#FEF3C7',
-    desc:'El equipo está integrando los documentos necesarios para presentar tu solicitud ante el SAT.'
+  saldo_no_trabajado:{
+    fase:'Saldo identificado — pendiente iniciar',icon:'💰',color:'#854F0B',bg:'#FEF3C7',
+    desc:'Se identificó un saldo a favor. El equipo evaluará la conveniencia y momento de presentar la solicitud de devolución.'
   },
-  solicitud_preparada:{
-    fase:'Preparando tu expediente',icon:'📋',color:'#92400E',bg:'#FEF3C7',
-    desc:'Tu expediente está completo y listo para ser presentado al SAT.'
+  integrando_tramite:{
+    fase:'Preparando tu expediente',icon:'📋',color:'#92400E',bg:'#FFF7ED',
+    desc:'El equipo está integrando los documentos necesarios para presentar la solicitud ante el SAT.'
   },
   presentada_sat:{
     fase:'Trámite presentado al SAT',icon:'📤',color:'#3B4BC8',bg:'#EEEDFE',
     desc:'Solicitud presentada formalmente. El SAT tiene hasta 40 días hábiles para resolver (Art. 22 CFF).'
   },
-  en_revision_sat:{
-    fase:'SAT analizando tu caso',icon:'🔍',color:'#633806',bg:'#FAEEDA',
-    desc:'El SAT está revisando tu solicitud y los documentos de soporte presentados.'
-  },
-  requerimiento_sat:{
+  requerida_sat:{
     fase:'SAT solicita información adicional',icon:'💬',color:'#dc2626',bg:'#fef2f2',
     desc:'El SAT emitió un requerimiento de información. Nuestro equipo está preparando la respuesta.'
   },
-  informacion_entregada:{
-    fase:'SAT solicita información adicional',icon:'💬',color:'#dc2626',bg:'#fef2f2',
-    desc:'Entregamos la información adicional requerida por el SAT. Continúa el análisis.'
+  requerimiento_atendido:{
+    fase:'Requerimiento atendido — en análisis SAT',icon:'📨',color:'#633806',bg:'#FAEEDA',
+    desc:'Entregamos la información requerida por el SAT. Continúa el análisis de tu solicitud.'
   },
   autorizada_no_depositada:{
     fase:'¡Aprobada — en camino a tu cuenta!',icon:'✅',color:'#0C5E1E',bg:'#D1FAE5',
     desc:'El SAT autorizó tu devolución. El depósito será acreditado en los próximos días hábiles en tu CLABE.'
   },
-  devuelta:{
+  depositada_concluida:{
     fase:'Depositada en tu cuenta',icon:'🏁',color:'#5a8a1a',bg:'#f0f7d4',
     desc:'Devolución acreditada exitosamente en la cuenta bancaria registrada ante el SAT. ¡Trámite concluido!'
   },
   negada:{
     fase:'Resolución desfavorable',icon:'❌',color:'#A32D2D',bg:'#FCEBEB',
-    desc:'El SAT emitió resolución desfavorable. Evaluaremos las opciones de impugnación disponibles (Art. 116 CFF).'
+    desc:'El SAT emitió resolución desfavorable o el trámite fue desistido. Evaluaremos opciones de impugnación (Art. 116 CFF).'
   }
 };
 
@@ -3507,14 +3502,13 @@ function devStatusBadge(status){
 // Timeline visual del proceso de devolución IVA
 // mini=true → versión compacta para la lista | mini=false → versión completa para el detalle
 const DEV_ETAPAS=[
-  {key:'requisitos_pendientes', icon:'📋', label:'Requisitos'},
-  {key:'solicitud_preparada',   icon:'✅', label:'Preparada'},
-  {key:'presentada_sat',        icon:'📤', label:'Presentada'},
-  {key:'en_revision_sat',       icon:'🔍', label:'En revisión'},
-  {key:'requerimiento_sat',     icon:'📩', label:'Requerimiento'},
-  {key:'informacion_entregada', icon:'📨', label:'Info entregada'},
-  {key:'autorizada_no_depositada',icon:'🏦', label:'Autorizada'},
-  {key:'devuelta',              icon:'✔️', label:'Concluida'},
+  {key:'saldo_no_trabajado',       icon:'💰', label:'Saldo identificado'},
+  {key:'integrando_tramite',       icon:'📋', label:'Integrando trámite'},
+  {key:'presentada_sat',           icon:'📤', label:'Presentada SAT'},
+  {key:'requerida_sat',            icon:'💬', label:'Requerida SAT'},
+  {key:'requerimiento_atendido',   icon:'📨', label:'Req. atendido'},
+  {key:'autorizada_no_depositada', icon:'✅', label:'Autorizada'},
+  {key:'depositada_concluida',     icon:'🏁', label:'Depositada'},
 ];
 
 function devStatusTimeline(status, mini){
@@ -3694,7 +3688,7 @@ function renderDevList(){
   }
 
   // Aplicar filtro por estatus seleccionado
-  const ESTADOS_CERRADO=['devuelta','negada'];
+  const ESTADOS_CERRADO=['depositada_concluida','negada'];
   const listaFiltrada=devFiltroActual==='todos'?devCache:devCache.filter(d=>d.status===devFiltroActual);
   const activos=sortDevoluciones(listaFiltrada.filter(d=>!ESTADOS_CERRADO.includes(d.status)));
   const cerrados=sortDevoluciones(listaFiltrada.filter(d=>ESTADOS_CERRADO.includes(d.status)));
@@ -3792,8 +3786,7 @@ async function renderNuevaDevolucion(id){
   const mesOpts='<option value="">Mes...</option>'+MESES.map(m=>'<option value="'+m+'"'+(periodoMes===m?' selected':'')+'>'+m+'</option>').join('');
   const anioOpts='<option value="">Año...</option>'+[2020,2021,2022,2023,2024,2025,2026,2027].map(y=>'<option value="'+y+'"'+(periodoAnio===String(y)?' selected':'')+'>'+y+'</option>').join('');
   const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.filter(c=>!c.estatus||c.estatus==='activo'||(editing&&editing.cliente_id===c.id)).map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'" data-regimen="'+(c.regimen_fiscal||'general')+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+(c.estatus&&c.estatus!=='activo'?' ('+(c.estatus==='baja'?'Baja':'Standby')+')':'')+'</option>').join('');
-  // 'solicitud_preparada' se oculta del formulario — etapa sin uso operativo
-const statusOpts=Object.entries(DEV_STATUS).filter(([k])=>k!=='solicitud_preparada').map(([k,v])=>'<option value="'+k+'"'+(editing&&editing.status===k?' selected':k==='requisitos_pendientes'&&!editing?' selected':'')+'>'+v.label+'</option>').join('');
+  const statusOpts=Object.entries(DEV_STATUS).map(([k,v])=>'<option value="'+k+'"'+(editing&&editing.status===k?' selected':k==='saldo_no_trabajado'&&!editing?' selected':'')+'>'+v.label+'</option>').join('');
   const correos=editing&&editing.correos_cliente?(editing.correos_cliente||[]).join(', '):'';
 
   app.innerHTML=renderTopNav('devoluciones')+`
