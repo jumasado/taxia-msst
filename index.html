@@ -3133,6 +3133,7 @@ async function renderClientes(){
           '<select id="cf-regimen" style="width:100%">'+
             '<option value="general">General (Título II LISR)</option>'+
             '<option value="resico_pm">RESICO Personas Morales (Título VII Cap. XII LISR)</option>'+
+            '<option value="coordinados">Coordinados — Autotransporte (Arts. 72-78 LISR)</option>'+
             '<option value="no_lucrativo">Personas Morales con Fines No Lucrativos (Título III LISR)</option>'+
           '</select>'+
         '</div>'+
@@ -4391,13 +4392,14 @@ async function renderNuevaProyeccion(id){
         <select id="pf-regimen" style="width:100%" onchange="pfToggleResicoExtra()">
           <option value="general"${(editing?.regimen_fiscal||'general')==='general'?' selected':''}>General (Título II LISR)</option>
           <option value="resico_pm"${editing?.regimen_fiscal==='resico_pm'?' selected':''}>RESICO Personas Morales (Título VII Cap. XII)</option>
+          <option value="coordinados"${editing?.regimen_fiscal==='coordinados'?' selected':''}>Coordinados — Autotransporte (Arts. 72-78 LISR)</option>
           <option value="no_lucrativo"${editing?.regimen_fiscal==='no_lucrativo'?' selected':''}>No lucrativo (Título III)</option>
         </select>
         <div style="font-size:10px;color:#aaa;margin-top:3px">Se autocompleta con el régimen del cliente al seleccionarlo. Editable por si este ejercicio difiere.</div>
       </div>
     </div>
     <div id="pf-resico-extra" style="display:none;margin-bottom:12px">
-      <div class="sec-label" style="margin-bottom:8px">Insumos RESICO Personas Morales — Arts. 208-211 LISR</div>
+      <div class="sec-label" style="margin-bottom:8px">Insumos base de flujo — RESICO PM (Arts. 208-211) / Coordinados (Arts. 72-78)</div>
       <div class="grid2">
         <div><div style="font-size:12px;color:#888;margin-bottom:4px">PTU pagada en el ejercicio</div>
           <input id="pf-ptu" type="number" placeholder="0.00" step="0.01" value="${editing?.ptu_pagada_ejercicio||0}"></div>
@@ -4419,7 +4421,7 @@ function pfToggleResicoExtra(){
   const sel=document.getElementById('pf-regimen');
   const box=document.getElementById('pf-resico-extra');
   if(!sel||!box)return;
-  box.style.display=sel.value==='resico_pm'?'block':'none';
+  box.style.display=(sel.value==='resico_pm'||sel.value==='coordinados')?'block':'none';
 }
 
 function pfSetCliente(sel){
@@ -4522,11 +4524,11 @@ async function renderDetalleProyeccion(id){
 
   // Régimen fiscal de la proyección (snapshot tomado del cliente al crearla) —
   // determina qué motor de cálculo aplica. 'general' = comportamiento histórico sin cambios.
-  const esResico=proy.regimen_fiscal==='resico_pm';
+  const esResico=proy.regimen_fiscal==='resico_pm'||proy.regimen_fiscal==='coordinados';
   const esNoLucrativo=proy.regimen_fiscal==='no_lucrativo';
   const ptuPagada=parseFloat(proy.ptu_pagada_ejercicio)||0;
   const perdidaPendiente=parseFloat(proy.perdida_fiscal_pendiente)||0;
-  const REGIMEN_LABELS={general:'General · Título II',resico_pm:'RESICO Personas Morales',no_lucrativo:'No lucrativo · Título III'};
+  const REGIMEN_LABELS={general:'General · Título II',resico_pm:'RESICO Personas Morales',coordinados:'Coordinados · Autotransporte · Arts. 72-78',no_lucrativo:'No lucrativo · Título III'};
   const regimenLabel=REGIMEN_LABELS[proy.regimen_fiscal]||REGIMEN_LABELS.general;
   // Encabezados de la tabla mensual: en RESICO PM las cifras son de flujo (cobrado/pagado),
   // no devengado — se relabelan para que quede inequívoco al revisar el mes a mes.
@@ -4604,6 +4606,14 @@ async function renderDetalleProyeccion(id){
         '<td style="text-align:right;font-size:11px;color:#888;vertical-align:middle">'+fmtMXN(totalPP)+'<br><span style="font-size:9px">PP acumulado</span></td>'+
         '<td></td></tr>');
 
+  // Banner informativo para coordinados
+  const esCoordinados=proy.regimen_fiscal==='coordinados';
+  const coordinadosBanner=esCoordinados?
+    '<div style="background:#E6F1FB;border:1px solid #3B4BC8;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:12px">'+
+    '🚛 <strong>Régimen de los Coordinados — Autotransporte (Arts. 72-78 LISR)</strong><br>'+
+    'Base de flujo de efectivo. Deducciones especiales: diesel 100%, llantas en el año, viáticos (Art. 28-V). '+
+    'Estímulo IEPS diesel acreditable contra ISR (Art. 16 LIF vigente). Motor: flujo × '+proy.tasa_isr+'%.</div>':'';
+
   const conciliacionCardHtml = esNoLucrativo ? (
     '<div class="card" style="margin-bottom:1rem">'+
       '<div class="sec-label" style="margin-bottom:10px">Determinación — Personas Morales con Fines No Lucrativos (Título III LISR)</div>'+
@@ -4616,7 +4626,7 @@ async function renderDetalleProyeccion(id){
   ) : esResico ? (
     '<div class="card" style="margin-bottom:1rem">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
-        '<div class="sec-label">Determinación de utilidad fiscal — base de flujo (RESICO PM)</div>'+
+        '<div class="sec-label">Determinación de utilidad fiscal — base de flujo ('+(proy.regimen_fiscal==='coordinados'?'Coordinados Arts. 72-78':'RESICO PM')+')</div>'+
       '</div>'+
       '<div class="table-wrap"><table class="data-table">'+
         '<tbody>'+
@@ -4657,6 +4667,7 @@ async function renderDetalleProyeccion(id){
   );
 
   document.getElementById('pf-det-body').innerHTML=
+  coordinadosBanner+
   '<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:1rem">'+
     '<div class="metric" style="border-left:3px solid #3B4BC8"><div class="metric-label">Ingresos proyectados</div><div class="metric-val" style="font-size:13px;color:#3B4BC8">'+fmtMXN(totalIngresos)+'</div><div style="font-size:10px;color:#888">'+nMeses+' meses reales</div></div>'+
     '<div class="metric" style="border-left:3px solid #EF9F27"><div class="metric-label">Utilidad contable</div><div class="metric-val" style="font-size:13px;color:'+(utilidadContable>=0?'#EF9F27':'#dc2626')+'">'+fmtMXN(utilidadContable)+'</div></div>'+
@@ -4666,7 +4677,7 @@ async function renderDetalleProyeccion(id){
   '</div>'+
   '<div class="card" style="margin-bottom:1rem">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
-      '<div class="sec-label">Estado de Resultados mensual'+(esResico?' (base de flujo — RESICO PM)':'')+'</div>'+
+      '<div class="sec-label">Estado de Resultados mensual'+(proy.regimen_fiscal==='coordinados'?' (base de flujo — Coordinados Arts. 72-78)':esResico?' (base de flujo — RESICO PM)':'')+'</div>'+
       '<div style="font-size:10px;color:#888;background:#f5fff5;padding:2px 8px;border-radius:4px">Verde claro = proyectado por promedio</div>'+
     '</div>'+
     '<div class="table-wrap"><table class="data-table">'+
@@ -5002,7 +5013,7 @@ function abrirCapturaMes(proyId,mes,mesId){
   // Régimen de la proyección — determina si la captura pide cifras de flujo (RESICO PM)
   // o devengado (general / no lucrativo, sin cambios respecto al comportamiento histórico).
   const proyCM=pfCache.find(p=>p.id===proyId);
-  const esResicoCM=proyCM?.regimen_fiscal==='resico_pm';
+  const esResicoCM=proyCM?.regimen_fiscal==='resico_pm'||proyCM?.regimen_fiscal==='coordinados';
   const labIng=esResicoCM?'Ingresos cobrados':'Ingresos';
   const labCv=esResicoCM?'Costo pagado':'Costo de ventas';
   const labGo=esResicoCM?'Gastos pagados':'Gastos de operación';
@@ -5094,7 +5105,7 @@ async function msImportarMod4(mes){
     const proy=(await sbGet('pf_proyecciones','?id=eq.'+encodeURIComponent(proyId)+'&select=cliente_id,ejercicio,regimen_fiscal'))||[];
     if(!proy.length) throw new Error('Proyección no encontrada');
     const {cliente_id,ejercicio,regimen_fiscal}=proy[0];
-    const esResicoImport=regimen_fiscal==='resico_pm';
+    const esResicoImport=regimen_fiscal==='resico_pm'||regimen_fiscal==='coordinados';
     // Buscar balanza del mes en client_documents
     const docs=await sbGet('client_documents',
       '?cliente_id=eq.'+encodeURIComponent(String(cliente_id))+
@@ -5259,11 +5270,11 @@ async function reporteProyeccionPDF(id){
   const totalOtrosIng=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_ingresos)||0),0);
   const totalOtrosGas=proyectados.reduce((s,m)=>s+(parseFloat(m.otros_gastos)||0),0);
   const utilidadContable=totalIngresos-totalCosto-totalGastosOp+totalOtrosIng-totalOtrosGas;
-  const esResico=proy.regimen_fiscal==='resico_pm';
+  const esResico=proy.regimen_fiscal==='resico_pm'||proy.regimen_fiscal==='coordinados';
   const esNoLucrativo=proy.regimen_fiscal==='no_lucrativo';
   const ptuPagada=parseFloat(proy.ptu_pagada_ejercicio)||0;
   const perdidaPendiente=parseFloat(proy.perdida_fiscal_pendiente)||0;
-  const REGIMEN_LABELS_PDF={general:'Régimen General · Título II LISR',resico_pm:'RESICO Personas Morales · Título VII Cap. XII LISR',no_lucrativo:'Personas Morales con Fines No Lucrativos · Título III LISR'};
+  const REGIMEN_LABELS_PDF={general:'Régimen General · Título II LISR',resico_pm:'RESICO Personas Morales · Título VII Cap. XII LISR',coordinados:'Coordinados · Autotransporte · Arts. 72-78 LISR',no_lucrativo:'Personas Morales con Fines No Lucrativos · Título III LISR'};
   const regimenLabelPDF=REGIMEN_LABELS_PDF[proy.regimen_fiscal]||REGIMEN_LABELS_PDF.general;
   // Encabezados de la tabla mensual del PDF: RESICO PM reporta flujo (cobrado/pagado).
   const colIngPDF=esResico?'Ing. cobrados':'Ingresos';
@@ -9286,6 +9297,11 @@ const DOC_RUBROS=[
   {id:'gasto_perdida_activos', cat:'resultado_deudor',  label:'Pérdida en venta o baja de activos'},
   {id:'gasto_otros',           cat:'resultado_deudor',  label:'Otros gastos deducibles (Art. 27 LISR)'},
   {id:'gasto_no_deducible',    cat:'resultado_deudor',  label:'Gastos no deducibles (Art. 28 LISR)'},
+  // Rubros especiales: autotransporte — Coordinados Arts. 72-78 LISR
+  {id:'gasto_combustible',     cat:'resultado_deudor',  label:'Combustibles y diesel (100% deducible — autotransporte)'},
+  {id:'gasto_llantas',         cat:'resultado_deudor',  label:'Llantas y refacciones (deducible en el año — autotransporte)'},
+  {id:'gasto_viaticos',        cat:'resultado_deudor',  label:'Viáticos de autotransporte (Art. 28-V LISR)'},
+  {id:'estimulo_ieps',         cat:'resultado_deudor',  label:'Estímulo IEPS diesel (acreditable ISR — Art. 16 LIF)'},
   {id:'gasto_isr',             cat:'resultado_deudor',  label:'ISR del ejercicio (NIF D-4)'},
   {id:'gasto_ptu',             cat:'resultado_deudor',  label:'PTU del ejercicio (NIF D-3)'},
   {id:'gasto_regalias',        cat:'resultado_deudor',  label:'Regalías, asistencia técnica y honorarios'},
