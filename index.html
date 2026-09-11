@@ -2754,48 +2754,116 @@ async function generarReporteDevPDF(soloCorreo=false){
     porCliente[k].push(d);
   });
 
-  let seccionesHTML='';
-  Object.entries(porCliente).forEach(([cli,devs])=>{
-    const totalSol=devs.reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
-    const totalDev=devs.reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
-    const rows=devs.map(d=>{
-      const plazos=calcPlazos(d);
-      const s=DEV_STATUS[d.status]||{label:d.status,color:'#888',bg:'#f5f5f3'};
-      const dr=d.fecha_presentacion_sat?diasRestantes(plazos.limite_resolucion):(plazos.presentacion?diasRestantes(plazos.presentacion):null);
-      const plazoTxt=d.status==='devuelta'?'Concluida':d.status==='negada'?'Negada':(dr===null?'—':dr<0?'Vencido '+Math.abs(dr)+'d':dr+'d');
-      return '<tr>'+
-        '<td>'+escH(d.periodo||'—')+'</td>'+
-        '<td><span style="background:'+s.bg+';color:'+s.color+';padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">'+s.label+'</span></td>'+
-        '<td>'+escH(d.fecha_inicio||'—')+'</td>'+
-        '<td>'+escH(d.fecha_presentacion_sat||'—')+'</td>'+
-        '<td>'+escH(plazos.limite_resolucion||'—')+'</td>'+
-        '<td style="font-weight:600">'+fmtMXN(d.monto_solicitado)+'</td>'+
-        '<td style="font-weight:600;color:'+(d.monto_devuelto?'#5a8a1a':'#888')+'">'+fmtMXN(d.monto_devuelto)+'</td>'+
-        '<td style="color:'+(dr!==null&&dr<0?'#dc2626':dr!==null&&dr<=5?'#92400E':'#5a8a1a')+'">'+plazoTxt+'</td>'+
-        '<td>'+escH(d.responsable||'—')+'</td>'+
-      '</tr>';
-    }).join('');
+  // Grupos de estatus para el reporte
+  const GRUPOS_ESTATUS=[
+    {
+      key:'en_proceso',
+      label:'En proceso',
+      color:'#3B4BC8', bg:'#E6F1FB',
+      filtro:d=>!['devuelta','negada'].includes(d.status)
+    },
+    {
+      key:'devuelta',
+      label:'Devuelta / Concluida',
+      color:'#3B6D11', bg:'#EAF3DE',
+      filtro:d=>d.status==='devuelta'
+    },
+    {
+      key:'negada',
+      label:'Negada / Rechazada',
+      color:'#A32D2D', bg:'#FCEBEB',
+      filtro:d=>d.status==='negada'
+    }
+  ];
 
-    seccionesHTML+='<div style="margin-bottom:24px;break-inside:avoid">'+
-      '<div style="background:#3B4BC8;color:#fff;padding:8px 12px;border-radius:6px 6px 0 0;display:flex;justify-content:space-between;align-items:center">'+
-        '<span style="font-size:13px;font-weight:700">'+escH(cli)+'</span>'+
-        '<span style="font-size:11px;opacity:.85">'+devs.length+' solicitud'+(devs.length>1?'es':'')+(totalSol?' · Sol: '+fmtMXN(totalSol):'')+(totalDev?' · Dev: '+fmtMXN(totalDev):'')+'</span>'+
-      '</div>'+
-      '<table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #e5e5e0;border-top:none">'+
-        '<thead><tr style="background:#f5f5f3">'+
-          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Período</th>'+
-          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Estatus</th>'+
-          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Inicio</th>'+
-          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Presentación SAT</th>'+
-          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Límite resolución</th>'+
-          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Solicitado</th>'+
-          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Devuelto</th>'+
-          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Plazo</th>'+
-          '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555">Responsable</th>'+
-        '</tr></thead>'+
-        '<tbody>'+rows+'</tbody>'+
-      '</table>'+
-    '</div>';
+  // Columnas del reporte
+  const thStyle='padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555;white-space:nowrap';
+  const tdR='padding:6px 8px;text-align:right;vertical-align:middle';
+  const tdL='padding:6px 8px;vertical-align:middle';
+  const THEAD='<thead><tr style="background:#f5f5f3">'+
+    '<th style="'+thStyle+'">Período</th>'+
+    '<th style="'+thStyle+'">Estatus</th>'+
+    '<th style="'+thStyle+'">Inicio</th>'+
+    '<th style="'+thStyle+'">Presentación SAT</th>'+
+    '<th style="'+thStyle+'">Límite resolución</th>'+
+    '<th style="'+thStyle+';text-align:right">Monto solicitado</th>'+
+    '<th style="'+thStyle+';text-align:right">Monto devuelto</th>'+
+    '<th style="'+thStyle+'">Plazo</th>'+
+    '<th style="'+thStyle+'">Responsable</th>'+
+  '</tr></thead>';
+
+  function buildRow(d){
+    const plazos=calcPlazos(d);
+    const s=DEV_STATUS[d.status]||{label:d.status,color:'#888',bg:'#f5f5f3'};
+    const dr=d.fecha_presentacion_sat?diasRestantes(plazos.limite_resolucion):(plazos.presentacion?diasRestantes(plazos.presentacion):null);
+    const plazoTxt=d.status==='devuelta'?'Concluida':d.status==='negada'?'Negada':(dr===null?'—':dr<0?'⚠ '+Math.abs(dr)+'d vencido':dr+'d');
+    const plazoColor=dr!==null&&dr<0?'#dc2626':dr!==null&&dr<=5?'#92400E':'#5a8a1a';
+    return '<tr style="border-bottom:1px solid #f5f5f3">'+
+      '<td style="'+tdL+';font-weight:600">'+escH(d.periodo||'—')+'</td>'+
+      '<td style="'+tdL+'"><span style="background:'+s.bg+';color:'+s.color+';padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;white-space:nowrap">'+s.label+'</span></td>'+
+      '<td style="'+tdL+';color:#888">'+escH(d.fecha_inicio||'—')+'</td>'+
+      '<td style="'+tdL+';color:#888">'+escH(d.fecha_presentacion_sat||'—')+'</td>'+
+      '<td style="'+tdL+';color:#888">'+escH(plazos.limite_resolucion||'—')+'</td>'+
+      '<td style="'+tdR+';font-weight:600;color:#3B4BC8">'+fmtMXN(d.monto_solicitado)+'</td>'+
+      '<td style="'+tdR+';font-weight:600;color:'+(d.monto_devuelto?'#3B6D11':'#bbb')+'">'+fmtMXN(d.monto_devuelto)+'</td>'+
+      '<td style="'+tdL+';color:'+plazoColor+';font-weight:600;white-space:nowrap">'+plazoTxt+'</td>'+
+      '<td style="'+tdL+';color:#888">'+escH(d.responsable||'—')+'</td>'+
+    '</tr>';
+  }
+
+  function buildSubtotalRow(label,sol,dev,n,color){
+    return '<tr style="background:#f5f5f3;font-weight:700;border-top:2px solid '+color+'40">'+
+      '<td colspan="5" style="padding:6px 10px;font-size:11px;color:'+color+'">'+
+        'Subtotal — '+label+' ('+n+' solicitud'+(n!==1?'es':(n===1?'':'s'))+')'+
+      '</td>'+
+      '<td style="'+tdR+';color:'+color+';font-size:12px">'+fmtMXN(sol)+'</td>'+
+      '<td style="'+tdR+';color:'+color+';font-size:12px">'+fmtMXN(dev)+'</td>'+
+      '<td colspan="2"></td>'+
+    '</tr>';
+  }
+
+  let seccionesHTML='';
+  Object.entries(porCliente).sort(([a],[b])=>a.localeCompare(b,'es')).forEach(([cli,devs])=>{
+    const totCliSol=devs.reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
+    const totCliDev=devs.reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
+
+    let tablaBody='';
+    let gruposConDatos=0;
+    GRUPOS_ESTATUS.forEach(g=>{
+      const grupo=devs.filter(g.filtro);
+      if(!grupo.length) return;
+      gruposConDatos++;
+      const gSol=grupo.reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
+      const gDev=grupo.reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
+      // Encabezado del grupo
+      tablaBody+='<tr><td colspan="9" style="padding:5px 8px;background:'+g.bg+';color:'+g.color+';font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border-top:1px solid '+g.color+'40">'+
+        g.label+' &nbsp;·&nbsp; '+grupo.length+' solicitud'+(grupo.length!==1?'es':'')+
+      '</td></tr>';
+      // Filas del grupo
+      tablaBody+=grupo.map(d=>buildRow(d)).join('');
+      // Subtotal del grupo
+      tablaBody+=buildSubtotalRow(g.label,gSol,gDev,grupo.length,g.color);
+    });
+
+    // Total del cliente
+    const totalCliRow='<tr style="background:#3B4BC8;color:#fff;font-weight:700">'+
+      '<td colspan="5" style="padding:8px 10px;font-size:12px">📊 TOTAL '+escH(cli).toUpperCase()+'</td>'+
+      '<td style="'+tdR+';font-size:13px;color:#fff">'+fmtMXN(totCliSol)+'</td>'+
+      '<td style="'+tdR+';font-size:13px;color:#8DC63F">'+fmtMXN(totCliDev)+'</td>'+
+      '<td colspan="2"></td>'+
+    '</tr>';
+
+    seccionesHTML+=
+      '<div style="margin-bottom:28px;page-break-inside:avoid">'+
+        // Encabezado del cliente
+        '<div style="background:#1a1a2e;color:#fff;padding:10px 14px;border-radius:6px 6px 0 0;display:flex;justify-content:space-between;align-items:center">'+
+          '<span style="font-size:14px;font-weight:700;letter-spacing:.3px">🏢 '+escH(cli)+'</span>'+
+          '<span style="font-size:10px;opacity:.7">'+devs.length+' solicitud'+(devs.length!==1?'es':'')+' · IVA Mensual</span>'+
+        '</div>'+
+        '<table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #e5e5e0;border-top:none">'+
+          THEAD+'<tbody>'+tablaBody+totalCliRow+'</tbody>'+
+        '</table>'+
+      '</div>';
   });
 
   // Totales generales
@@ -2804,6 +2872,53 @@ async function generarReporteDevPDF(soloCorreo=false){
   const enProceso=lista.filter(d=>d.status!=='devuelta'&&d.status!=='negada').length;
   const concluidas=lista.filter(d=>d.status==='devuelta').length;
   const negadas=lista.filter(d=>d.status==='negada').length;
+
+  // Subtotales globales por grupo de estatus
+  const gtProcSol=lista.filter(d=>!['devuelta','negada'].includes(d.status)).reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
+  const gtProcDev=lista.filter(d=>!['devuelta','negada'].includes(d.status)).reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
+  const gtDevSol=lista.filter(d=>d.status==='devuelta').reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
+  const gtDevDev=lista.filter(d=>d.status==='devuelta').reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
+  const gtNegSol=lista.filter(d=>d.status==='negada').reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
+
+  const granTotalHTML=
+    '<div style="margin-top:8px;page-break-inside:avoid">'+
+    '<table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #3B4BC8;border-radius:6px">'+
+      '<thead><tr style="background:#3B4BC8;color:#fff">'+
+        '<th style="padding:8px 12px;text-align:left;font-size:12px" colspan="2">📋 RESUMEN GENERAL — DEVOLUCIONES IVA MENSUAL</th>'+
+        '<th style="padding:8px 12px;text-align:right">Solicitudes</th>'+
+        '<th style="padding:8px 12px;text-align:right">Monto solicitado</th>'+
+        '<th style="padding:8px 12px;text-align:right">Monto devuelto</th>'+
+        '<th style="padding:8px 12px;text-align:right">Diferencia</th>'+
+      '</tr></thead>'+
+      '<tbody>'+
+        (enProceso?'<tr style="background:#E6F1FB"><td style="padding:7px 12px" colspan="2">🔵 En proceso</td>'+
+          '<td style="padding:7px 12px;text-align:right;font-weight:600">'+enProceso+'</td>'+
+          '<td style="padding:7px 12px;text-align:right;font-weight:600;color:#3B4BC8">'+fmtMXN(gtProcSol)+'</td>'+
+          '<td style="padding:7px 12px;text-align:right;color:#bbb">'+fmtMXN(gtProcDev)+'</td>'+
+          '<td style="padding:7px 12px;text-align:right;color:#EF9F27;font-weight:600">'+fmtMXN(gtProcSol-gtProcDev)+'</td>'+
+        '</tr>':'')+
+        (concluidas?'<tr style="background:#EAF3DE"><td style="padding:7px 12px" colspan="2">🟢 Devuelta / Concluida</td>'+
+          '<td style="padding:7px 12px;text-align:right;font-weight:600">'+concluidas+'</td>'+
+          '<td style="padding:7px 12px;text-align:right;font-weight:600;color:#3B4BC8">'+fmtMXN(gtDevSol)+'</td>'+
+          '<td style="padding:7px 12px;text-align:right;font-weight:600;color:#3B6D11">'+fmtMXN(gtDevDev)+'</td>'+
+          '<td style="padding:7px 12px;text-align:right;color:'+(gtDevSol-gtDevDev>0?'#EF9F27':'#3B6D11')+';font-weight:600">'+fmtMXN(gtDevSol-gtDevDev)+'</td>'+
+        '</tr>':'')+
+        (negadas?'<tr style="background:#FCEBEB"><td style="padding:7px 12px" colspan="2">🔴 Negada / Rechazada</td>'+
+          '<td style="padding:7px 12px;text-align:right;font-weight:600">'+negadas+'</td>'+
+          '<td style="padding:7px 12px;text-align:right;font-weight:600;color:#A32D2D">'+fmtMXN(gtNegSol)+'</td>'+
+          '<td style="padding:7px 12px;text-align:right;color:#bbb">—</td>'+
+          '<td style="padding:7px 12px;text-align:right;color:#A32D2D;font-weight:600">'+fmtMXN(gtNegSol)+'</td>'+
+        '</tr>':'')+
+        '<tr style="background:#1a1a2e;color:#fff;font-weight:700;font-size:13px">'+
+          '<td style="padding:10px 12px" colspan="2">⭐ GRAN TOTAL</td>'+
+          '<td style="padding:10px 12px;text-align:right">'+lista.length+' solicitudes</td>'+
+          '<td style="padding:10px 12px;text-align:right">'+fmtMXN(totalGenSol)+'</td>'+
+          '<td style="padding:10px 12px;text-align:right;color:#8DC63F">'+fmtMXN(totalGenDev)+'</td>'+
+          '<td style="padding:10px 12px;text-align:right;color:'+(totalGenSol-totalGenDev>1?'#EF9F27':'#8DC63F')+'">'+fmtMXN(totalGenSol-totalGenDev)+'</td>'+
+        '</tr>'+
+      '</tbody>'+
+    '</table>'+
+    '</div>';
 
   const win=window.open('','_blank');
   win.document.write('<!DOCTYPE html><html lang="es"><head>'+
@@ -2853,6 +2968,10 @@ async function generarReporteDevPDF(soloCorreo=false){
     seccionesHTML+
     '<div style="margin-top:20px;padding-top:10px;border-top:1px solid #e5e5e0;font-size:10px;color:#bbb;text-align:center">'+
       'Reporte generado por TaxIA día a día — MSST Consulting SC — Confidencial — '+hoy+
+    '</div>'+
+    granTotalHTML+
+    '<div style="margin-top:20px;padding-top:10px;border-top:1px solid #e5e5e0;font-size:9px;color:#bbb;text-align:center">'+
+      'MSST Consulting SC · TaxIA día a día · Confidencial — Uso exclusivo del cliente · '+hoy+
     '</div>'+
   '</body></html>');
   win.document.close();
