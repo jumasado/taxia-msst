@@ -2754,27 +2754,8 @@ async function generarReporteDevPDF(soloCorreo=false){
     porCliente[k].push(d);
   });
 
-  // Grupos de estatus para el reporte
-  const GRUPOS_ESTATUS=[
-    {
-      key:'en_proceso',
-      label:'En proceso',
-      color:'#3B4BC8', bg:'#E6F1FB',
-      filtro:d=>!['devuelta','negada'].includes(d.status)
-    },
-    {
-      key:'devuelta',
-      label:'Devuelta / Concluida',
-      color:'#3B6D11', bg:'#EAF3DE',
-      filtro:d=>d.status==='devuelta'
-    },
-    {
-      key:'negada',
-      label:'Negada / Rechazada',
-      color:'#A32D2D', bg:'#FCEBEB',
-      filtro:d=>d.status==='negada'
-    }
-  ];
+  // Orden processal de estatus (para ordenar grupos dentro del cliente)
+  const ESTATUS_ORDEN=Object.keys(DEV_STATUS);
 
   // Columnas del reporte
   const thStyle='padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e0;font-size:10px;color:#555;white-space:nowrap';
@@ -2782,7 +2763,6 @@ async function generarReporteDevPDF(soloCorreo=false){
   const tdL='padding:6px 8px;vertical-align:middle';
   const THEAD='<thead><tr style="background:#f5f5f3">'+
     '<th style="'+thStyle+'">Período</th>'+
-    '<th style="'+thStyle+'">Estatus</th>'+
     '<th style="'+thStyle+'">Inicio</th>'+
     '<th style="'+thStyle+'">Presentación SAT</th>'+
     '<th style="'+thStyle+'">Límite resolución</th>'+
@@ -2794,13 +2774,11 @@ async function generarReporteDevPDF(soloCorreo=false){
 
   function buildRow(d){
     const plazos=calcPlazos(d);
-    const s=DEV_STATUS[d.status]||{label:d.status,color:'#888',bg:'#f5f5f3'};
     const dr=d.fecha_presentacion_sat?diasRestantes(plazos.limite_resolucion):(plazos.presentacion?diasRestantes(plazos.presentacion):null);
     const plazoTxt=d.status==='devuelta'?'Concluida':d.status==='negada'?'Negada':(dr===null?'—':dr<0?'⚠ '+Math.abs(dr)+'d vencido':dr+'d');
     const plazoColor=dr!==null&&dr<0?'#dc2626':dr!==null&&dr<=5?'#92400E':'#5a8a1a';
     return '<tr style="border-bottom:1px solid #f5f5f3">'+
       '<td style="'+tdL+';font-weight:600">'+escH(d.periodo||'—')+'</td>'+
-      '<td style="'+tdL+'"><span style="background:'+s.bg+';color:'+s.color+';padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;white-space:nowrap">'+s.label+'</span></td>'+
       '<td style="'+tdL+';color:#888">'+escH(d.fecha_inicio||'—')+'</td>'+
       '<td style="'+tdL+';color:#888">'+escH(d.fecha_presentacion_sat||'—')+'</td>'+
       '<td style="'+tdL+';color:#888">'+escH(plazos.limite_resolucion||'—')+'</td>'+
@@ -2811,13 +2789,14 @@ async function generarReporteDevPDF(soloCorreo=false){
     '</tr>';
   }
 
-  function buildSubtotalRow(label,sol,dev,n,color){
-    return '<tr style="background:#f5f5f3;font-weight:700;border-top:2px solid '+color+'40">'+
-      '<td colspan="5" style="padding:6px 10px;font-size:11px;color:'+color+'">'+
-        'Subtotal — '+label+' ('+n+' solicitud'+(n!==1?'es':(n===1?'':'s'))+')'+
+  function buildSubtotalRow(s,sol,dev,n){
+    return '<tr style="background:'+s.bg+';border-top:1.5px solid '+s.color+'30">'+
+      '<td colspan="4" style="padding:7px 10px;font-size:11px;font-weight:700;color:'+s.color+'">'+
+        'Subtotal '+escH(s.label)+
+        ' <span style="font-weight:400;font-size:10px;opacity:.8">('+n+' solicitud'+(n!==1?'es':'')+')</span>'+
       '</td>'+
-      '<td style="'+tdR+';color:'+color+';font-size:12px">'+fmtMXN(sol)+'</td>'+
-      '<td style="'+tdR+';color:'+color+';font-size:12px">'+fmtMXN(dev)+'</td>'+
+      '<td style="'+tdR+';color:'+s.color+';font-weight:700;font-size:12px">'+fmtMXN(sol)+'</td>'+
+      '<td style="'+tdR+';color:'+(dev>0?'#3B6D11':s.color)+';font-weight:700;font-size:12px">'+fmtMXN(dev)+'</td>'+
       '<td colspan="2"></td>'+
     '</tr>';
   }
@@ -2827,38 +2806,47 @@ async function generarReporteDevPDF(soloCorreo=false){
     const totCliSol=devs.reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
     const totCliDev=devs.reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
 
+    // Obtener estatus presentes en este cliente, en orden processal
+    const estatusPresentesCli=[...new Set(devs.map(d=>d.status))]
+      .sort((a,b)=>ESTATUS_ORDEN.indexOf(a)-ESTATUS_ORDEN.indexOf(b));
+
     let tablaBody='';
-    let gruposConDatos=0;
-    GRUPOS_ESTATUS.forEach(g=>{
-      const grupo=devs.filter(g.filtro);
+    estatusPresentesCli.forEach(estatus=>{
+      const grupo=devs.filter(d=>d.status===estatus);
       if(!grupo.length) return;
-      gruposConDatos++;
-      const gSol=grupo.reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
-      const gDev=grupo.reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
-      // Encabezado del grupo
-      tablaBody+='<tr><td colspan="9" style="padding:5px 8px;background:'+g.bg+';color:'+g.color+';font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border-top:1px solid '+g.color+'40">'+
-        g.label+' &nbsp;·&nbsp; '+grupo.length+' solicitud'+(grupo.length!==1?'es':'')+
-      '</td></tr>';
-      // Filas del grupo
+      const s=DEV_STATUS[estatus]||{label:estatus,color:'#888',bg:'#f5f5f3'};
+      const fase=DEV_FASE[estatus]||{icon:'📋'};
+      const gSol=grupo.reduce((t,d)=>t+(parseFloat(d.monto_solicitado)||0),0);
+      const gDev=grupo.reduce((t,d)=>t+(parseFloat(d.monto_devuelto)||0),0);
+
+      // Encabezado del estatus
+      tablaBody+=
+        '<tr><td colspan="8" style="padding:6px 10px;background:'+s.bg+';color:'+s.color+
+          ';font-size:10px;font-weight:700;border-top:2px solid '+s.color+'50">'+
+          fase.icon+' '+escH(s.label)+
+          ' <span style="font-weight:400;opacity:.75">· '+grupo.length+' solicitud'+(grupo.length!==1?'es':'')+'</span>'+
+        '</td></tr>';
+      // Filas individuales
       tablaBody+=grupo.map(d=>buildRow(d)).join('');
-      // Subtotal del grupo
-      tablaBody+=buildSubtotalRow(g.label,gSol,gDev,grupo.length,g.color);
+      // Subtotal del estatus
+      tablaBody+=buildSubtotalRow(s,gSol,gDev,grupo.length);
     });
 
     // Total del cliente
-    const totalCliRow='<tr style="background:#3B4BC8;color:#fff;font-weight:700">'+
-      '<td colspan="5" style="padding:8px 10px;font-size:12px">📊 TOTAL '+escH(cli).toUpperCase()+'</td>'+
-      '<td style="'+tdR+';font-size:13px;color:#fff">'+fmtMXN(totCliSol)+'</td>'+
-      '<td style="'+tdR+';font-size:13px;color:#8DC63F">'+fmtMXN(totCliDev)+'</td>'+
-      '<td colspan="2"></td>'+
-    '</tr>';
+    const totalCliRow=
+      '<tr style="background:#1a1a2e;color:#fff;font-weight:700">'+
+        '<td colspan="4" style="padding:9px 12px;font-size:12px;letter-spacing:.3px">📊 TOTAL '+escH(cli).toUpperCase()+'</td>'+
+        '<td style="'+tdR+';font-size:13px;color:#93c5fd">'+fmtMXN(totCliSol)+'</td>'+
+        '<td style="'+tdR+';font-size:13px;color:#86efac">'+fmtMXN(totCliDev)+'</td>'+
+        '<td colspan="2"></td>'+
+      '</tr>';
 
     seccionesHTML+=
       '<div style="margin-bottom:28px;page-break-inside:avoid">'+
-        // Encabezado del cliente
         '<div style="background:#1a1a2e;color:#fff;padding:10px 14px;border-radius:6px 6px 0 0;display:flex;justify-content:space-between;align-items:center">'+
-          '<span style="font-size:14px;font-weight:700;letter-spacing:.3px">🏢 '+escH(cli)+'</span>'+
-          '<span style="font-size:10px;opacity:.7">'+devs.length+' solicitud'+(devs.length!==1?'es':'')+' · IVA Mensual</span>'+
+          '<span style="font-size:14px;font-weight:700">🏢 '+escH(cli)+'</span>'+
+          '<span style="font-size:10px;opacity:.7">'+devs.length+' solicitud'+(devs.length!==1?'es':'')+
+            ' · '+estatusPresentesCli.length+' estatus diferente'+(estatusPresentesCli.length!==1?'s':'')+' · IVA Mensual</span>'+
         '</div>'+
         '<table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #e5e5e0;border-top:none">'+
           THEAD+'<tbody>'+tablaBody+totalCliRow+'</tbody>'+
@@ -2873,48 +2861,43 @@ async function generarReporteDevPDF(soloCorreo=false){
   const concluidas=lista.filter(d=>d.status==='devuelta').length;
   const negadas=lista.filter(d=>d.status==='negada').length;
 
-  // Subtotales globales por grupo de estatus
-  const gtProcSol=lista.filter(d=>!['devuelta','negada'].includes(d.status)).reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
-  const gtProcDev=lista.filter(d=>!['devuelta','negada'].includes(d.status)).reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
-  const gtDevSol=lista.filter(d=>d.status==='devuelta').reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
-  const gtDevDev=lista.filter(d=>d.status==='devuelta').reduce((s,d)=>s+(parseFloat(d.monto_devuelto)||0),0);
-  const gtNegSol=lista.filter(d=>d.status==='negada').reduce((s,d)=>s+(parseFloat(d.monto_solicitado)||0),0);
+  // Resumen general por CADA ESTATUS presente en el reporte
+  const estatusEnReporte=[...new Set(lista.map(d=>d.status))]
+    .sort((a,b)=>Object.keys(DEV_STATUS).indexOf(a)-Object.keys(DEV_STATUS).indexOf(b));
+
+  const filasResumen=estatusEnReporte.map(estatus=>{
+    const s=DEV_STATUS[estatus]||{label:estatus,color:'#888',bg:'#f5f5f3'};
+    const fase=DEV_FASE[estatus]||{icon:'📋'};
+    const grupo=lista.filter(d=>d.status===estatus);
+    const gSol=grupo.reduce((t,d)=>t+(parseFloat(d.monto_solicitado)||0),0);
+    const gDev=grupo.reduce((t,d)=>t+(parseFloat(d.monto_devuelto)||0),0);
+    return '<tr style="background:'+s.bg+';border-bottom:0.5px solid #e5e5e0">'+
+      '<td style="padding:7px 12px;font-weight:600;color:'+s.color+'">'+fase.icon+' '+escH(s.label)+'</td>'+
+      '<td style="padding:7px 12px;text-align:right;font-weight:600">'+grupo.length+'</td>'+
+      '<td style="padding:7px 12px;text-align:right;font-weight:700;color:#185FA5">'+fmtMXN(gSol)+'</td>'+
+      '<td style="padding:7px 12px;text-align:right;font-weight:700;color:'+(gDev>0?'#3B6D11':'#bbb')+'">'+fmtMXN(gDev)+'</td>'+
+      '<td style="padding:7px 12px;text-align:right;color:'+(gSol-gDev>0?'#854F0B':'#3B6D11')+';font-weight:600">'+fmtMXN(gSol-gDev)+'</td>'+
+    '</tr>';
+  }).join('');
 
   const granTotalHTML=
     '<div style="margin-top:8px;page-break-inside:avoid">'+
-    '<table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #3B4BC8;border-radius:6px">'+
-      '<thead><tr style="background:#3B4BC8;color:#fff">'+
-        '<th style="padding:8px 12px;text-align:left;font-size:12px" colspan="2">📋 RESUMEN GENERAL — DEVOLUCIONES IVA MENSUAL</th>'+
-        '<th style="padding:8px 12px;text-align:right">Solicitudes</th>'+
-        '<th style="padding:8px 12px;text-align:right">Monto solicitado</th>'+
-        '<th style="padding:8px 12px;text-align:right">Monto devuelto</th>'+
-        '<th style="padding:8px 12px;text-align:right">Diferencia</th>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #1a1a2e;border-radius:6px;overflow:hidden">'+
+      '<thead><tr style="background:#1a1a2e;color:#fff">'+
+        '<th style="padding:9px 12px;text-align:left;font-size:12px">📋 RESUMEN GENERAL — DEVOLUCIONES IVA MENSUAL</th>'+
+        '<th style="padding:9px 12px;text-align:right">Solicitudes</th>'+
+        '<th style="padding:9px 12px;text-align:right">Monto solicitado</th>'+
+        '<th style="padding:9px 12px;text-align:right">Monto devuelto</th>'+
+        '<th style="padding:9px 12px;text-align:right">Pendiente</th>'+
       '</tr></thead>'+
       '<tbody>'+
-        (enProceso?'<tr style="background:#E6F1FB"><td style="padding:7px 12px" colspan="2">🔵 En proceso</td>'+
-          '<td style="padding:7px 12px;text-align:right;font-weight:600">'+enProceso+'</td>'+
-          '<td style="padding:7px 12px;text-align:right;font-weight:600;color:#3B4BC8">'+fmtMXN(gtProcSol)+'</td>'+
-          '<td style="padding:7px 12px;text-align:right;color:#bbb">'+fmtMXN(gtProcDev)+'</td>'+
-          '<td style="padding:7px 12px;text-align:right;color:#EF9F27;font-weight:600">'+fmtMXN(gtProcSol-gtProcDev)+'</td>'+
-        '</tr>':'')+
-        (concluidas?'<tr style="background:#EAF3DE"><td style="padding:7px 12px" colspan="2">🟢 Devuelta / Concluida</td>'+
-          '<td style="padding:7px 12px;text-align:right;font-weight:600">'+concluidas+'</td>'+
-          '<td style="padding:7px 12px;text-align:right;font-weight:600;color:#3B4BC8">'+fmtMXN(gtDevSol)+'</td>'+
-          '<td style="padding:7px 12px;text-align:right;font-weight:600;color:#3B6D11">'+fmtMXN(gtDevDev)+'</td>'+
-          '<td style="padding:7px 12px;text-align:right;color:'+(gtDevSol-gtDevDev>0?'#EF9F27':'#3B6D11')+';font-weight:600">'+fmtMXN(gtDevSol-gtDevDev)+'</td>'+
-        '</tr>':'')+
-        (negadas?'<tr style="background:#FCEBEB"><td style="padding:7px 12px" colspan="2">🔴 Negada / Rechazada</td>'+
-          '<td style="padding:7px 12px;text-align:right;font-weight:600">'+negadas+'</td>'+
-          '<td style="padding:7px 12px;text-align:right;font-weight:600;color:#A32D2D">'+fmtMXN(gtNegSol)+'</td>'+
-          '<td style="padding:7px 12px;text-align:right;color:#bbb">—</td>'+
-          '<td style="padding:7px 12px;text-align:right;color:#A32D2D;font-weight:600">'+fmtMXN(gtNegSol)+'</td>'+
-        '</tr>':'')+
-        '<tr style="background:#1a1a2e;color:#fff;font-weight:700;font-size:13px">'+
-          '<td style="padding:10px 12px" colspan="2">⭐ GRAN TOTAL</td>'+
+        filasResumen+
+        '<tr style="background:#1a1a2e;color:#fff;font-weight:700;font-size:13px;border-top:2px solid #fff">'+
+          '<td style="padding:10px 12px">⭐ GRAN TOTAL</td>'+
           '<td style="padding:10px 12px;text-align:right">'+lista.length+' solicitudes</td>'+
-          '<td style="padding:10px 12px;text-align:right">'+fmtMXN(totalGenSol)+'</td>'+
-          '<td style="padding:10px 12px;text-align:right;color:#8DC63F">'+fmtMXN(totalGenDev)+'</td>'+
-          '<td style="padding:10px 12px;text-align:right;color:'+(totalGenSol-totalGenDev>1?'#EF9F27':'#8DC63F')+'">'+fmtMXN(totalGenSol-totalGenDev)+'</td>'+
+          '<td style="padding:10px 12px;text-align:right;color:#93c5fd">'+fmtMXN(totalGenSol)+'</td>'+
+          '<td style="padding:10px 12px;text-align:right;color:#86efac">'+fmtMXN(totalGenDev)+'</td>'+
+          '<td style="padding:10px 12px;text-align:right;color:#fcd34d">'+fmtMXN(totalGenSol-totalGenDev)+'</td>'+
         '</tr>'+
       '</tbody>'+
     '</table>'+
