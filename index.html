@@ -3434,6 +3434,46 @@ const DEV_STATUS={
   negada:{label:'Negada / Rechazada',color:'#dc2626',bg:'#fef2f2'}
 };
 
+// FASE: lenguaje del cliente agrupado desde el estatus técnico interno
+const DEV_FASE={
+  requisitos_pendientes:{
+    fase:'Preparando tu expediente',icon:'📋',color:'#92400E',bg:'#FEF3C7',
+    desc:'El equipo está integrando los documentos necesarios para presentar tu solicitud ante el SAT.'
+  },
+  solicitud_preparada:{
+    fase:'Preparando tu expediente',icon:'📋',color:'#92400E',bg:'#FEF3C7',
+    desc:'Tu expediente está completo y listo para ser presentado al SAT.'
+  },
+  presentada_sat:{
+    fase:'Trámite presentado al SAT',icon:'📤',color:'#3B4BC8',bg:'#EEEDFE',
+    desc:'Solicitud presentada formalmente. El SAT tiene hasta 40 días hábiles para resolver (Art. 22 CFF).'
+  },
+  en_revision_sat:{
+    fase:'SAT analizando tu caso',icon:'🔍',color:'#633806',bg:'#FAEEDA',
+    desc:'El SAT está revisando tu solicitud y los documentos de soporte presentados.'
+  },
+  requerimiento_sat:{
+    fase:'SAT solicita información adicional',icon:'💬',color:'#dc2626',bg:'#fef2f2',
+    desc:'El SAT emitió un requerimiento de información. Nuestro equipo está preparando la respuesta.'
+  },
+  informacion_entregada:{
+    fase:'SAT solicita información adicional',icon:'💬',color:'#dc2626',bg:'#fef2f2',
+    desc:'Entregamos la información adicional requerida por el SAT. Continúa el análisis.'
+  },
+  autorizada_no_depositada:{
+    fase:'¡Aprobada — en camino a tu cuenta!',icon:'✅',color:'#0C5E1E',bg:'#D1FAE5',
+    desc:'El SAT autorizó tu devolución. El depósito será acreditado en los próximos días hábiles en tu CLABE.'
+  },
+  devuelta:{
+    fase:'Depositada en tu cuenta',icon:'🏁',color:'#5a8a1a',bg:'#f0f7d4',
+    desc:'Devolución acreditada exitosamente en la cuenta bancaria registrada ante el SAT. ¡Trámite concluido!'
+  },
+  negada:{
+    fase:'Resolución desfavorable',icon:'❌',color:'#A32D2D',bg:'#FCEBEB',
+    desc:'El SAT emitió resolución desfavorable. Evaluaremos las opciones de impugnación disponibles (Art. 116 CFF).'
+  }
+};
+
 const DEV_REQUISITOS_SAT=[
   'e.firma vigente del contribuyente',
   'Declaración mensual IVA del período presentada',
@@ -3621,12 +3661,14 @@ function renderDevFiltros(){
   const btns=estatusPresentes.map(k=>{
     const isActivo=devFiltroActual===k;
     const info=k==='todos'?{label:'Todas',color:'#3B4BC8',bg:'#E6F1FB'}:DEV_STATUS[k];
-    return '<button onclick="devAplicarFiltro(\''+k+'\')" style="'+
-      'padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;'+
+    const fase=k!=='todos'?DEV_FASE[k]:null;
+    return '<button onclick="devAplicarFiltro(\''+k+'\')" title="'+(fase?'Fase: '+fase.fase:'')+
+      '" style="padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;'+
       'border:2px solid '+(isActivo?info.color:'#e0e0db')+';'+
       'background:'+(isActivo?info.bg:'#fff')+';'+
       'color:'+(isActivo?info.color:'#888')+'">'+
-      escH(info.label)+' <span style="background:'+(isActivo?info.color:'#ddd')+';color:'+(isActivo?'#fff':'#666')+
+      (fase?fase.icon+' ':'')+escH(info.label)+
+      ' <span style="background:'+(isActivo?info.color:'#ddd')+';color:'+(isActivo?'#fff':'#666')+
       ';border-radius:999px;padding:0 6px;font-size:10px;margin-left:2px">'+( conteo[k]||0)+'</span>'+
     '</button>';
   }).join('');
@@ -3681,15 +3723,25 @@ function renderDevList(){
       const plazos=calcPlazos(d);
       const drp=d.fecha_presentacion_sat?diasRestantes(plazos.limite_resolucion):null;
       const drr=d.status==='requerimiento_sat'?diasRestantes(d.fecha_limite_req):null;
-      html+='<div class="card" style="margin-bottom:10px;cursor:pointer" onclick="renderDetalleDevolucion(\''+d.id+'\')">'+
+      const faseCard=DEV_FASE[d.status]||{fase:d.status,icon:'📋',color:'#888',bg:'#f5f5f3',desc:''};
+      const sCard=DEV_STATUS[d.status]||{label:d.status,color:'#888',bg:'#f5f5f3'};
+      html+='<div class="card" style="margin-bottom:10px;cursor:pointer;border-left:4px solid '+faseCard.color+'" onclick="renderDetalleDevolucion(\''+d.id+'\')">'+
         '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">'+
           '<div style="flex:1">'+
             '<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+escH(d.cliente_nombre||'—')+'</div>'+
-            '<div style="font-size:12px;color:#888;margin-bottom:6px">Período: '+escH(d.periodo)+(d.folio_fed?' · Folio: '+escH(d.folio_fed):'')+'</div>'+
+            '<div style="font-size:12px;color:#888;margin-bottom:8px">IVA Mensual · Período: '+escH(d.periodo)+(d.folio_fed?' · Folio SAT: '+escH(d.folio_fed):'')+'</div>'+
+            // FASE (lenguaje cliente) - prominente
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'+
+              '<span style="font-size:15px">'+faseCard.icon+'</span>'+
+              '<span style="font-size:13px;font-weight:700;color:'+faseCard.color+'">'+faseCard.fase+'</span>'+
+            '</div>'+
+            '<div style="font-size:11px;color:#888;margin-bottom:8px;padding-left:21px">'+faseCard.desc+'</div>'+
+            // Estatus técnico - secundario
             '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'+
+              '<span style="font-size:9px;color:#bbb;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Estatus interno:</span>'+
               devStatusBadge(d.status)+
-              (d.monto_solicitado?'<span style="font-size:12px;color:#888">Solicitado: <strong>'+fmtMXN(d.monto_solicitado)+'</strong></span>':'')+
-              (d.status==='devuelta'&&d.monto_devuelto?'<span style="font-size:12px;color:#5a8a1a">Devuelto: <strong>'+fmtMXN(d.monto_devuelto)+'</strong></span>':'')+
+              (d.monto_solicitado?'<span style="font-size:12px;color:#888;margin-left:4px">Sol: <strong style="color:#3B4BC8">'+fmtMXN(d.monto_solicitado)+'</strong></span>':'')+
+              (d.status==='devuelta'&&d.monto_devuelto?'<span style="font-size:12px;color:#5a8a1a">Dev: <strong>'+fmtMXN(d.monto_devuelto)+'</strong></span>':'')+
             '</div>'+
             devStatusTimeline(d.status,true)+
             '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+
@@ -3737,7 +3789,8 @@ async function renderNuevaDevolucion(id){
   const mesOpts='<option value="">Mes...</option>'+MESES.map(m=>'<option value="'+m+'"'+(periodoMes===m?' selected':'')+'>'+m+'</option>').join('');
   const anioOpts='<option value="">Año...</option>'+[2020,2021,2022,2023,2024,2025,2026,2027].map(y=>'<option value="'+y+'"'+(periodoAnio===String(y)?' selected':'')+'>'+y+'</option>').join('');
   const cliOpts='<option value="">Selecciona cliente...</option>'+clientesCache.filter(c=>!c.estatus||c.estatus==='activo'||(editing&&editing.cliente_id===c.id)).map(c=>'<option value="'+c.id+'" data-nombre="'+escH(c.nombre)+'" data-regimen="'+(c.regimen_fiscal||'general')+'"'+(editing&&editing.cliente_id===c.id?' selected':'')+'>'+escH(c.nombre)+(c.estatus&&c.estatus!=='activo'?' ('+(c.estatus==='baja'?'Baja':'Standby')+')':'')+'</option>').join('');
-  const statusOpts=Object.entries(DEV_STATUS).map(([k,v])=>'<option value="'+k+'"'+(editing&&editing.status===k?' selected':k==='requisitos_pendientes'&&!editing?' selected':'')+'>'+v.label+'</option>').join('');
+  // 'solicitud_preparada' se oculta del formulario — etapa sin uso operativo
+const statusOpts=Object.entries(DEV_STATUS).filter(([k])=>k!=='solicitud_preparada').map(([k,v])=>'<option value="'+k+'"'+(editing&&editing.status===k?' selected':k==='requisitos_pendientes'&&!editing?' selected':'')+'>'+v.label+'</option>').join('');
   const correos=editing&&editing.correos_cliente?(editing.correos_cliente||[]).join(', '):'';
 
   app.innerHTML=renderTopNav('devoluciones')+`
@@ -4021,7 +4074,16 @@ async function renderDetalleDevolucion(id){
     '</div>';
   }).join('');
 
+  // FASE del cliente en el detalle
+  const faseDetalle=DEV_FASE[dev.status]||{fase:dev.status,icon:'📋',color:'#888',bg:'#f5f5f3',desc:''};
+  const faseBannerHTML='<div style="background:'+faseDetalle.bg+';border:1.5px solid '+faseDetalle.color+'30;border-radius:10px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:flex-start;gap:12px">'+
+    '<span style="font-size:28px;flex-shrink:0">'+faseDetalle.icon+'</span>'+
+    '<div><div style="font-size:16px;font-weight:700;color:'+faseDetalle.color+'">'+faseDetalle.fase+'</div>'+
+    '<div style="font-size:12px;color:#555;margin-top:4px;line-height:1.5">'+faseDetalle.desc+'</div></div>'+
+  '</div>';
+
   document.getElementById('det-body').innerHTML=
+  faseBannerHTML+
   detHtml+
   // Resumen superior
   '<div class="card" style="margin-bottom:1rem">'+
