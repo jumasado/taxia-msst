@@ -3725,37 +3725,56 @@ function renderDevList(){
       const drr=d.status==='requerimiento_sat'?diasRestantes(d.fecha_limite_req):null;
       const faseCard=DEV_FASE[d.status]||{fase:d.status,icon:'📋',color:'#888',bg:'#f5f5f3',desc:''};
       const sCard=DEV_STATUS[d.status]||{label:d.status,color:'#888',bg:'#f5f5f3'};
-      html+='<div class="card" style="margin-bottom:10px;cursor:pointer;border-left:4px solid '+faseCard.color+'" onclick="renderDetalleDevolucion(\''+d.id+'\')">'+
-        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">'+
-          '<div style="flex:1">'+
-            '<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+escH(d.cliente_nombre||'—')+'</div>'+
-            '<div style="font-size:12px;color:#888;margin-bottom:8px">IVA Mensual · Período: '+escH(d.periodo)+(d.folio_fed?' · Folio SAT: '+escH(d.folio_fed):'')+'</div>'+
-            // FASE (lenguaje cliente) - prominente
-            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'+
-              '<span style="font-size:15px">'+faseCard.icon+'</span>'+
-              '<span style="font-size:13px;font-weight:700;color:'+faseCard.color+'">'+faseCard.fase+'</span>'+
+      const plazosCard=calcPlazos(d);
+      const drCard=d.fecha_presentacion_sat?diasRestantes(plazosCard.limite_resolucion):(plazosCard.presentacion?diasRestantes(plazosCard.presentacion):null);
+      const idxCard=DEV_ETAPAS.findIndex(e=>e.key===d.status);
+      const pctCard=idxCard>=0?Math.round((idxCard/(DEV_ETAPAS.length-1))*100):0;
+      const barColor=d.status==='negada'?'#A32D2D':d.status==='devuelta'?'#3B6D11':faseCard.color;
+      html+='<div style="background:#fff;border:0.5px solid #e0e0db;border-radius:12px;margin-bottom:8px;cursor:pointer;overflow:hidden;display:grid;grid-template-columns:4px 1fr" onclick="renderDetalleDevolucion(\''+d.id+'\')">'+
+        // Acento vertical de color
+        '<div style="background:'+barColor+'"></div>'+
+        '<div style="padding:14px 18px">'+
+          // Fila 1: cliente + monto
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'+
+            '<div>'+
+              '<div style="font-size:14px;font-weight:600;color:#1a1a1a">'+escH(d.cliente_nombre||'—')+'</div>'+
+              '<div style="font-size:11px;color:#888;margin-top:2px">IVA Mensual · '+escH(d.periodo)+(d.folio_fed?' · Folio '+escH(d.folio_fed):'')+'</div>'+
             '</div>'+
-            '<div style="font-size:11px;color:#888;margin-bottom:8px;padding-left:21px">'+faseCard.desc+'</div>'+
-            // Estatus técnico - secundario
-            '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'+
-              '<span style="font-size:9px;color:#bbb;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Estatus interno:</span>'+
-              devStatusBadge(d.status)+
-              (d.monto_solicitado?'<span style="font-size:12px;color:#888;margin-left:4px">Sol: <strong style="color:#3B4BC8">'+fmtMXN(d.monto_solicitado)+'</strong></span>':'')+
-              (d.status==='devuelta'&&d.monto_devuelto?'<span style="font-size:12px;color:#5a8a1a">Dev: <strong>'+fmtMXN(d.monto_devuelto)+'</strong></span>':'')+
-            '</div>'+
-            devStatusTimeline(d.status,true)+
-            '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'+
-              (plazos.presentacion&&!d.fecha_presentacion_sat?alertaDias(diasRestantes(plazos.presentacion),'Presentar'):'')+ 
-              (d.fecha_presentacion_sat&&drp!==null?alertaDias(drp,'Resolución SAT'):'')+ 
+            '<div style="text-align:right;flex-shrink:0;margin-left:16px">'+
+              (d.status==='devuelta'&&d.monto_devuelto?
+                '<div style="font-size:18px;font-weight:700;color:#3B6D11">'+fmtMXN(d.monto_devuelto)+'</div>'+
+                '<div style="font-size:9px;color:#888">Monto devuelto</div>':
+                (d.monto_solicitado?
+                  '<div style="font-size:18px;font-weight:700;color:#185FA5">'+fmtMXN(d.monto_solicitado)+'</div>'+
+                  '<div style="font-size:9px;color:#888">Monto solicitado</div>':'')
+              )+
             '</div>'+
           '</div>'+
-          '<div style="text-align:right;flex-shrink:0">'+
-            '<div style="font-size:11px;color:#888">Responsable</div>'+
-            '<div style="font-size:12px;font-weight:500">'+escH(d.responsable||'—')+'</div>'+
-            '<div style="font-size:11px;color:#888;margin-top:4px">Inicio: '+escH(d.fecha_inicio||'—')+'</div>'+
+          // Fila 2: fase + alert + fechas + responsable en una línea
+          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+
+            '<span style="font-size:11px;font-weight:600;background:'+faseCard.bg+';color:'+faseCard.color+';padding:3px 10px;border-radius:20px">'+faseCard.icon+' '+faseCard.fase+'</span>'+
+            (drCard!==null&&drCard<0?'<span style="font-size:10px;background:#fef2f2;color:#A32D2D;padding:3px 9px;border-radius:20px;font-weight:600">⚠ '+Math.abs(drCard)+'d vencido</span>':
+             drCard!==null&&drCard<=5?'<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:3px 9px;border-radius:20px;font-weight:600">'+drCard+'d para resolver</span>':'')+
+            '<span style="font-size:11px;color:#aaa">·</span>'+
+            '<span style="font-size:11px;color:#888">Inicio: '+escH(d.fecha_inicio||'—')+'</span>'+
+            (d.fecha_presentacion_sat?'<span style="font-size:11px;color:#aaa">|</span><span style="font-size:11px;color:#888">Pres: '+escH(d.fecha_presentacion_sat)+'</span>':'')+
+            '<span style="font-size:11px;color:#aaa">|</span>'+
+            '<span style="font-size:11px;font-weight:600;color:#555">'+escH(d.responsable||'—')+'</span>'+
+          '</div>'+
+          // Fila 3: barra de progreso
+          '<div>'+
+            '<div style="height:4px;background:#f0f0ec;border-radius:2px;overflow:hidden">'+
+              '<div style="height:100%;background:'+barColor+';border-radius:2px;width:'+pctCard+'%;transition:width .3s"></div>'+
+            '</div>'+
+            '<div style="display:flex;justify-content:space-between;margin-top:3px">'+
+              '<span style="font-size:9px;color:'+barColor+';font-weight:600">'+(idxCard+1)+'/'+DEV_ETAPAS.length+' etapas · '+devStatusBadge(d.status).replace(/<[^>]+>/g,'').trim()+'</span>'+
+              (plazosCard.limite_resolucion&&d.status!=='devuelta'&&d.status!=='negada'?
+                '<span style="font-size:9px;color:#aaa">Límite resolución: '+escH(plazosCard.limite_resolucion)+'</span>':'')+ 
+            '</div>'+
           '</div>'+
         '</div>'+
       '</div>';
+      // (sin html abierto, bloque completo arriba)
     });
   }
 
