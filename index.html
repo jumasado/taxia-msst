@@ -3191,7 +3191,7 @@ function renderClientesTabla(){
     return '<tr>'+
       '<td style="font-weight:500">'+escH(c.nombre)+'</td>'+
       '<td style="color:#888">'+escH(c.rfc||'—')+'</td>'+
-      '<td>'+escH(c.tipo||'—')+(c.regimen_fiscal==='resico_pm'?' <span style="font-size:9px;color:#5a8a1a;font-weight:700">RESICO</span>':c.regimen_fiscal==='no_lucrativo'?' <span style="font-size:9px;color:#888;font-weight:700">NO LUCR.</span>':'')+'</td>'+
+      '<td>'+escH(c.tipo||'—')+(c.regimen_fiscal==='resico_pm'?' <span style="font-size:9px;color:#5a8a1a;font-weight:700">RESICO</span>':c.regimen_fiscal==='coordinados'?' <span style="font-size:9px;color:#3B4BC8;font-weight:700">🚛 COORD.</span>':c.regimen_fiscal==='no_lucrativo'?' <span style="font-size:9px;color:#888;font-weight:700">NO LUCR.</span>':'')+'</td>'+
       '<td>'+grupoCell+'</td>'+
       '<td>'+escH(c.responsable||'—')+'</td>'+
       '<td style="font-size:12px">'+(c.upload_contact_email?'<a href="mailto:'+escH(c.upload_contact_email)+'" style="color:#3B4BC8;text-decoration:none" title="'+escH(c.upload_contact_name||'')+'">'+escH(c.upload_contact_email)+'</a>':'<span style="color:#bbb">—</span>')+'</td>'+
@@ -4471,7 +4471,7 @@ async function renderDetalleProyeccion(id){
   app.innerHTML=renderTopNav('proyeccion')+`
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
     <button class="btn btn-sm" onclick="renderProyeccion()">← Proyecciones</button>
-    <div style="font-size:15px;font-weight:600;flex:1">${escH(proy.cliente_nombre)} — ${proy.ejercicio} <span style="font-size:10px;font-weight:700;color:${proy.regimen_fiscal==='resico_pm'?'#5a8a1a':proy.regimen_fiscal==='no_lucrativo'?'#888':'#3B4BC8'};background:${proy.regimen_fiscal==='resico_pm'?'#EAF3DE':proy.regimen_fiscal==='no_lucrativo'?'#f5f5f3':'#EEEDFE'};padding:2px 8px;border-radius:999px;vertical-align:middle;margin-left:6px">${proy.regimen_fiscal==='resico_pm'?'RESICO PM':proy.regimen_fiscal==='no_lucrativo'?'NO LUCRATIVO':'GENERAL · T.II'}</span></div>
+    <div style="font-size:15px;font-weight:600;flex:1">${escH(proy.cliente_nombre)} — ${proy.ejercicio} <span style="font-size:10px;font-weight:700;color:${proy.regimen_fiscal==='resico_pm'?'#5a8a1a':proy.regimen_fiscal==='coordinados'?'#3B4BC8':proy.regimen_fiscal==='no_lucrativo'?'#888':'#555'};background:${proy.regimen_fiscal==='resico_pm'?'#EAF3DE':proy.regimen_fiscal==='coordinados'?'#E6F1FB':proy.regimen_fiscal==='no_lucrativo'?'#f5f5f3':'#f0f0ec'};padding:2px 8px;border-radius:999px;vertical-align:middle;margin-left:6px">${proy.regimen_fiscal==='resico_pm'?'RESICO PM':proy.regimen_fiscal==='coordinados'?'🚛 COORDINADOS':proy.regimen_fiscal==='no_lucrativo'?'NO LUCRATIVO':'GENERAL · T.II'}</span></div>
     <button class="btn btn-sm btn-purple" onclick="renderNuevaProyeccion('${id}')">✏️ Editar</button>
     <button class="btn btn-sm btn-purple" onclick="reporteProyeccionPDF('${id}')">⎙ Reporte PDF</button>
     <button class="btn btn-sm" style="background:#f0f7d4;color:#5a8a1a;border:1px solid #c5e0a0" onclick="guardarEscenarioProyeccion('${id}')">💾 Guardar escenario</button>
