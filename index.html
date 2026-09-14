@@ -3255,7 +3255,7 @@ async function deleteCliente(id){
   const c=clientesCache.find(x=>x.id===id);
   if(!confirm(`¿Eliminar "${c?.nombre}"?`))return;
   await sbDelete('clientes',`?id=eq.${id}`);
-  await loadCaches();renderClientesTabla();
+  await loadCaches(true);renderClientesTabla();
 }
 
 async function renderGrupos(){
@@ -3292,7 +3292,7 @@ async function saveGrupo(){
   if(!nombre){err.textContent='Escribe un nombre.';err.style.display='block';return;}
   if(gruposCache.find(g=>g.nombre.toLowerCase()===nombre.toLowerCase())){err.textContent='Ese grupo ya existe.';err.style.display='block';return;}
   await sbPost('grupos',{nombre});
-  await loadCaches();
+  await loadCaches(true);
   document.getElementById('gf-nombre').value='';
   const ok=document.getElementById('gf-ok');ok.style.display='block';
   setTimeout(()=>ok.style.display='none',1500);
@@ -3303,7 +3303,7 @@ async function deleteGrupo(id,nombre){
   if(count>0){alert(`No puedes eliminar "${nombre}" — tiene ${count} cliente(s).`);return;}
   if(!confirm(`¿Eliminar grupo "${nombre}"?`))return;
   await sbDelete('grupos',`?id=eq.${id}`);
-  await loadCaches();renderGruposList();
+  await loadCaches(true);renderGruposList();
 }
 
 /* ===== ADMIN USUARIOS ===== */
