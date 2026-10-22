@@ -10087,7 +10087,13 @@ function docExtraerCSVConClasif(text, clasifMap){
     if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
     const partes=num.split(/[-. ]/);
     const mayor=partes[0];
-    if(mayor==='000') continue;
+    // Filas 0000-xxx: totales/encabezados de CONTPAQi (Activo, Circulante, Capital...). Solo se admiten
+    // las que el usuario clasificó EXPLÍCITAMENTE en rubros de capital (p.ej. 0000-320 Reserva Legal,
+    // 0000-330 Resultados de ejercicios anteriores); el resto son subtotales y duplicarían saldos.
+    if(/^0+$/.test(mayor)){
+      const _rz=clasifMap[num];
+      if(!(_rz&&/^capital_/.test(_rz))) continue;
+    }
 
     const esCero=partes.length>=2&&partes.slice(1).every(p=>/^0+$/.test(p));
     const codeCompleto=partes.slice(0,2).join('-');
@@ -10113,7 +10119,9 @@ function docExtraerCSVConClasif(text, clasifMap){
       const sa=Math.abs(parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0);
       if(sa){ const ak=cat+'_acum'; acum[ak]=(acum[ak]||0)+sa; if(!acum.detalle_acum[subId])acum.detalle_acum[subId]=0; acum.detalle_acum[subId]+=sa; }
     } else {
-      const valor=parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0;
+      let valor=parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0;
+      // Rubros de naturaleza contraria dentro de su clase restan (la balanza trae el saldo en valor absoluto)
+      if(valor&&(subId==='activo_depreciacion'||subId==='capital_perdidas')) valor=-Math.abs(valor);
       if(valor){ acum[cat]+=valor; if(!acum.detalle[subId])acum.detalle[subId]=0; acum.detalle[subId]+=valor; }
     }
   }
