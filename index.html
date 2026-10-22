@@ -10579,6 +10579,9 @@ const ER_ESTRUCTURA = [
   {tipo:'linea',     label:'Depreciación y amortización contable',  rubros:['gasto_depreciacion'], signo:-1},
   {tipo:'linea',     label:'Arrendamiento de activos pagado',       rubros:['gasto_arrendamiento'],signo:-1},
   {tipo:'linea',     label:'Regalías y asistencia técnica',         rubros:['gasto_regalias'],     signo:-1},
+  {tipo:'linea',     label:'Combustibles y diesel (autotransporte)', rubros:['gasto_combustible'],   signo:-1},
+  {tipo:'linea',     label:'Llantas y refacciones (autotransporte)', rubros:['gasto_llantas'],       signo:-1},
+  {tipo:'linea',     label:'Viáticos de autotransporte',             rubros:['gasto_viaticos'],      signo:-1},
   {tipo:'subtotal',  label:'= TOTAL GASTOS DE OPERACIÓN',           key:'gastos_op'},
   {tipo:'subtotal',  label:'= UTILIDAD (PÉRDIDA) DE OPERACIÓN',     key:'util_op', enfasis:true},
 
@@ -10599,6 +10602,7 @@ const ER_ESTRUCTURA = [
   {tipo:'linea',     label:'(-) Pérdidas por deterioro de activos',  rubros:['gasto_deterioro'],    signo:-1},
   {tipo:'linea',     label:'(-) Otros gastos deducibles',            rubros:['gasto_otros'],        signo:-1},
   {tipo:'linea',     label:'(-) Gastos no deducibles (Art. 28 LISR)',   rubros:['gasto_no_deducible'], signo:-1},
+  {tipo:'linea',     label:'(+) Estímulo IEPS diesel',                  rubros:['estimulo_ieps'],      signo:-1},
   {tipo:'subtotal',  label:'= TOTAL OTROS INGRESOS Y GASTOS',        key:'otros_neto'},
 
   {tipo:'total',     label:'= UTILIDAD (PÉRDIDA) ANTES DE ISR Y PTU',key:'util_antes_isr'},
