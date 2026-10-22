@@ -10039,7 +10039,7 @@ function docExtraerCSVConClasif(text, clasifMap){
     if(['NOMBRE','DESCRIPCION','CONCEPTO'].includes(hn)) iN=i;
     if(/^CARGOS$|DEBITOS|MOVIMIENTODEBE/.test(hn)) iCargos=i;
     if(/^ABONOS$|CREDITOS|MOVIMIENTOHABER/.test(hn)) iAbonos=i;
-    if(/SALDOACTUAL|SALDOFINAL|SALDO_ACT/.test(hn)&&!/DEUDOR|ACREEDOR/.test(hn)) iSA=i;
+    if(/SALDOACTUAL|SALDOFINAL|SALDO_ACT/.test(hn)&&!/DEUDOR|ACREEDOR|PARAESTADOS/.test(hn)) iSA=i;
   });
   if(iCargos<0||iAbonos<0||iSA<0){
     const numericCols=new Set();
@@ -10059,7 +10059,7 @@ function docExtraerCSVConClasif(text, clasifMap){
     const num=(cols[iC]||'').trim();
     if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
     const partes=num.split(/[-. ]/);
-    if(partes[0]==='000') continue;
+    if(/^0+$/.test(partes[0])) continue; // filas de total (0000-xxx) no son cuentas reales
     if(partes.length>=2&&partes.slice(1).every(p=>/^0+$/.test(p))) mayorConCero.add(partes[0]);
   }
 
