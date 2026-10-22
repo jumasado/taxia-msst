@@ -9939,6 +9939,7 @@ function docExtraerCSVConClasif(text, clasifMap){
   // Verificar si algún hijo DIRECTO del código tiene clasificación propia
   // USA nodoMap (jerarquía real CONTPAQi) — evita el bug de auto-exclusión
   // donde "400-0000-0000" se excluía porque "400-0000-0000" empieza con "400-0000-"
+  let archivoHijos = null; // jerarquía inferida de la balanza (se llena en el parser estándar)
   const clasifKeys = Object.keys(clasifMap).filter(k=>!k.endsWith('_cedulas'));
   function tieneHijosClasificados(cod){
     // Modo A: usar árbol real del catálogo (preciso)
@@ -9947,8 +9948,10 @@ function docExtraerCSVConClasif(text, clasifMap){
     if(nodo && nodo.hijos && nodo.hijos.length>0){
       return nodo.hijos.some(hijo => clasifMap[hijo]&&clasifMap[hijo]!=='no_aplica');
     }
-    // Modo B: fallback sin nodoMap — NO excluir para evitar el bug de auto-exclusión
-    // El doble conteo es menos dañino que excluir ingresos completos
+    // Modo B: sin nodoMap (catálogo no abierto en esta sesión) — inferir la jerarquía de la
+    // propia balanza: una cuenta mayor "XXXX-000" tiene como hijos las "XXXX-NNN" del archivo.
+    // Evita contar doble (mayor + subcuentas) al recalcular sin abrir el catálogo.
+    if(archivoHijos && archivoHijos[cod]) return archivoHijos[cod].some(h => clasifMap[h]&&clasifMap[h]!=='no_aplica');
     return false;
   }
 
@@ -10051,6 +10054,13 @@ function docExtraerCSVConClasif(text, clasifMap){
     if(un.length>=4){ if(iSI<0)iSI=un[0]; if(iCargos<0)iCargos=un[1]; if(iAbonos<0)iAbonos=un[2]; if(iSA<0)iSA=un[un.length-1]; }
   }
   if(iSA<0) iSA=header.length-1;
+
+  // Jerarquía inferida del propio archivo: mayor = "XXXX-000", hijos = "XXXX-NNN"
+  archivoHijos = {};
+  { const _cods=[];
+    for(let i=1;i<rawLines.length;i++){ const c=(rawLines[i].split(sep)[iC]||'').replace(/^"|"$/g,'').trim(); if(/^\d{3,6}-\d+$/.test(c)) _cods.push(c); }
+    _cods.forEach(c=>{ const p=c.split('-'); if(/^0+$/.test(p[0])||/^0+$/.test(p[1])) return; const m=p[0]+'-'+'0'.repeat(p[1].length); (archivoHijos[m]=archivoHijos[m]||[]).push(c); });
+  }
 
   // Paso 1: detectar mayors con cuenta "XXX-0000"
   const mayorConCero=new Set();
