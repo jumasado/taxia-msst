@@ -10032,7 +10032,14 @@ function docExtraerCSVConClasif(text, clasifMap){
   }
 
   // ===== PARSER FORMATO ESTÁNDAR CONTPAQi CSV =====
-  const header = rawLines[0].split(sep).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
+  // Separador CSV que respeta comillas (nombres de cuenta con comas, p. ej. "Servicio Financiero, Factoraje")
+  const splitCSV = (line)=>{ const o=[]; let c='',q=false;
+    for(let k=0;k<line.length;k++){ const ch=line[k];
+      if(ch==='"'){ if(q&&line[k+1]==='"'){c+='"';k++;} else q=!q; }
+      else if(ch===sep&&!q){ o.push(c); c=''; }
+      else c+=ch; }
+    o.push(c); return o; };
+  const header = splitCSV(rawLines[0]).map(h=>h.replace(/^"|"$/g,'').trim().toUpperCase());
   const norm = s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
 
   let iC=0, iN=1, iSI=-1, iCargos=-1, iAbonos=-1, iSA=-1;
@@ -10047,7 +10054,7 @@ function docExtraerCSVConClasif(text, clasifMap){
   if(iCargos<0||iAbonos<0||iSA<0){
     const numericCols=new Set();
     for(let row=1;row<Math.min(rawLines.length,5);row++){
-      const cols=rawLines[row].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+      const cols=splitCSV(rawLines[row]).map(c=>c.replace(/^"|"$/g,'').trim());
       cols.forEach((v,i)=>{ if(i>1&&(parseFloat(v.replace(/[$, ]/g,''))!==0||v==='0.00'||v==='0')) numericCols.add(i); });
     }
     const un=[...numericCols].sort((a,b)=>a-b);
@@ -10058,14 +10065,14 @@ function docExtraerCSVConClasif(text, clasifMap){
   // Jerarquía inferida del propio archivo: mayor = "XXXX-000", hijos = "XXXX-NNN"
   archivoHijos = {};
   { const _cods=[];
-    for(let i=1;i<rawLines.length;i++){ const c=(rawLines[i].split(sep)[iC]||'').replace(/^"|"$/g,'').trim(); if(/^\d{3,6}-\d+$/.test(c)) _cods.push(c); }
+    for(let i=1;i<rawLines.length;i++){ const c=(splitCSV(rawLines[i])[iC]||'').replace(/^"|"$/g,'').trim(); if(/^\d{3,6}-\d+$/.test(c)) _cods.push(c); }
     _cods.forEach(c=>{ const p=c.split('-'); if(/^0+$/.test(p[0])||/^0+$/.test(p[1])) return; const m=p[0]+'-'+'0'.repeat(p[1].length); (archivoHijos[m]=archivoHijos[m]||[]).push(c); });
   }
 
   // Paso 1: detectar mayors con cuenta "XXX-0000"
   const mayorConCero=new Set();
   for(let i=1;i<rawLines.length;i++){
-    const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+    const cols=splitCSV(rawLines[i]).map(c=>c.replace(/^"|"$/g,'').trim());
     const num=(cols[iC]||'').trim();
     if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
     const partes=num.split(/[-. ]/);
@@ -10075,7 +10082,7 @@ function docExtraerCSVConClasif(text, clasifMap){
 
   // Paso 2: procesar con reglas de cascada
   for(let i=1;i<rawLines.length;i++){
-    const cols=rawLines[i].split(sep).map(c=>c.replace(/^"|"$/g,'').trim());
+    const cols=splitCSV(rawLines[i]).map(c=>c.replace(/^"|"$/g,'').trim());
     const num=(cols[iC]||'').trim();
     if(!num||!/^\d{3,6}([-.]|$)/.test(num)) continue;
     const partes=num.split(/[-. ]/);
