@@ -8904,12 +8904,13 @@ function docRenderFinanciero(ejercicios){
     ?'<span style="background:#EAF3DE;color:#3B6D11;border:1px solid #b7d9a0;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">✓ Catálogo clasificado ('+Object.keys(docClasifCache).length+' cuentas)</span>'
       +'<button class="btn btn-sm" style="font-size:10px" onclick="docReClasificar()">✏ Re-clasificar</button>'
     :'<span style="background:#FAEEDA;color:#854F0B;border:1px solid #f0c97a;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">⚠ Sin catálogo clasificado</span>';
+  const chipValid=docValidChipHtml()+'<button class="btn btn-sm" style="font-size:10px" onclick="docAbrirValidacion()">🛡 Validar mes base</button>';
 
   return '<div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
     +'<div style="font-size:12px;color:#888;font-weight:600">EJERCICIO FISCAL</div>'
     +'<select onchange="docEjercicio=parseInt(this.value);docSetTab(\'financiero\')" style="font-size:13px;padding:6px 10px;border:1px solid #e0e0db;border-radius:8px;width:130px">'+anioOpts+'</select>'
     +'<div style="font-size:11px;color:#888">'+finEj.length+' documentos en '+docEjercicio+'</div>'
-    +badgeClasif+'</div>'
+    +badgeClasif+chipValid+'</div>'
     +'<div class="card"><div class="sec-label">Balanzas de comprobación — '+docEjercicio+'</div>'
     +'<div style="background:#E6F1FB;border-radius:8px;padding:8px 12px;font-size:11px;color:#185FA5;margin-bottom:12px">Sube en CSV o Excel para extracción automática. También acepta PDF.</div>'
     +'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">'+grid+'</div></div>'
@@ -10211,9 +10212,259 @@ async function docBorrarBalanza(docId,mes){
 }
 
 
+// ===================================================
+// VALIDACIÓN DEL MES BASE (ER + BG de CONTPAQi vs cálculo de TaxIA)
+// Bloqueo total: sin mes base validado no se pueden subir más balanzas.
+// Clientes con balanzas cargadas antes de esta función: exentos (con aviso) hasta validarse.
+// ===================================================
+const DOC_VALID_CUTOFF='2026-10-22T00:00:00';
+const DOC_VALID_TOL=1.00; // tolerancia por redondeo (MXN)
+const DOC_MES_ABR={ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,oct:10,nov:11,dic:12};
+const _fmtMXN=v=>new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:2}).format(v||0);
+const _normTxt=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+
+function docValidacionRow(){return docCacheFin.find(d=>d.tipo==='validacion_base')||null;}
+
+// nueva | pendiente | exenta | validada | invalida
+function docEstadoValidacion(){
+  const v=docValidacionRow();
+  const bals=docCacheFin.filter(d=>d.tipo==='balanza');
+  if(v&&v.cifras&&v.cifras.ok===true) return 'validada';
+  if(v) return 'invalida';
+  if(!bals.length) return 'nueva';
+  return bals.some(b=>String(b.created_at||'')>=DOC_VALID_CUTOFF)?'pendiente':'exenta';
+}
+
+// ---- Lectura de reportes CONTPAQi (xlsx) ----
+async function docLeerXlsxCPQ(file){
+  if(typeof XLSX==='undefined') throw new Error('La librería Excel aún no carga; reintenta en unos segundos.');
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(buf,{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+}
+function _cpqNum(v){
+  if(typeof v==='number') return v;
+  if(typeof v==='string'){const s=v.trim(); if(/^-?\(?[\d,]+(\.\d+)?\)?$/.test(s)){const neg=/^\(|^-/.test(s);const n=parseFloat(s.replace(/[(),-]/g,''));return neg?-n:n;}}
+  return null;
+}
+// Busca una etiqueta y regresa los números que le siguen en la misma fila (hasta la siguiente etiqueta)
+function _cpqBuscar(rows,rx){
+  for(const r of rows){
+    for(let j=0;j<r.length;j++){
+      const c=r[j];
+      if(typeof c==='string'&&rx.test(_normTxt(c))){
+        const nums=[];
+        for(let k=j+1;k<r.length;k++){
+          const n=_cpqNum(r[k]);
+          if(n!==null) nums.push(n);
+          else if(typeof r[k]==='string'&&r[k].trim()!=='') break;
+        }
+        if(nums.length) return nums;
+      }
+    }
+  }
+  return null;
+}
+function _cpqMeta(rows){
+  let empresa='',mes=null,anio=null;
+  for(const r of rows.slice(0,6)){
+    const t=r.filter(x=>typeof x==='string').join(' | ');
+    if(/contpaq/i.test(t)&&!empresa){const s=r.filter(x=>typeof x==='string'&&x.trim()&&!/contpaq/i.test(x)&&!/hoja/i.test(x));if(s.length)empresa=s[0].trim();}
+    const m=t.match(/al\s+(\d{1,2})\/([A-Za-zñ]{3})[a-z]*\/(\d{4})/i);
+    if(m){mes=DOC_MES_ABR[_normTxt(m[2])]||null;anio=parseInt(m[3]);}
+  }
+  return {empresa,mes,anio};
+}
+function docParseER(rows){
+  const ing=_cpqBuscar(rows,/^total ingresos$/), egr=_cpqBuscar(rows,/^total egresos$/), uti=_cpqBuscar(rows,/^utilidad \(o perdida\)$/);
+  if(!ing||!egr||!uti) throw new Error('El archivo no parece ser el Estado de Resultados de CONTPAQi (no se encontró Total Ingresos / Total Egresos / Utilidad o Pérdida).');
+  return {meta:_cpqMeta(rows),ingresos:ing[0],egresos:egr[0],utilidad:uti[0],
+    ingresos_acum:ing.length>=3?ing[2]:null,egresos_acum:egr.length>=3?egr[2]:null,utilidad_acum:uti.length>=3?uti[2]:null};
+}
+function docParseBG(rows){
+  const act=_cpqBuscar(rows,/^suma del activo$/), pas=_cpqBuscar(rows,/^suma del pasivo$/), cap=_cpqBuscar(rows,/^total capital$/),
+        res=_cpqBuscar(rows,/^utilidad o perdida del ejercicio$/), spc=_cpqBuscar(rows,/^suma del pasivo y capital$/);
+  if(!act||!pas||!cap||!spc) throw new Error('El archivo no parece ser el Balance General (Posición Financiera) de CONTPAQi (no se encontró Suma del Activo / Pasivo / Total Capital).');
+  return {meta:_cpqMeta(rows),activo:act[0],pasivo:pas[0],capital:cap[0],resultado:res?res[0]:0,pasivo_capital:spc[0]};
+}
+
+// ---- Cifras de TaxIA para el mes base ----
+function docMetricasTaxia(c){
+  const ra=c.resultado_acreedor||0, rd=c.resultado_deudor||0, raa=c.resultado_acreedor_acum||0, rda=c.resultado_deudor_acum||0;
+  return {activo:c.activo||0,pasivo:c.pasivo||0,capital:c.capital||0,
+    ingresos:ra,egresos:rd,utilidad:ra-rd,ingresos_acum:raa,egresos_acum:rda,utilidad_acum:raa-rda};
+}
+async function docCifrasBaseTaxia(mes,ejercicio){
+  const b=docCacheFin.find(d=>d.tipo==='balanza'&&d.mes===mes&&d.ejercicio===ejercicio);
+  if(!b) throw new Error('No hay balanza cargada para '+DOC_MESES_L[mes-1]+' '+ejercicio+'.');
+  if(String(b.archivo_ext||'').toLowerCase()!=='csv'||!b.archivo_url) throw new Error('La balanza base debe estar en CSV para poder validarse.');
+  if(!docClasifCache||!Object.keys(docClasifCache).length) await docCargarClasif();
+  const tiene=docClasifCache&&Object.keys(docClasifCache).filter(k=>!k.endsWith('_cedulas')).length>0;
+  if(!tiene) throw new Error('Clasifica primero el catálogo de cuentas de este cliente.');
+  const r=await fetch(b.archivo_url,{headers:{'Authorization':'Bearer '+_authToken(),'apikey':SB_KEY}});
+  if(!r.ok) throw new Error('No se pudo descargar la balanza base ('+r.status+').');
+  const c=docExtraerCSVConClasif(await r.text(),docClasifCache);
+  if(!c||!Object.keys(c).length) throw new Error('No se pudieron extraer cifras de la balanza base.');
+  return c;
+}
+function docCompararBase(tx,er,bg){
+  const L=[];
+  const add=(grupo,concepto,cp,t)=>{ if(cp===null||cp===undefined) return; const dif=Math.round((t-cp)*100)/100; L.push({grupo,concepto,contpaq:cp,taxia:t,dif,ok:Math.abs(dif)<=DOC_VALID_TOL}); };
+  add('Estado de Resultados (período)','Total ingresos',er.ingresos,tx.ingresos);
+  add('Estado de Resultados (período)','Total egresos',er.egresos,tx.egresos);
+  add('Estado de Resultados (período)','Utilidad (pérdida)',er.utilidad,tx.utilidad);
+  add('Estado de Resultados (acumulado)','Total ingresos',er.ingresos_acum,tx.ingresos_acum);
+  add('Estado de Resultados (acumulado)','Total egresos',er.egresos_acum,tx.egresos_acum);
+  add('Estado de Resultados (acumulado)','Utilidad (pérdida)',er.utilidad_acum,tx.utilidad_acum);
+  add('Balance General','Suma del activo',bg.activo,tx.activo);
+  add('Balance General','Suma del pasivo',bg.pasivo,tx.pasivo);
+  add('Balance General','Total capital',bg.capital,tx.capital);
+  add('Balance General','Utilidad o pérdida del ejercicio',bg.resultado,tx.utilidad_acum);
+  add('Balance General','Suma del pasivo y capital',bg.pasivo_capital,tx.pasivo+tx.capital+tx.utilidad_acum);
+  // Cuadre contable interno de TaxIA: A = P + C + Resultado
+  const dif=Math.round((tx.activo-(tx.pasivo+tx.capital+tx.utilidad_acum))*100)/100;
+  L.push({grupo:'Cuadre interno TaxIA',concepto:'Activo − (Pasivo + Capital + Resultado)',contpaq:0,taxia:dif,dif:dif,ok:Math.abs(dif)<=DOC_VALID_TOL});
+  return L;
+}
+
+// Revalida en vivo el mes base contra las cifras CONTPAQi guardadas (detecta cambios de catálogo o de archivo)
+async function docRevalidarBase(){
+  const v=docValidacionRow(); if(!v||!v.cifras) return {ok:false,msg:'Sin validación de mes base.'};
+  const cf=v.cifras;
+  try{
+    const c=await docCifrasBaseTaxia(cf.mes,cf.ejercicio);
+    const tx=docMetricasTaxia(c);
+    const lineas=docCompararBase(tx,cf.contpaq.er,cf.contpaq.bg);
+    const ok=lineas.every(l=>l.ok);
+    if(ok!==(cf.ok===true)){
+      const nuevo={...cf,ok,lineas,taxia:tx,revalidado_en:nowISO()};
+      await sbPatch('client_documents','?id=eq.'+encodeURIComponent(v.id),{cifras:nuevo,status:ok?'validado':'invalido',updated_at:nowISO()});
+      v.cifras=nuevo;
+    }
+    return {ok,lineas,msg:ok?'':'El mes base ya no cuadra contra CONTPAQi (cambió la clasificación del catálogo o el archivo). Corrige y vuelve a validar.'};
+  }catch(e){return {ok:false,msg:e.message};}
+}
+
+// Compuerta: ¿se puede subir esta balanza?
+async function docGateBalanza(mes,ejercicio){
+  const est=docEstadoValidacion();
+  const bals=docCacheFin.filter(d=>d.tipo==='balanza');
+  if(est==='nueva') return {ok:true};
+  if(est==='exenta') return {ok:true,aviso:'⚠ Mes base sin validar contra CONTPAQi. Valídalo desde "Validar mes base".'};
+  if(est==='pendiente'){
+    // Solo se permite reemplazar la balanza base (única cargada)
+    if(bals.every(b=>b.mes===mes&&b.ejercicio===ejercicio)) return {ok:true};
+    return {ok:false,msg:'Bloqueado: valida primero el mes base (ER y BG de CONTPAQi) antes de subir más balanzas.'};
+  }
+  if(est==='invalida') return {ok:false,msg:'Bloqueado: el mes base no cuadra contra CONTPAQi. Corrige la clasificación y vuelve a validar.'};
+  // validada: revalidar en vivo (salvo que se esté reemplazando la propia balanza base)
+  const v=docValidacionRow();
+  if(v.cifras.mes===mes&&v.cifras.ejercicio===ejercicio) return {ok:true,revalidarDespues:true};
+  const r=await docRevalidarBase();
+  return r.ok?{ok:true}:{ok:false,msg:'Bloqueado: '+r.msg};
+}
+
+// ---- Interfaz ----
+function docValidChipHtml(){
+  const est=docEstadoValidacion(), v=docValidacionRow();
+  const mk=(bg,col,brd,txt)=>'<span onclick="docAbrirValidacion()" style="cursor:pointer;background:'+bg+';color:'+col+';border:1px solid '+brd+';padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">'+txt+'</span>';
+  if(est==='validada') return mk('#EAF3DE','#3B6D11','#b7d9a0','✓ Mes base validado: '+DOC_MESES_C[v.cifras.mes-1]+' '+v.cifras.ejercicio);
+  if(est==='invalida') return mk('#FCEBEB','#A32D2D','#f5c0c0','✕ Mes base NO cuadra — carga bloqueada');
+  if(est==='pendiente') return mk('#FCEBEB','#A32D2D','#f5c0c0','⛔ Mes base sin validar — carga bloqueada');
+  if(est==='exenta') return mk('#FAEEDA','#854F0B','#f0c97a','⚠ Mes base sin validar (pendiente)');
+  return mk('#E6F1FB','#185FA5','#c5d0ff','ℹ Sube la balanza base y valídala con ER y BG');
+}
+function docCerrarValidacion(){const m=document.getElementById('doc-valid-modal');if(m)m.remove();}
+function docAbrirValidacion(){
+  docCerrarValidacion();
+  const est=docEstadoValidacion(), v=docValidacionRow();
+  const bals=docCacheFin.filter(d=>d.tipo==='balanza'&&String(d.archivo_ext||'').toLowerCase()==='csv').sort((a,b)=>(a.ejercicio-b.ejercicio)||(a.mes-b.mes));
+  const opts=bals.map(b=>'<option value="'+b.ejercicio+'-'+b.mes+'"'+((v&&v.cifras&&v.cifras.mes===b.mes&&v.cifras.ejercicio===b.ejercicio)?' selected':'')+'>'+DOC_MESES_L[b.mes-1]+' '+b.ejercicio+'</option>').join('');
+  const msgEst={validada:'✓ Mes base validado. Cualquier cambio en la balanza base o en el catálogo se revalida automáticamente.',
+    invalida:'✕ El mes base ya no cuadra. Corrige y vuelve a validar.',
+    pendiente:'⛔ Sin validar: no se pueden subir más balanzas hasta que el mes base cuadre contra CONTPAQi.',
+    exenta:'⚠ Cliente con balanzas previas: puede seguir operando, pero valida su mes base lo antes posible.',
+    nueva:'Primero sube la balanza del mes base (CSV) y luego valídala aquí.'}[est];
+  const m=document.createElement('div');m.className='modal-overlay';m.id='doc-valid-modal';
+  m.innerHTML='<div class="modal-box" style="max-width:640px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
+      '<div><div style="font-size:15px;font-weight:700">🛡 Validación del mes base</div><div style="font-size:11px;color:#888">'+escD(docClienteActual.nombre)+'</div></div>'+
+      '<button onclick="docCerrarValidacion()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button></div>'+
+    '<div style="background:#f5f5f3;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:10px">'+msgEst+'</div>'+
+    (bals.length?
+    '<div style="font-size:12px;margin-bottom:8px">Sube del mismo mes los reportes de <b>CONTPAQi</b> (Excel): Estado de Resultados y Balance General (Posición Financiera). TaxIA los compara contra su propio cálculo; todo debe cuadrar (tolerancia $1.00).</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">'+
+      '<div><div style="font-size:10px;color:#888;font-weight:700">MES BASE</div><select id="vb-mes" style="width:100%;padding:6px;border:1px solid #e0e0db;border-radius:8px;font-size:12px">'+opts+'</select></div>'+
+      '<div><div style="font-size:10px;color:#888;font-weight:700">ESTADO DE RESULTADOS (.xlsx)</div><input id="vb-er" type="file" accept=".xlsx,.xls" style="font-size:11px;width:100%"></div>'+
+      '<div><div style="font-size:10px;color:#888;font-weight:700">BALANCE GENERAL (.xlsx)</div><input id="vb-bg" type="file" accept=".xlsx,.xls" style="font-size:11px;width:100%"></div>'+
+    '</div>'+
+    '<button class="btn btn-primary" style="width:100%" id="vb-btn" onclick="docEjecutarValidacion()">Validar contra CONTPAQi</button>':'')+
+    '<div id="vb-res" style="margin-top:12px;max-height:340px;overflow-y:auto"></div>'+
+    '<button class="btn" style="width:100%;margin-top:10px" onclick="docCerrarValidacion()">Cerrar</button></div>';
+  document.body.appendChild(m);
+  if(v&&v.cifras&&v.cifras.lineas) docPintarValidacion(v.cifras.lineas,v.cifras.ok,v.cifras.avisos||[]);
+}
+function docPintarValidacion(lineas,ok,avisos){
+  const el=document.getElementById('vb-res'); if(!el) return;
+  let g='',h='<table style="width:100%;border-collapse:collapse;font-size:11px"><tr style="background:#f5f5f3;font-weight:700"><td style="padding:4px 6px">Concepto</td><td style="padding:4px 6px;text-align:right">CONTPAQi</td><td style="padding:4px 6px;text-align:right">TaxIA</td><td style="padding:4px 6px;text-align:right">Dif.</td><td></td></tr>';
+  lineas.forEach(l=>{
+    if(l.grupo!==g){g=l.grupo;h+='<tr><td colspan="5" style="padding:6px 6px 2px;font-size:10px;font-weight:700;color:#888;text-transform:uppercase">'+escD(g)+'</td></tr>';}
+    h+='<tr style="border-bottom:1px solid #f0f0ec"><td style="padding:4px 6px">'+escD(l.concepto)+'</td><td style="padding:4px 6px;text-align:right">'+_fmtMXN(l.contpaq)+'</td><td style="padding:4px 6px;text-align:right">'+_fmtMXN(l.taxia)+'</td><td style="padding:4px 6px;text-align:right;color:'+(l.ok?'#3B6D11':'#A32D2D')+'">'+_fmtMXN(l.dif)+'</td><td style="padding:4px 6px">'+(l.ok?'✓':'✕')+'</td></tr>';
+  });
+  h+='</table>';
+  el.innerHTML=(avisos.length?'<div style="background:#FAEEDA;color:#854F0B;border-radius:8px;padding:6px 10px;font-size:11px;margin-bottom:8px">'+avisos.map(escD).join('<br>')+'</div>':'')+
+    '<div style="background:'+(ok?'#EAF3DE':'#FCEBEB')+';color:'+(ok?'#3B6D11':'#A32D2D')+';border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;margin-bottom:8px">'+(ok?'✓ VALIDADO: TaxIA coincide con CONTPAQi':'✕ NO CUADRA: revisa la clasificación del catálogo (cuentas sin clasificar o mal clasificadas) y recalcula la balanza')+'</div>'+h;
+}
+async function docEjecutarValidacion(){
+  const btn=document.getElementById('vb-btn'), res=document.getElementById('vb-res');
+  const fe=document.getElementById('vb-er').files[0], fb=document.getElementById('vb-bg').files[0];
+  if(!fe||!fb){res.innerHTML='<div style="color:#A32D2D;font-size:12px">Selecciona ambos archivos (Estado de Resultados y Balance General).</div>';return;}
+  const [ej,mes]=document.getElementById('vb-mes').value.split('-').map(Number);
+  btn.disabled=true;btn.textContent='Validando...';
+  try{
+    const er=docParseER(await docLeerXlsxCPQ(fe)), bg=docParseBG(await docLeerXlsxCPQ(fb));
+    const avisos=[];
+    [['Estado de Resultados',er.meta],['Balance General',bg.meta]].forEach(([n,mt])=>{
+      if(mt.mes&&mt.anio&&(mt.mes!==mes||mt.anio!==ej)) throw new Error(n+' es de '+DOC_MESES_L[mt.mes-1]+' '+mt.anio+' y el mes base seleccionado es '+DOC_MESES_L[mes-1]+' '+ej+'.');
+      const a=_normTxt(mt.empresa), b=_normTxt(docClienteActual.nombre);
+      if(a&&b&&!(a.includes(b)||b.includes(a))) avisos.push('El '+n+' indica la empresa "'+mt.empresa+'", que no coincide con "'+docClienteActual.nombre+'". Confirma que es el cliente correcto.');
+    });
+    const c=await docCifrasBaseTaxia(mes,ej);
+    const tx=docMetricasTaxia(c);
+    const lineas=docCompararBase(tx,er,bg);
+    const ok=lineas.every(l=>l.ok);
+    // Trazabilidad: conservar los reportes de CONTPAQi
+    const ts=Date.now(), base='financiero/'+docClienteActual.id+'/validacion/';
+    let urlER='',urlBG='';
+    try{urlER=await docUploadStorage(fe,base+'er_'+ej+'-'+mes+'_'+ts+'.xlsx');urlBG=await docUploadStorage(fb,base+'bg_'+ej+'-'+mes+'_'+ts+'.xlsx');}catch(e){avisos.push('No se pudieron archivar los reportes: '+e.message);}
+    const cifras={ok,mes,ejercicio:ej,contpaq:{er:{...er,meta:undefined},bg:{...bg,meta:undefined}},taxia:tx,lineas,avisos,
+      archivo_er:urlER,archivo_bg:urlBG,validado_por:(session&&session.email)||null,validado_en:nowISO()};
+    const payload={cliente_id:String(docClienteActual.id),cliente_nombre:docClienteActual.nombre,categoria:'financiero',tipo:'validacion_base',
+      mes,ejercicio:ej,tipo_label:'Validación mes base',nombre_archivo:'validacion_base',archivo_url:urlER||'',archivo_ext:'xlsx',
+      cifras,status:ok?'validado':'invalido',updated_at:nowISO()};
+    const existing=docValidacionRow();
+    if(existing?.id){
+      await sbPatch('client_documents','?id=eq.'+encodeURIComponent(existing.id),payload);
+      const i=docCacheFin.findIndex(d=>d.id===existing.id); if(i>=0) docCacheFin[i]={...existing,...payload};
+    }else{
+      const r=await sbPost('client_documents',{...payload,created_at:nowISO()},'return=representation');
+      const data=await r.json(); const nuevo=Array.isArray(data)?data[0]:data; if(nuevo) docCacheFin.push(nuevo);
+    }
+    docPintarValidacion(lineas,ok,avisos);
+    docToast(ok?'✓ Mes base validado contra CONTPAQi':'✕ El mes base no cuadra contra CONTPAQi',ok?'ok':'err');
+    docSetTab('financiero');
+  }catch(e){res.innerHTML='<div style="background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:8px 12px;font-size:12px">'+escD(e.message)+'</div>';}
+  finally{btn.disabled=false;btn.textContent='Validar contra CONTPAQi';}
+}
+
 async function docSubirBalanza(mes,ejercicio,input){
   const file=input.files[0];if(!file)return;
   const ext=file.name.split('.').pop().toLowerCase();
+  // Compuerta: mes base validado contra CONTPAQi (bloqueo total)
+  const _gate=await docGateBalanza(mes,ejercicio);
+  if(!_gate.ok){input.value='';docToast(_gate.msg,'err');docAbrirValidacion();return;}
+  if(_gate.aviso) docToast(_gate.aviso,'warn');
   docToast('Subiendo balanza '+DOC_MESES_L[mes-1]+'...','warn');
   try{
     const url=await docUploadStorage(file,'financiero/'+docClienteActual.id+'/'+ejercicio+'/balanza_'+mes+'-'+Date.now()+'.'+ext);
@@ -10244,6 +10495,7 @@ async function docSubirBalanza(mes,ejercicio,input){
     }
     const ejs=[...new Set(docCacheFin.map(d=>d.ejercicio).filter(Boolean))].sort((a,b)=>b-a);
     if(!ejs.includes(docEjercicio))ejs.unshift(docEjercicio);
+    if(_gate.revalidarDespues){const _rv=await docRevalidarBase(); if(!_rv.ok) docToast('⚠ La balanza base cambió y ya no cuadra contra CONTPAQi: carga bloqueada hasta corregir.','err');}
     docSetTab('financiero');
     docToast(Object.keys(cifras).length?'Balanza subida y cifras extraídas del CSV':'Balanza subida — usa ✨ IA para PDF','ok');
   }catch(e){docToast('Error: '+e.message,'err');}
