@@ -8854,6 +8854,7 @@ function docRenderFinanciero(ejercicios){
     if(ok) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#EEEDFE;color:#3C3489;border-color:#c5d0ff" data-did="'+escD(String(d.id))+'" data-url="'+escD(d.archivo_url||'')+'" onclick="docRecalcularBalanza(this.dataset.did,this.dataset.url)" title="Recalcular cifras con clasificación actual">↺</button>';
     if(ok&&!hasCifras) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#EEEDFE;color:#3B4BC8;border-color:#c5d0ff" data-did="'+escD(String(d.id))+'" onclick="docExtraerCifras(this.dataset.did,\'balanza\','+docEjercicio+','+n+')">✨ IA</button>';
     if(ok) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#FCEBEB;color:#A32D2D;border-color:#f5c0c0" data-did="'+escD(String(d.id))+'" data-mes="'+n+'" onclick="docBorrarBalanza(this.dataset.did,parseInt(this.dataset.mes))">✕</button>';
+    html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#E6F1FB;color:#0C447C;border-color:#b9d4ee" data-mes="'+n+'" data-ej="'+docEjercicio+'" onclick="docImportarBalanzaDocs(parseInt(this.dataset.mes),parseInt(this.dataset.ej),this)" title="Traer la balanza de este mes desde TaxIA Docs'+(ok?' (reemplaza la actual)':'')+'">\u2b07 Docs</button>';
     html+='<label class="btn btn-sm" style="font-size:9px;padding:2px 4px;cursor:pointer;justify-content:center;margin:0">'+(ok?'↑':'↑ Subir');
     html+='<input type="file" accept=".pdf,.csv,.xlsx,.xls" style="display:none" data-mes="'+n+'" data-ej="'+docEjercicio+'" onchange="docSubirBalanza(parseInt(this.dataset.mes),parseInt(this.dataset.ej),this)"></label>';
     html+='</div></div>';
@@ -10456,6 +10457,95 @@ async function docEjecutarValidacion(){
     docSetTab('financiero');
   }catch(e){res.innerHTML='<div style="background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:8px 12px;font-size:12px">'+escD(e.message)+'</div>';}
   finally{btn.disabled=false;btn.textContent='Validar contra CONTPAQi';}
+}
+
+// ════════════════════════════════════════════════════════════════
+// Importar balanza desde TaxIA Docs — mes por mes, bajo demanda
+// Trae el CSV ya convertido en TaxIA Docs y lo procesa con el mismo
+// flujo que una subida manual: compuerta CONTPAQi, extracción de
+// cifras con la clasificación vigente, y reemplazo del registro.
+// ════════════════════════════════════════════════════════════════
+async function docImportarBalanzaDocs(mes,ejercicio,btn){
+  if(!docClienteActual||!docClienteActual.id){docToast('Selecciona un cliente primero','err');return;}
+  const mesL=DOC_MESES_L[mes-1];
+  const existente=docCacheFin.find(d=>d.tipo==='balanza'&&d.mes===mes&&d.ejercicio===ejercicio);
+  if(existente&&!confirm('Ya existe la balanza de '+mesL+' '+ejercicio+'.\n\nSe reemplazará por la versión de TaxIA Docs. ¿Continuar?'))return;
+
+  // Compuerta de validación del mes base (misma regla que la carga manual)
+  const _gate=await docGateBalanza(mes,ejercicio);
+  if(!_gate.ok){docToast(_gate.msg,'err');docAbrirValidacion();return;}
+  if(_gate.aviso) docToast(_gate.aviso,'warn');
+
+  const txtOrig=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.innerHTML='…';}
+  docToast('Consultando TaxIA Docs — '+mesL+' '+ejercicio+'…','warn');
+
+  try{
+    await ensureFreshToken();
+    const r=await fetch(SB_URL+'/functions/v1/balanza-docs',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+_authToken(),'apikey':SB_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({cliente_id:String(docClienteActual.id),ejercicio:ejercicio,mes:mes})
+    });
+    const data=await r.json().catch(()=>({}));
+
+    if(!r.ok||!data.ok){
+      const code=data.error||('HTTP '+r.status);
+      const msgs={
+        not_linked:'Este cliente no está vinculado en TaxIA Docs.',
+        not_found:'No hay balanza de '+mesL+' '+ejercicio+' en TaxIA Docs.',
+        no_csv:'El periodo existe en TaxIA Docs pero aún no tiene CSV convertido.',
+        download_failed:'No se pudo leer el archivo desde TaxIA Docs.',
+        empty_file:'El CSV de TaxIA Docs está vacío.'
+      };
+      throw new Error(msgs[code]||data.message||code);
+    }
+
+    const nombre=data.filename||('BALANZA_'+ejercicio+'_'+String(mes).padStart(2,'0')+'.csv');
+    const file=new File([data.csv],nombre,{type:'text/csv'});
+
+    // Subir al Storage de TaxIA (misma ruta que la carga manual)
+    const url=await docUploadStorage(file,'financiero/'+docClienteActual.id+'/'+ejercicio+'/balanza_'+mes+'-'+Date.now()+'.csv');
+
+    // Extraer cifras con la clasificación vigente
+    let cifras={};
+    if(!docClasifCache) await docCargarClasif();
+    const tieneClasif=docClasifCache&&Object.keys(docClasifCache).filter(k=>!k.endsWith('_cedulas')).length>0;
+    if(tieneClasif){
+      cifras=docExtraerCSVConClasif(data.csv,docClasifCache);
+    }else{
+      docToast('⚠ Clasificando sin catálogo — clasifica el catálogo de cuentas para mayor exactitud','warn');
+      cifras=docExtraerCSV(data.csv);
+    }
+
+    const payload={cliente_id:String(docClienteActual.id),cliente_nombre:docClienteActual.nombre,
+      categoria:'financiero',tipo:'balanza',mes:mes,ejercicio:ejercicio,tipo_label:'Balanza '+mesL,
+      nombre_archivo:nombre,archivo_url:url,archivo_ext:'csv',
+      cifras:cifras,status:Object.keys(cifras).length?'extraido':'cargado',
+      notas:'Importada de TaxIA Docs el '+new Date().toLocaleDateString('es-MX')+(data.row_count?' · '+data.row_count+' filas':''),
+      updated_at:nowISO()};
+
+    if(existente&&existente.id){
+      await sbPatch('client_documents','?id=eq.'+existente.id,payload);
+      const i=docCacheFin.findIndex(d=>d.id===existente.id);
+      if(i>=0) docCacheFin[i]=Object.assign({},existente,payload);
+    }else{
+      const res=await sbPost('client_documents',Object.assign({},payload,{created_at:nowISO()}),'return=representation');
+      const d2=await res.json();const nuevo=Array.isArray(d2)?d2[0]:d2;
+      if(nuevo) docCacheFin.push(nuevo);
+    }
+
+    if(_gate.revalidarDespues){
+      const _rv=await docRevalidarBase();
+      if(!_rv.ok) docToast('⚠ La balanza base cambió y ya no cuadra contra CONTPAQi: revisa la validación.','err');
+    }
+
+    docSetTab('financiero');
+    docToast('✓ '+mesL+' importada de TaxIA Docs'+(Object.keys(cifras).length?' — cifras extraídas':' — sin cifras')+(data.row_count?' ('+data.row_count+' filas)':''),'ok');
+  }catch(e){
+    docToast('TaxIA Docs: '+e.message,'err');
+    if(btn){btn.disabled=false;btn.innerHTML=txtOrig;}
+  }
 }
 
 async function docSubirBalanza(mes,ejercicio,input){
