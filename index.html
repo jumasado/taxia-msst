@@ -10127,7 +10127,9 @@ function docExtraerCSVConClasif(text, clasifMap){
     } else {
       let valor=parseFloat((cols[iSA]||'').replace(/[$, ]/g,''))||0;
       // Rubros de naturaleza contraria dentro de su clase restan (la balanza trae el saldo en valor absoluto)
-      if(valor&&(subId==='activo_depreciacion'||subId==='capital_perdidas')) valor=-Math.abs(valor);
+      // El saldo se resta tal cual (preserva el signo): una depreciacion acumulada con
+      // saldo negativo en la balanza debe SUMAR al activo, no restarse dos veces.
+      if(valor&&(subId==='activo_depreciacion'||subId==='capital_perdidas')) valor=-valor;
       if(valor){ acum[cat]+=valor; if(!acum.detalle[subId])acum.detalle[subId]=0; acum.detalle[subId]+=valor; }
     }
   }
