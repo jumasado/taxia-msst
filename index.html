@@ -8855,6 +8855,9 @@ function docRenderFinanciero(ejercicios){
     if(ok&&!hasCifras) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#EEEDFE;color:#3B4BC8;border-color:#c5d0ff" data-did="'+escD(String(d.id))+'" onclick="docExtraerCifras(this.dataset.did,\'balanza\','+docEjercicio+','+n+')">✨ IA</button>';
     if(ok) html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#FCEBEB;color:#A32D2D;border-color:#f5c0c0" data-did="'+escD(String(d.id))+'" data-mes="'+n+'" onclick="docBorrarBalanza(this.dataset.did,parseInt(this.dataset.mes))">✕</button>';
     html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;background:#E6F1FB;color:#0C447C;border-color:#b9d4ee" data-mes="'+n+'" data-ej="'+docEjercicio+'" onclick="docImportarBalanzaDocs(parseInt(this.dataset.mes),parseInt(this.dataset.ej),this)" title="Traer la balanza de este mes desde TaxIA Docs'+(ok?' (reemplaza la actual)':'')+'">\u2b07 Docs</button>';
+    { const _ncp=(docReporteCPQ('er',n,docEjercicio)?1:0)+(docReporteCPQ('bg',n,docEjercicio)?1:0);
+      const _cs=_ncp===2?'background:#EAF3DE;color:#3B6D11;border-color:#b7d9a0':(_ncp===1?'background:#FAEEDA;color:#854F0B;border-color:#e8d5ab':'background:#fafafa;color:#888;border-color:#e5e5e0');
+      html+='<button class="btn btn-sm" style="font-size:9px;padding:2px 4px;'+_cs+'" data-mes="'+n+'" data-ej="'+docEjercicio+'" onclick="docAbrirReportesCPQ(parseInt(this.dataset.mes),parseInt(this.dataset.ej))" title="Reportes CONTPAQi del mes (ER y BG) — '+_ncp+' de 2 cargados">CPQ '+_ncp+'/2</button>'; }
     html+='<label class="btn btn-sm" style="font-size:9px;padding:2px 4px;cursor:pointer;justify-content:center;margin:0">'+(ok?'↑':'↑ Subir');
     html+='<input type="file" accept=".pdf,.csv,.xlsx,.xls" style="display:none" data-mes="'+n+'" data-ej="'+docEjercicio+'" onchange="docSubirBalanza(parseInt(this.dataset.mes),parseInt(this.dataset.ej),this)"></label>';
     html+='</div></div>';
@@ -10296,6 +10299,117 @@ function docParseBG(rows){
   return {meta:_cpqMeta(rows),activo:act[0],pasivo:pas[0],capital:cap[0],resultado:res?res[0]:0,pasivo_capital:spc[0]};
 }
 
+// ════════════════════════════════════════════════════════════════
+// Reportes CONTPAQi (ER y BG) guardados por mes
+// Evitan tener que adjuntar los .xlsx en cada validacion y permiten
+// validar cualquier mes, no solo el mes base.
+// ════════════════════════════════════════════════════════════════
+const DOC_CPQ_KIND={er:{tipo:'cpq_er',label:'Estado de Resultados',corto:'ER'},
+                    bg:{tipo:'cpq_bg',label:'Balance General',corto:'BG'}};
+
+function docReporteCPQ(kind,mes,ejercicio){
+  const t=DOC_CPQ_KIND[kind]&&DOC_CPQ_KIND[kind].tipo; if(!t) return null;
+  return docCacheFin.find(d=>d.tipo===t&&d.mes===mes&&d.ejercicio===ejercicio)||null;
+}
+function docCPQCompletos(mes,ejercicio){
+  return !!(docReporteCPQ('er',mes,ejercicio)&&docReporteCPQ('bg',mes,ejercicio));
+}
+
+// Parsea, valida contra el mes/cliente y guarda el reporte del mes
+async function docSubirReporteCPQ(kind,mes,ejercicio,input){
+  const file=input&&input.files&&input.files[0]; if(!file) return;
+  const K=DOC_CPQ_KIND[kind]; if(!K){input.value='';return;}
+  const mesL=DOC_MESES_L[mes-1];
+  try{
+    const rows=await docLeerXlsxCPQ(file);
+    const parsed=(kind==='er')?docParseER(rows):docParseBG(rows);
+    const mt=parsed.meta||{};
+    if(mt.mes&&mt.anio&&(mt.mes!==mes||mt.anio!==ejercicio))
+      throw new Error('El archivo es de '+DOC_MESES_L[mt.mes-1]+' '+mt.anio+' y lo estas subiendo en '+mesL+' '+ejercicio+'.');
+    const a=_normTxt(mt.empresa), b=_normTxt(docClienteActual.nombre);
+    const avisoEmpresa=(a&&b&&!(a.includes(b)||b.includes(a)))
+      ? 'El archivo indica la empresa "'+mt.empresa+'", distinta de "'+docClienteActual.nombre+'".' : '';
+    if(avisoEmpresa&&!confirm(avisoEmpresa+'\n\n¿Guardarlo de todos modos?')){input.value='';return;}
+
+    docToast('Guardando '+K.corto+' de '+mesL+'…','warn');
+    const url=await docUploadStorage(file,'financiero/'+docClienteActual.id+'/cpq/'+kind+'_'+ejercicio+'-'+mes+'_'+Date.now()+'.xlsx');
+    await _docGuardarCPQ(kind,mes,ejercicio,file.name,url,parsed);
+    docToast('✓ '+K.corto+' de '+mesL+' guardado','ok');
+    docAbrirReportesCPQ(mes,ejercicio);
+    docSetTab('financiero');
+  }catch(e){ docToast(K.corto+': '+e.message,'err'); }
+  finally{ if(input) input.value=''; }
+}
+
+// Upsert del reporte del mes a partir de datos ya parseados y subidos
+async function _docGuardarCPQ(kind,mes,ejercicio,nombre,url,parsed){
+  const K=DOC_CPQ_KIND[kind]; if(!K) return;
+  const cifras=Object.assign({},parsed,{meta:undefined,_meta:(parsed&&parsed.meta)||{}});
+  const payload={cliente_id:String(docClienteActual.id),cliente_nombre:docClienteActual.nombre,
+    categoria:'financiero',tipo:K.tipo,mes:mes,ejercicio:ejercicio,
+    tipo_label:K.label+' CONTPAQi '+DOC_MESES_L[mes-1],nombre_archivo:nombre||(kind+'.xlsx'),
+    archivo_url:url||'',archivo_ext:'xlsx',cifras:cifras,status:'cargado',updated_at:nowISO()};
+  const prev=docReporteCPQ(kind,mes,ejercicio);
+  if(prev&&prev.id){
+    await sbPatch('client_documents','?id=eq.'+encodeURIComponent(prev.id),payload);
+    const i=docCacheFin.findIndex(d=>d.id===prev.id); if(i>=0) docCacheFin[i]=Object.assign({},prev,payload);
+  }else{
+    const r=await sbPost('client_documents',Object.assign({},payload,{created_at:nowISO()}),'return=representation');
+    const d2=await r.json(); const nuevo=Array.isArray(d2)?d2[0]:d2; if(nuevo) docCacheFin.push(nuevo);
+  }
+}
+
+async function docBorrarReporteCPQ(kind,mes,ejercicio){
+  const K=DOC_CPQ_KIND[kind], d=docReporteCPQ(kind,mes,ejercicio); if(!d) return;
+  if(!confirm('¿Borrar el '+K.corto+' de '+DOC_MESES_L[mes-1]+' '+ejercicio+'?')) return;
+  try{
+    await fetch(SB_URL+'/rest/v1/client_documents?id=eq.'+encodeURIComponent(d.id),
+      {method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+_authToken()}});
+    const i=docCacheFin.findIndex(x=>String(x.id)===String(d.id)); if(i>=0) docCacheFin.splice(i,1);
+    docToast(K.corto+' eliminado','ok');
+    docAbrirReportesCPQ(mes,ejercicio); docSetTab('financiero');
+  }catch(e){ docToast('No se pudo borrar: '+e.message,'err'); }
+}
+
+function docCerrarReportesCPQ(){ const m=document.getElementById('doc-cpq-modal'); if(m) m.remove(); }
+
+function docAbrirReportesCPQ(mes,ejercicio){
+  docCerrarReportesCPQ();
+  const mesL=DOC_MESES_L[mes-1];
+  const fila=(kind)=>{
+    const K=DOC_CPQ_KIND[kind], d=docReporteCPQ(kind,mes,ejercicio), ok=!!d;
+    let det='<span style="color:#888">Sin cargar</span>';
+    if(ok){
+      const f=(d.updated_at||d.created_at||'').slice(0,10);
+      det='<span style="color:#3B6D11;font-weight:600">✓ '+escD(d.nombre_archivo||'cargado')+'</span>'+
+          (f?'<span style="color:#888;font-size:10px"> · '+f+'</span>':'');
+    }
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0ec">'+
+      '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">'+K.label+'</div>'+
+      '<div style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+det+'</div></div>'+
+      (ok?'<a class="btn btn-sm" style="font-size:10px;padding:3px 7px" href="'+escD(d.archivo_url||'#')+'" target="_blank" rel="noopener">Ver</a>':'')+
+      '<label class="btn btn-sm" style="font-size:10px;padding:3px 7px;cursor:pointer;margin:0">'+(ok?'Reemplazar':'Subir')+
+        '<input type="file" accept=".xlsx,.xls" style="display:none" onchange="docSubirReporteCPQ(\''+kind+'\','+mes+','+ejercicio+',this)"></label>'+
+      (ok?'<button class="btn btn-sm" style="font-size:10px;padding:3px 7px;background:#FCEBEB;color:#A32D2D;border-color:#f5c0c0" onclick="docBorrarReporteCPQ(\''+kind+'\','+mes+','+ejercicio+')">✕</button>':'')+
+      '</div>';
+  };
+  const listos=docCPQCompletos(mes,ejercicio);
+  const m=document.createElement('div'); m.className='modal-overlay'; m.id='doc-cpq-modal';
+  m.innerHTML='<div class="modal-box" style="max-width:520px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
+      '<div><div style="font-size:15px;font-weight:700">📊 Reportes CONTPAQi — '+mesL+' '+ejercicio+'</div>'+
+      '<div style="font-size:11px;color:#888">'+escD(docClienteActual.nombre)+'</div></div>'+
+      '<button onclick="docCerrarReportesCPQ()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#888">✕</button></div>'+
+    '<div style="background:#f5f5f3;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:6px">'+
+      'Guarda aquí los dos reportes de CONTPAQi (Excel) de este mes. Quedan archivados y la validación los usa sin volver a pedírtelos.</div>'+
+    fila('er')+fila('bg')+
+    '<button class="btn btn-primary" style="width:100%;margin-top:12px"'+(listos?'':' disabled')+
+      ' onclick="docCerrarReportesCPQ();docAbrirValidacion('+mes+','+ejercicio+')">'+
+      (listos?'Validar '+mesL+' contra CONTPAQi':'Carga ambos reportes para poder validar')+'</button>'+
+    '<button class="btn" style="width:100%;margin-top:8px" onclick="docCerrarReportesCPQ()">Cerrar</button></div>';
+  document.body.appendChild(m);
+}
+
 // ---- Cifras de TaxIA para el mes base ----
 function docMetricasTaxia(c){
   const ra=c.resultado_acreedor||0, rd=c.resultado_deudor||0, raa=c.resultado_acreedor_acum||0, rda=c.resultado_deudor_acum||0;
@@ -10383,11 +10497,13 @@ function docValidChipHtml(){
   return mk('#E6F1FB','#185FA5','#c5d0ff','ℹ Sube la balanza base y valídala con ER y BG');
 }
 function docCerrarValidacion(){const m=document.getElementById('doc-valid-modal');if(m)m.remove();}
-function docAbrirValidacion(){
+function docAbrirValidacion(mesPre,ejPre){
   docCerrarValidacion();
   const est=docEstadoValidacion(), v=docValidacionRow();
   const bals=docCacheFin.filter(d=>d.tipo==='balanza'&&String(d.archivo_ext||'').toLowerCase()==='csv').sort((a,b)=>(a.ejercicio-b.ejercicio)||(a.mes-b.mes));
-  const opts=bals.map(b=>'<option value="'+b.ejercicio+'-'+b.mes+'"'+((v&&v.cifras&&v.cifras.mes===b.mes&&v.cifras.ejercicio===b.ejercicio)?' selected':'')+'>'+DOC_MESES_L[b.mes-1]+' '+b.ejercicio+'</option>').join('');
+  const _selMes=(mesPre!==undefined&&mesPre!==null)?mesPre:(v&&v.cifras?v.cifras.mes:null);
+  const _selEj =(ejPre !==undefined&&ejPre !==null)?ejPre :(v&&v.cifras?v.cifras.ejercicio:null);
+  const opts=bals.map(b=>'<option value="'+b.ejercicio+'-'+b.mes+'"'+((_selMes===b.mes&&_selEj===b.ejercicio)?' selected':'')+'>'+DOC_MESES_L[b.mes-1]+' '+b.ejercicio+'</option>').join('');
   const msgEst={validada:'✓ Mes base validado. Cualquier cambio en la balanza base o en el catálogo se revalida automáticamente.',
     invalida:'✕ El mes base ya no cuadra. Corrige y vuelve a validar.',
     pendiente:'⛔ Sin validar: no se pueden subir más balanzas hasta que el mes base cuadre contra CONTPAQi.',
@@ -10406,11 +10522,43 @@ function docAbrirValidacion(){
       '<div><div style="font-size:10px;color:#888;font-weight:700">ESTADO DE RESULTADOS (.xlsx)</div><input id="vb-er" type="file" accept=".xlsx,.xls" style="font-size:11px;width:100%"></div>'+
       '<div><div style="font-size:10px;color:#888;font-weight:700">BALANCE GENERAL (.xlsx)</div><input id="vb-bg" type="file" accept=".xlsx,.xls" style="font-size:11px;width:100%"></div>'+
     '</div>'+
+    '<div id="vb-guardados" style="font-size:11px;margin-bottom:8px"></div>'+
     '<button class="btn btn-primary" style="width:100%" id="vb-btn" onclick="docEjecutarValidacion()">Validar contra CONTPAQi</button>':'')+
     '<div id="vb-res" style="margin-top:12px;max-height:340px;overflow-y:auto"></div>'+
     '<button class="btn" style="width:100%;margin-top:10px" onclick="docCerrarValidacion()">Cerrar</button></div>';
   document.body.appendChild(m);
-  if(v&&v.cifras&&v.cifras.lineas) docPintarValidacion(v.cifras.lineas,v.cifras.ok,v.cifras.avisos||[]);
+  const _sel=document.getElementById('vb-mes');
+  if(_sel){ _sel.onchange=docRefrescarEstadoCPQ; }
+  docRefrescarEstadoCPQ();
+  // Recalcular EN VIVO contra la clasificacion vigente en lugar de pintar el
+  // resultado archivado, que puede ser de hace meses y confunde al usuario.
+  docValidarEnVivo();
+}
+
+// Muestra, para el mes elegido, que reportes de CONTPAQi ya estan guardados
+function docRefrescarEstadoCPQ(){
+  const el=document.getElementById('vb-guardados'), sel=document.getElementById('vb-mes');
+  if(!el||!sel||!sel.value) return;
+  const p=sel.value.split('-').map(Number), ej=p[0], mes=p[1];
+  const e=!!docReporteCPQ('er',mes,ej), b=!!docReporteCPQ('bg',mes,ej);
+  const pin=(ok,t)=>'<span style="color:'+(ok?'#3B6D11':'#A32D2D')+'">'+(ok?'✓':'✕')+' '+t+'</span>';
+  el.innerHTML=(e&&b)
+    ? '<div style="background:#EAF3DE;color:#3B6D11;border-radius:8px;padding:6px 10px">Reportes de '+DOC_MESES_L[mes-1]+' guardados — no necesitas adjuntar nada. Sube un archivo solo si quieres reemplazarlo.</div>'
+    : '<div style="background:#FAEEDA;color:#854F0B;border-radius:8px;padding:6px 10px">Faltan reportes de '+DOC_MESES_L[mes-1]+': '+pin(e,'ER')+' &nbsp; '+pin(b,'BG')+'. Adjúntalos aquí o guárdalos con el botón CPQ del mes.</div>';
+}
+
+// Revalida el mes base en vivo al abrir el modal (sin pedir archivos)
+async function docValidarEnVivo(){
+  const res=document.getElementById('vb-res'); if(!res) return;
+  const v=docValidacionRow(); if(!v||!v.cifras||!v.cifras.lineas) return;
+  res.innerHTML='<div style="font-size:12px;color:#888">Recalculando con la clasificación vigente…</div>';
+  try{
+    const r=await docRevalidarBase();
+    if(r&&r.lineas) docPintarValidacion(r.lineas,r.ok,r.avisos||[]);
+    else docPintarValidacion(v.cifras.lineas,v.cifras.ok,v.cifras.avisos||[]);
+  }catch(e){
+    docPintarValidacion(v.cifras.lineas,v.cifras.ok,(v.cifras.avisos||[]).concat(['No se pudo recalcular en vivo: '+e.message]));
+  }
 }
 function docPintarValidacion(lineas,ok,avisos){
   const el=document.getElementById('vb-res'); if(!el) return;
@@ -10426,11 +10574,19 @@ function docPintarValidacion(lineas,ok,avisos){
 async function docEjecutarValidacion(){
   const btn=document.getElementById('vb-btn'), res=document.getElementById('vb-res');
   const fe=document.getElementById('vb-er').files[0], fb=document.getElementById('vb-bg').files[0];
-  if(!fe||!fb){res.innerHTML='<div style="color:#A32D2D;font-size:12px">Selecciona ambos archivos (Estado de Resultados y Balance General).</div>';return;}
   const [ej,mes]=document.getElementById('vb-mes').value.split('-').map(Number);
+  // Cada reporte sale del archivo recien adjuntado o, si no hay, del guardado del mes.
+  const gER=docReporteCPQ('er',mes,ej), gBG=docReporteCPQ('bg',mes,ej);
+  if((!fe&&!gER)||(!fb&&!gBG)){
+    const falta=[]; if(!fe&&!gER)falta.push('Estado de Resultados'); if(!fb&&!gBG)falta.push('Balance General');
+    res.innerHTML='<div style="color:#A32D2D;font-size:12px">Falta '+falta.join(' y ')+' de '+DOC_MESES_L[mes-1]+' '+ej+'. Adjúntalo aquí o guárdalo con el botón CPQ del mes.</div>';
+    return;
+  }
   btn.disabled=true;btn.textContent='Validando...';
   try{
-    const er=docParseER(await docLeerXlsxCPQ(fe)), bg=docParseBG(await docLeerXlsxCPQ(fb));
+    const _deGuardado=(d)=>{const x=Object.assign({},d&&d.cifras); const mt=x._meta||{}; delete x._meta; x.meta=mt; return x;};
+    const er=fe?docParseER(await docLeerXlsxCPQ(fe)):_deGuardado(gER);
+    const bg=fb?docParseBG(await docLeerXlsxCPQ(fb)):_deGuardado(gBG);
     const avisos=[];
     [['Estado de Resultados',er.meta],['Balance General',bg.meta]].forEach(([n,mt])=>{
       if(mt.mes&&mt.anio&&(mt.mes!==mes||mt.anio!==ej)) throw new Error(n+' es de '+DOC_MESES_L[mt.mes-1]+' '+mt.anio+' y el mes base seleccionado es '+DOC_MESES_L[mes-1]+' '+ej+'.');
@@ -10443,8 +10599,17 @@ async function docEjecutarValidacion(){
     const ok=lineas.every(l=>l.ok);
     // Trazabilidad: conservar los reportes de CONTPAQi
     const ts=Date.now(), base='financiero/'+docClienteActual.id+'/validacion/';
-    let urlER='',urlBG='';
-    try{urlER=await docUploadStorage(fe,base+'er_'+ej+'-'+mes+'_'+ts+'.xlsx');urlBG=await docUploadStorage(fb,base+'bg_'+ej+'-'+mes+'_'+ts+'.xlsx');}catch(e){avisos.push('No se pudieron archivar los reportes: '+e.message);}
+    let urlER=(gER&&gER.archivo_url)||'', urlBG=(gBG&&gBG.archivo_url)||'';
+    try{
+      if(fe) urlER=await docUploadStorage(fe,base+'er_'+ej+'-'+mes+'_'+ts+'.xlsx');
+      if(fb) urlBG=await docUploadStorage(fb,base+'bg_'+ej+'-'+mes+'_'+ts+'.xlsx');
+    }catch(e){avisos.push('No se pudieron archivar los reportes: '+e.message);}
+    // Lo que se adjunto aqui queda guardado como reporte del mes: la proxima
+    // validacion de este mes ya no lo pedira.
+    try{
+      if(fe) await _docGuardarCPQ('er',mes,ej,fe.name,urlER,er);
+      if(fb) await _docGuardarCPQ('bg',mes,ej,fb.name,urlBG,bg);
+    }catch(e){avisos.push('No se pudieron guardar los reportes del mes: '+e.message);}
     const cifras={ok,mes,ejercicio:ej,contpaq:{er:{...er,meta:undefined},bg:{...bg,meta:undefined}},taxia:tx,lineas,avisos,
       archivo_er:urlER,archivo_bg:urlBG,validado_por:(session&&session.email)||null,validado_en:nowISO()};
     const payload={cliente_id:String(docClienteActual.id),cliente_nombre:docClienteActual.nombre,categoria:'financiero',tipo:'validacion_base',
