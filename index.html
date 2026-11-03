@@ -9802,8 +9802,12 @@ async function docGuardarClasif(){
     if(sel.value)(window._clasifChanges=window._clasifChanges||{})[codReal+'_rubro_fiscal']=sel.value;
   });
   const clasifChanges2=window._clasifChanges||{};
+  // Solo persistir cuentas que existen en el catalogo real (nodoMap).
+  // _cuentaVariants() genera claves alternativas para LEER; si se guardan
+  // ensucian la tabla con filas cuyo nombre_mayor es el propio codigo.
+  const _hayArbol=Object.keys(nodoMap).length>0;
   const rows=Object.entries(clasifFinal)
-    .filter(([cod,rubro])=>rubro&&rubro!=='')
+    .filter(([cod,rubro])=>rubro&&rubro!==''&&(!_hayArbol||nodoMap[cod]))
     .map(([cod,rubro])=>{
       const nodo=nodoMap[cod];
       return {
